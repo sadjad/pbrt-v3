@@ -5,6 +5,7 @@
 #include <deque>
 #include <iomanip>
 #include <iostream>
+#include <math.h>
 #include <memory>
 #include <numeric>
 #include <random>
@@ -68,7 +69,9 @@ LambdaMaster::LambdaMaster(const string &scenePath, const uint16_t listenPort,
       awsAddress(LambdaInvocationRequest::endpoint(awsRegion), "https"),
       workerRequestTimer(WORKER_REQUEST_INTERVAL),
       statusPrintTimer(STATUS_PRINT_INTERVAL),
-      writeOutputTimer(WRITE_OUTPUT_INTERVAL) {
+      writeOutputTimer(WRITE_OUTPUT_INTERVAL),
+      rateMeter(),
+      rateMeters() {
     global::manager.init(scenePath);
     loadCamera();
 
@@ -185,6 +188,19 @@ LambdaMaster::LambdaMaster(const string &scenePath, const uint16_t listenPort,
                  << " / connecting: " << workerStats.queueStats.connecting
                  << " / connected: " << workerStats.queueStats.connected
                  << endl;
+
+            const RayStatsD& rate = rateMeter.getRate();
+            cerr << rate.demandedRays << endl;
+            cerr << "               Treelet: ";
+            for (const auto & s : rateMeters.getRate().stats) {
+                cerr << setw(8) << s.first.to_string();
+            }
+            cerr << endl;
+            cerr << "log10(demanded rays/s): ";
+            for (const auto & s : rateMeters.getRate().stats) {
+                cerr << setw(8) << setprecision(3) << log10(s.second.demandedRays);
+            }
+            cerr << endl;
 
             ostringstream oss;
             oss << "\033[0m"
@@ -415,9 +431,12 @@ bool LambdaMaster::processMessage(const uint64_t workerId,
     }
 
     case OpCode::WorkerStats: {
+        high_resolution_clock::time_point now = high_resolution_clock::now();
         protobuf::WorkerStats proto;
         protoutil::from_string(message.payload(), proto);
         auto stats = from_protobuf(proto);
+        rateMeter.update(RayStatsD{stats.aggregateStats});
+        rateMeters.update(RayStatsPerObjectD{stats});
         /* merge into global worker stats */
         workerStats.merge(stats);
         /* merge into local worker stats */

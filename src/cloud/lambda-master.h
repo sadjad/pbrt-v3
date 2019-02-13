@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "cloud/estimators.h"
 #include "cloud/lambda.h"
 #include "cloud/manager.h"
 #include "cloud/stats.h"
@@ -155,6 +156,8 @@ class LambdaMaster {
 
     /* Worker stats */
     WorkerStats workerStats;
+    RateEstimator<RayStatsD> rateMeter;
+    RateEstimator<RayStatsPerObjectD> rateMeters;
     size_t initializedWorkers{0};
 };
 

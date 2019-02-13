@@ -44,7 +44,7 @@ class ProgramFinished : public exception {};
 
 constexpr chrono::milliseconds PEER_CHECK_INTERVAL{1'000};
 constexpr chrono::milliseconds STATUS_PRINT_INTERVAL{10'000};
-constexpr chrono::milliseconds WORKER_STATS_INTERVAL{2'000};
+constexpr chrono::milliseconds WORKER_STATS_INTERVAL{1'000};
 
 protobuf::FinishedRay createFinishedRay(const size_t sampleId,
                                         const Point2f& pFilm,
@@ -255,6 +255,8 @@ Poller::Action::Result::Type LambdaWorker::handleRayQueue() {
         processedRays.pop_front();
 
         const TreeletId nextTreelet = ray.currentTreelet();
+        global::workerStats.recordDemandedRay(
+            SceneManager::ObjectKey{ObjectType::Treelet, nextTreelet});
 
         if (treeletIds.count(nextTreelet)) {
             pushRayQueue(move(ray));
