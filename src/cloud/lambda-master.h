@@ -27,13 +27,18 @@
 
 namespace pbrt {
 
+struct MasterConfiguration {
+  bool treeletStats;
+};
+
 class LambdaMaster {
   public:
     LambdaMaster(const std::string &scenePath, const uint16_t listenPort,
                  const uint32_t numberOfLambdas,
                  const std::string &publicAddress,
                  const std::string &storageBackend,
-                 const std::string &awsRegion);
+                 const std::string &awsRegion,
+                 const MasterConfiguration &config);
 
     void run();
 
@@ -159,6 +164,8 @@ class LambdaMaster {
     RateEstimator<RayStatsD> rateMeter;
     RateEstimator<RayStatsPerObjectD> rateMeters;
     size_t initializedWorkers{0};
+
+    const MasterConfiguration config;
 };
 
 class Schedule {
