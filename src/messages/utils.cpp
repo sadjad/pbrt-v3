@@ -300,6 +300,7 @@ protobuf::RayStats to_protobuf(const RayStats& stats) {
   proto.set_received_rays(stats.receivedRays);
   proto.set_waiting_rays(stats.waitingRays);
   proto.set_processed_rays(stats.processedRays);
+  proto.set_demanded_rays(stats.demandedRays);
   for (double d : stats.traceDurationPercentiles) {
     proto.add_trace_duration_percentiles(d);
   }
@@ -872,6 +873,7 @@ RayStats from_protobuf(const protobuf::RayStats& proto) {
     stats.receivedRays = proto.received_rays();
     stats.waitingRays = proto.waiting_rays();
     stats.processedRays = proto.processed_rays();
+    stats.demandedRays = proto.demanded_rays();
 
     for (int i = 0; i < NUM_PERCENTILES; ++i) {
       double d = proto.trace_duration_percentiles(i);
