@@ -74,6 +74,7 @@ class UDPConnection {
 
     UDPConnection& operator=(const UDPConnection&) = delete;
     UDPConnection(const UDPConnection&) = delete;
+    UDPConnection(UDPConnection &&) = default;
 
     int64_t micros_ahead_of_pace() const;
     bool within_pace() { return micros_ahead_of_pace() <= 0; }

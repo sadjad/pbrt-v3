@@ -83,6 +83,9 @@ LambdaWorker::LambdaWorker(const string& coordinatorIP,
                         "rayCount,timestamp,action";
     }
 
+    udpConnection.emplace_back(true, config.maxUdpRate);
+    udpConnection.emplace_back(true, config.maxUdpRate);
+
     PbrtOptions.nThreads = 1;
     bvh = make_shared<CloudBVH>();
     manager.init(".");
@@ -109,7 +112,7 @@ LambdaWorker::LambdaWorker(const string& coordinatorIP,
         [this]() { this->terminate(); });
 
     eventAction[Event::UdpReceive] = loop.poller().add_action(Poller::Action(
-        udpConnection.socket(), Direction::In,
+        udpConnection[0].socket(), Direction::In,
         bind(&LambdaWorker::handleUdpReceive, this), [this]() { return true; },
         []() { throw runtime_error("udp in failed"); }));
 
@@ -124,11 +127,11 @@ LambdaWorker::LambdaWorker(const string& coordinatorIP,
         []() { throw runtime_error("acks failed"); }));
 
     eventAction[Event::UdpSend] = loop.poller().add_action(Poller::Action(
-        udpConnection.socket(), Direction::Out,
+        udpConnection[0].socket(), Direction::Out,
         bind(&LambdaWorker::handleUdpSend, this),
         [this]() {
             return (!servicePackets.empty() || !rayPackets.empty()) &&
-                   udpConnection.within_pace();
+                   udpConnection[0].within_pace();
         },
         []() { throw runtime_error("udp out failed"); }));
 
@@ -222,17 +225,17 @@ void LambdaWorker::initBenchmark(const uint32_t duration,
         eventAction[Event::Diagnostics],    eventAction[Event::WorkerStats]};
 
     loop.poller().deactivate_actions(toDeactivate);
-    udpConnection.reset_reference();
+    udpConnection[0].reset_reference();
 
     if (rate) {
-        udpConnection.set_rate(rate);
+        udpConnection[0].set_rate(rate);
     }
 
     /* (2) set up new udpReceive and udpSend actions */
     eventAction[Event::UdpReceive] = loop.poller().add_action(Poller::Action(
-        udpConnection.socket(), Direction::In,
+        udpConnection[0].socket(), Direction::In,
         [this]() {
-            auto datagram = udpConnection.socket().recvfrom();
+            auto datagram = udpConnection[0].socket().recvfrom();
             benchmarkData.checkpoint.bytesReceived += datagram.second.length();
             benchmarkData.checkpoint.packetsReceived++;
             return ResultType::Continue;
@@ -241,22 +244,22 @@ void LambdaWorker::initBenchmark(const uint32_t duration,
         []() { throw runtime_error("udp in failed"); }));
 
     if (destination) {
-        const Address address = peers.at(destination).address;
+        const Address address = peers.at(destination).address[0];
 
         eventAction[Event::UdpSend] = loop.poller().add_action(Poller::Action(
-            udpConnection.socket(), Direction::Out,
+            udpConnection[0].socket(), Direction::Out,
             [this, address]() {
                 const static string packet =
                     Message::str(*workerId, OpCode::Ping, string(1300, 'x'));
-                udpConnection.socket().sendto(address, packet);
-                udpConnection.record_send(packet.length());
+                udpConnection[0].socket().sendto(address, packet);
+                udpConnection[0].record_send(packet.length());
 
                 benchmarkData.checkpoint.bytesSent += packet.length();
                 benchmarkData.checkpoint.packetsSent++;
 
                 return ResultType::Continue;
             },
-            [this]() { return udpConnection.within_pace(); },
+            [this]() { return udpConnection[0].within_pace(); },
             []() { throw runtime_error("udp out failed"); }));
     }
 
@@ -512,7 +515,7 @@ ResultType LambdaWorker::handleOutQueue() {
         const auto& peer =
             peers.at(*random::sample(candidates.begin(), candidates.end()));
 
-        auto& peerSeqNo = sequenceNumbers[peer.address];
+        auto& peerSeqNo = sequenceNumbers[peer.address[0]];
 
         string unpackedRayStr;
         RayStatePtr unpackedRayPtr;
@@ -570,7 +573,7 @@ ResultType LambdaWorker::handleOutQueue() {
             const bool tracked = packetLogBD(randEngine);
 
             RayPacket rayPacket{
-                peer.address,
+                peer.address[0],
                 peer.id,
                 treeletId,
                 rayCount,
@@ -683,7 +686,8 @@ ResultType LambdaWorker::handlePeers() {
         switch (peer.state) {
         case Worker::State::Connecting: {
             auto message = createConnectionRequest(peer);
-            servicePackets.emplace_front(peer.address, peer.id, message.str());
+            servicePackets.emplace_front(peer.address[0], peer.id,
+                                         message.str());
             peer.tries++;
             break;
         }
@@ -693,7 +697,7 @@ ResultType LambdaWorker::handlePeers() {
             if (peerId > 0 && peer.nextKeepAlive < now) {
                 peer.nextKeepAlive += KEEP_ALIVE_INTERVAL;
                 servicePackets.emplace_back(
-                    peer.address, peer.id,
+                    peer.address[0], peer.id,
                     Message::str(*workerId, OpCode::Ping,
                                  put_field(*workerId)));
             }
@@ -793,7 +797,7 @@ ResultType LambdaWorker::handleRayAcknowledgements() {
                 const auto& peer = peers.at(
                     *random::sample(candidates.begin(), candidates.end()));
 
-                packet.destination = peer.address;
+                packet.destination = peer.address[0];
                 packet.destinationId = peer.id;
                 packet.sequenceNumber = sequenceNumbers[packet.destination]++;
                 packet.attempt = 0;
@@ -815,9 +819,9 @@ ResultType LambdaWorker::handleUdpSend() {
 
     /* we always send service packets first */
     auto sendUdpPacket = [this](const Address& peer, const string& payload) {
-        udpConnection.bytes_sent += payload.length();
-        udpConnection.socket().sendto(peer, payload);
-        udpConnection.record_send(payload.length());
+        udpConnection[0].bytes_sent += payload.length();
+        udpConnection[0].socket().sendto(peer, payload);
+        udpConnection[0].record_send(payload.length());
     };
 
     if (!servicePackets.empty()) {
@@ -869,9 +873,9 @@ ResultType LambdaWorker::handleUdpSend() {
 ResultType LambdaWorker::handleUdpReceive() {
     RECORD_INTERVAL("receiveUDP");
 
-    auto datagram = udpConnection.socket().recvfrom();
+    auto datagram = udpConnection[0].socket().recvfrom();
     auto& data = datagram.second;
-    udpConnection.bytes_received += data.length();
+    udpConnection[0].bytes_received += data.length();
 
     messageParser.parse(data);
     auto& messages = messageParser.completed_messages();
@@ -972,14 +976,14 @@ ResultType LambdaWorker::handleDiagnostics() {
     workerDiagnosticsTimer.reset();
 
     workerDiagnostics.bytesSent =
-        udpConnection.bytes_sent - lastDiagnostics.bytesSent;
+        udpConnection[0].bytes_sent - lastDiagnostics.bytesSent;
 
     workerDiagnostics.bytesReceived =
-        udpConnection.bytes_received - lastDiagnostics.bytesReceived;
+        udpConnection[0].bytes_received - lastDiagnostics.bytesReceived;
 
     workerDiagnostics.outstandingUdp = rayPackets.size();
-    lastDiagnostics.bytesSent = udpConnection.bytes_sent;
-    lastDiagnostics.bytesReceived = udpConnection.bytes_received;
+    lastDiagnostics.bytesSent = udpConnection[0].bytes_sent;
+    lastDiagnostics.bytesReceived = udpConnection[0].bytes_received;
 
     const auto timestamp =
         duration_cast<microseconds>(now() - workerDiagnostics.startTime)
@@ -1170,7 +1174,7 @@ bool LambdaWorker::processMessage(const Message& message) {
 
         auto& peer = peers.at(otherWorkerId);
         auto message = createConnectionResponse(peer);
-        servicePackets.emplace_front(peer.address, otherWorkerId,
+        servicePackets.emplace_front(peer.address[0], otherWorkerId,
                                      message.str());
         break;
     }
@@ -1270,11 +1274,11 @@ void LambdaWorker::run() {
 
         // If this connection is not within pace, it requests a timeout when it
         // would be, so that we can re-poll and schedule it.
-        const int64_t ahead_us = udpConnection.micros_ahead_of_pace();
+        const int64_t ahead_us = udpConnection[0].micros_ahead_of_pace();
         int64_t ahead_ms = ahead_us / 1000;
         if (ahead_us != 0 && ahead_ms == 0) ahead_ms = 1;
 
-        const int timeout_ms = udpConnection.within_pace() ? -1 : ahead_ms;
+        const int timeout_ms = udpConnection[0].within_pace() ? -1 : ahead_ms;
         min_timeout_ms = min_neg_infinity(min_timeout_ms, timeout_ms);
 
         auto res = loop.loop_once(min_timeout_ms).result;

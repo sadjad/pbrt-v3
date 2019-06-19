@@ -66,7 +66,7 @@ class LambdaWorker {
         enum class State { Connecting, Connected };
 
         WorkerId id;
-        Address address;
+        Address address[2];
         State state{State::Connecting};
         packet_clock::time_point nextKeepAlive{};
         int32_t seed{0};
@@ -74,8 +74,9 @@ class LambdaWorker {
 
         std::set<TreeletId> treelets{};
 
-        Worker(const WorkerId id, Address&& addr)
-            : id(id), address(std::move(addr)) {}
+        Worker(const WorkerId id, Address&& addr) : id(id) {
+            address[0] = std::move(addr);
+        }
     };
 
     struct ServicePacket {
@@ -251,7 +252,8 @@ class LambdaWorker {
 
     /* Sending rays to other nodes */
     uint64_t ackId{0};
-    UDPConnection udpConnection{true, config.maxUdpRate};
+    std::vector<UDPConnection> udpConnection{};
+
     std::deque<ServicePacket> servicePackets{};
 
     /* outgoing rays */
