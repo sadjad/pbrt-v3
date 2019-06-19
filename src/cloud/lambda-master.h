@@ -43,8 +43,8 @@ struct Assignment {
 enum class FinishedRayAction { Discard, SendBack, Upload };
 
 enum class Task {
-  RayTracing,
-  NetworkTest,
+    RayTracing,
+    NetworkTest,
 };
 
 struct MasterConfiguration {
@@ -89,7 +89,7 @@ class LambdaMaster {
         WorkerId id;
 
         std::shared_ptr<TCPConnection> connection;
-        Optional<Address> udpAddress{};
+        Optional<Address> udpAddress[2];
         Optional<Bounds2i> tile;
         std::set<ObjectKey> objects;
         size_t freeSpace{2 * 1000 * 1000 * 1000};

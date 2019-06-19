@@ -267,13 +267,15 @@ message ConnectRequest {
     uint64 worker_id = 1;
     int32 my_seed = 2;
     int32 your_seed = 3;
+    uint32 address_no = 4;
 }
 
 message ConnectResponse {
     uint64 worker_id = 1;
     int32 my_seed = 2;
     int32 your_seed = 3;
-    repeated uint32 treelet_ids = 4;
+    uint32 address_no = 4;
+    repeated uint32 treelet_ids = 5;
 }
 
 message RayStats {

@@ -194,6 +194,7 @@ LambdaMaster::LambdaMaster(const string &scenePath, const uint16_t listenPort,
             protobuf::ConnectRequest req;
             protoutil::from_string(message.payload(), req);
             const WorkerId workerId = req.worker_id();
+            const auto addressNo = min(req.address_no(), 1u);
 
             if (!workers.count(workerId)) {
                 throw runtime_error("unexpected worker id: " +
@@ -201,17 +202,18 @@ LambdaMaster::LambdaMaster(const string &scenePath, const uint16_t listenPort,
             }
 
             auto &worker = workers.at(workerId);
-            if (!worker.udpAddress.initialized()) {
+            if (!worker.udpAddress[addressNo].initialized()) {
                 initializedWorkers++;
             }
 
-            worker.udpAddress.reset(move(addr));
+            worker.udpAddress[addressNo].reset(move(addr));
 
             /* create connection response */
             protobuf::ConnectResponse resp;
             resp.set_worker_id(0);
             resp.set_my_seed(121212);
             resp.set_your_seed(req.my_seed());
+            resp.set_address_no(addressNo);
             Message responseMsg{0, OpCode::ConnectionResponse,
                                 protoutil::to_string(resp)};
             worker.connection->enqueue_write(responseMsg.str());
@@ -427,7 +429,7 @@ ResultType LambdaMaster::handleJobStart() {
             auto &worker = workerkv.second;
 
             LOG(INFO) << "[WORKER] " << worker.id << ","
-                      << worker.udpAddress->str();
+                      << worker.udpAddress[0]->str();
 
             const uint32_t destination = workerPairs[worker.id - 1] + 1;
             const uint32_t duration = 30;
@@ -455,7 +457,7 @@ ResultType LambdaMaster::handleConnectAll() {
         for (auto &workerkv : workers) {
             auto &worker = workerkv.second;
             proto.set_worker_id(worker.id);
-            proto.set_address(worker.udpAddress->str());
+            proto.set_address(worker.udpAddress[0]->str());
             writer.write(proto);
         }
     }
@@ -583,7 +585,7 @@ ResultType LambdaMaster::handleWriteOutput() {
 bool LambdaMaster::processWorkerRequest(const WorkerRequest &request) {
     auto &worker = workers.at(request.worker);
 
-    if (!worker.udpAddress.initialized()) {
+    if (!worker.udpAddress[0].initialized()) {
         /* LOG(WARNING) << "No UDP address for " << request.worker << endl; */
         return false;
     }
@@ -602,14 +604,14 @@ bool LambdaMaster::processWorkerRequest(const WorkerRequest &request) {
         *random::sample(workerIdList.cbegin(), workerIdList.cend());
     const auto &selectedWorker = workers.at(selectedWorkerId);
 
-    if (!selectedWorker.udpAddress.initialized()) {
+    if (!selectedWorker.udpAddress[0].initialized()) {
         return false;
     }
 
     auto makeMessage = [](const Worker &worker) {
         protobuf::ConnectTo proto;
         proto.set_worker_id(worker.id);
-        proto.set_address(worker.udpAddress->str());
+        proto.set_address(worker.udpAddress[0]->str());
         return Message::str(0, OpCode::ConnectTo, protoutil::to_string(proto));
     };
 
