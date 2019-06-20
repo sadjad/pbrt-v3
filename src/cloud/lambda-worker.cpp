@@ -111,10 +111,17 @@ LambdaWorker::LambdaWorker(const string& coordinatorIP,
         []() { LOG(INFO) << "Connection to coordinator failed."; },
         [this]() { this->terminate(); });
 
-    eventAction[Event::UdpReceive] = loop.poller().add_action(Poller::Action(
-        udpConnection[0].socket(), Direction::In,
-        bind(&LambdaWorker::handleUdpReceive, this), [this]() { return true; },
-        []() { throw runtime_error("udp in failed"); }));
+    eventAction[Event::UdpReceive] = loop.poller().add_action(
+        Poller::Action(udpConnection[0].socket(), Direction::In,
+                       bind(&LambdaWorker::handleUdpReceive, this, 0),
+                       [this]() { return true; },
+                       []() { throw runtime_error("udp in failed"); }));
+
+    eventAction[Event::UdpReceive2] = loop.poller().add_action(
+        Poller::Action(udpConnection[1].socket(), Direction::In,
+                       bind(&LambdaWorker::handleUdpReceive, this, 1),
+                       [this]() { return true; },
+                       []() { throw runtime_error("udp in failed"); }));
 
     eventAction[Event::RayAcks] = loop.poller().add_action(Poller::Action(
         handleRayAcknowledgementsTimer.fd, Direction::In,
@@ -128,10 +135,18 @@ LambdaWorker::LambdaWorker(const string& coordinatorIP,
 
     eventAction[Event::UdpSend] = loop.poller().add_action(Poller::Action(
         udpConnection[0].socket(), Direction::Out,
-        bind(&LambdaWorker::handleUdpSend, this),
+        bind(&LambdaWorker::handleUdpSend, this, 0),
         [this]() {
             return (!servicePackets.empty() || !rayPackets.empty()) &&
                    udpConnection[0].within_pace();
+        },
+        []() { throw runtime_error("udp out failed"); }));
+
+    eventAction[Event::UdpSend2] = loop.poller().add_action(Poller::Action(
+        udpConnection[1].socket(), Direction::Out,
+        bind(&LambdaWorker::handleUdpSend, this, 1),
+        [this]() {
+            return !servicePackets.empty() && udpConnection[1].within_pace();
         },
         []() { throw runtime_error("udp out failed"); }));
 
@@ -215,53 +230,76 @@ void LambdaWorker::NetStats::merge(const NetStats& other) {
 
 void LambdaWorker::initBenchmark(const uint32_t duration,
                                  const uint32_t destination,
-                                 const uint32_t rate) {
+                                 const uint32_t rate,
+                                 const uint32_t addressNo) {
     /* (1) disable all unnecessary actions */
     set<uint64_t> toDeactivate{
         eventAction[Event::RayQueue],       eventAction[Event::OutQueue],
         eventAction[Event::FinishedQueue],  eventAction[Event::Peers],
         eventAction[Event::NeededTreelets], eventAction[Event::UdpSend],
         eventAction[Event::UdpReceive],     eventAction[Event::RayAcks],
-        eventAction[Event::Diagnostics],    eventAction[Event::WorkerStats]};
+        eventAction[Event::Diagnostics],    eventAction[Event::WorkerStats],
+        eventAction[Event::UdpSend2],       eventAction[Event::UdpReceive2],
+    };
 
     loop.poller().deactivate_actions(toDeactivate);
     udpConnection[0].reset_reference();
+    udpConnection[1].reset_reference();
+
+    const uint32_t sendIface = addressNo;
+    const uint32_t recvIface = 1 - addressNo;
 
     if (rate) {
-        udpConnection[0].set_rate(rate);
+        udpConnection[recvIface].set_rate(rate);
     }
 
-    /* (2) set up new udpReceive and udpSend actions */
-    eventAction[Event::UdpReceive] = loop.poller().add_action(Poller::Action(
-        udpConnection[0].socket(), Direction::In,
-        [this]() {
-            auto datagram = udpConnection[0].socket().recvfrom();
+    auto recvCallback = [this, recvIface](const uint32_t iface) {
+        auto datagram = udpConnection[iface].socket().recvfrom();
+
+        if (iface == recvIface) {
             benchmarkData.checkpoint.bytesReceived += datagram.second.length();
             benchmarkData.checkpoint.packetsReceived++;
-            return ResultType::Continue;
-        },
-        [this]() { return true; },
-        []() { throw runtime_error("udp in failed"); }));
+        }
 
-    if (destination) {
-        const Address address = peers.at(destination).address[0];
+        return ResultType::Continue;
+    };
 
-        eventAction[Event::UdpSend] = loop.poller().add_action(Poller::Action(
-            udpConnection[0].socket(), Direction::Out,
-            [this, address]() {
-                const static string packet =
-                    Message::str(*workerId, OpCode::Ping, string(1300, 'x'));
-                udpConnection[0].socket().sendto(address, packet);
-                udpConnection[0].record_send(packet.length());
+    auto sendCallback = [this, sendIface](const uint32_t iface, const Address address) {
+        const static string packet =
+            Message::str(*workerId, OpCode::Ping, string(1300, 'x'));
+        udpConnection[iface].socket().sendto(address, packet);
+        udpConnection[iface].record_send(packet.length());
 
-                benchmarkData.checkpoint.bytesSent += packet.length();
-                benchmarkData.checkpoint.packetsSent++;
+        if (iface == sendIface) {
+            benchmarkData.checkpoint.bytesSent += packet.length();
+            benchmarkData.checkpoint.packetsSent++;
+        }
 
-                return ResultType::Continue;
-            },
-            [this]() { return udpConnection[0].within_pace(); },
-            []() { throw runtime_error("udp out failed"); }));
-    }
+        return ResultType::Continue;
+    };
+
+    /* (2) set up new udpReceive and udpSend actions */
+    eventAction[Event::UdpReceive] = loop.poller().add_action(
+        Poller::Action(udpConnection[0].socket(), Direction::In,
+                       bind(recvCallback, 0), [this]() { return true; },
+                       []() { throw runtime_error("udp in failed"); }));
+
+    eventAction[Event::UdpReceive2] = loop.poller().add_action(
+        Poller::Action(udpConnection[1].socket(), Direction::In,
+                       bind(recvCallback, 1), [this]() { return true; },
+                       []() { throw runtime_error("udp in failed"); }));
+
+    eventAction[Event::UdpSend] = loop.poller().add_action(
+        Poller::Action(udpConnection[0].socket(), Direction::Out,
+                       bind(sendCallback, 0, peers.at(destination).address[0]),
+                       [this]() { return udpConnection[0].within_pace(); },
+                       []() { throw runtime_error("udp out failed"); }));
+
+    eventAction[Event::UdpSend2] = loop.poller().add_action(
+        Poller::Action(udpConnection[1].socket(), Direction::Out,
+                       bind(sendCallback, 1, peers.at(destination).address[1]),
+                       [this]() { return udpConnection[1].within_pace(); },
+                       []() { throw runtime_error("udp out failed"); }));
 
     benchmarkTimer = make_unique<TimerFD>(seconds{duration});
     checkpointTimer = make_unique<TimerFD>(seconds{1});
@@ -272,10 +310,11 @@ void LambdaWorker::initBenchmark(const uint32_t duration,
             benchmarkTimer->reset();
             benchmarkData.end = probe_clock::now();
 
-            set<uint64_t> toDeactivate{eventAction[Event::UdpReceive],
-                                       eventAction[Event::NetStats]};
+            set<uint64_t> toDeactivate{
+                eventAction[Event::UdpReceive], eventAction[Event::UdpSend],
+                eventAction[Event::UdpReceive2], eventAction[Event::UdpSend2],
+                eventAction[Event::NetStats]};
 
-            if (destination) toDeactivate.insert(eventAction[Event::UdpSend]);
             loop.poller().deactivate_actions(toDeactivate);
 
             return ResultType::CancelAll;
@@ -301,19 +340,23 @@ void LambdaWorker::initBenchmark(const uint32_t duration,
     benchmarkData.checkpoint.timestamp = benchmarkData.start;
 }
 
-Message LambdaWorker::createConnectionRequest(const Worker& peer) {
+Message LambdaWorker::createConnectionRequest(const Worker& peer,
+                                              const uint32_t addressNo) {
     protobuf::ConnectRequest proto;
     proto.set_worker_id(*workerId);
     proto.set_my_seed(mySeed);
     proto.set_your_seed(peer.seed);
+    proto.set_address_no(addressNo);
     return {*workerId, OpCode::ConnectionRequest, protoutil::to_string(proto)};
 }
 
-Message LambdaWorker::createConnectionResponse(const Worker& peer) {
+Message LambdaWorker::createConnectionResponse(const Worker& peer,
+                                               const uint32_t addressNo) {
     protobuf::ConnectResponse proto;
     proto.set_worker_id(*workerId);
     proto.set_my_seed(mySeed);
     proto.set_your_seed(peer.seed);
+    proto.set_address_no(addressNo);
     for (const auto& treeletId : treeletIds) {
         proto.add_treelet_ids(treeletId);
     }
@@ -679,15 +722,19 @@ ResultType LambdaWorker::handlePeers() {
 
     const auto now = packet_clock::now();
 
-    for (auto it = peers.begin(); it != peers.end();) {
+    for (auto it = peers.begin(); it != peers.end(); it++) {
         auto& peerId = it->first;
         auto& peer = it->second;
 
         switch (peer.state) {
         case Worker::State::Connecting: {
-            auto message = createConnectionRequest(peer);
-            servicePackets.emplace_front(peer.address[0], peer.id,
-                                         message.str());
+            for (size_t i = 0; i < 2; i++) {
+                auto message = createConnectionRequest(peer, i);
+                servicePackets.emplace_front(peer.address[i], peer.id,
+                                             message.str());
+                servicePackets.front().iface = i;
+            }
+
             peer.tries++;
             break;
         }
@@ -704,8 +751,6 @@ ResultType LambdaWorker::handlePeers() {
 
             break;
         }
-
-        it++;
     }
 
     return ResultType::Continue;
@@ -814,34 +859,45 @@ ResultType LambdaWorker::handleRayAcknowledgements() {
     return ResultType::Continue;
 }
 
-ResultType LambdaWorker::handleUdpSend() {
+ResultType LambdaWorker::handleUdpSend(const size_t iface) {
     RECORD_INTERVAL("sendUDP");
 
+    cout << "sendUdp" << endl;
+
     /* we always send service packets first */
-    auto sendUdpPacket = [this](const Address& peer, const string& payload) {
-        udpConnection[0].bytes_sent += payload.length();
-        udpConnection[0].socket().sendto(peer, payload);
-        udpConnection[0].record_send(payload.length());
+    auto sendUdpPacket = [this](const Address& peer, const string& payload,
+                                const size_t iface) {
+        cout << "sending to " << peer.str() << " " << iface;
+        udpConnection[iface].bytes_sent += payload.length();
+        udpConnection[iface].socket().sendto(peer, payload);
+        udpConnection[iface].record_send(payload.length());
+        cout << "sending done" << endl;
     };
 
-    if (!servicePackets.empty()) {
-        auto& datagram = servicePackets.front();
-        sendUdpPacket(datagram.destination, datagram.data);
+    for (auto datagramIt = servicePackets.begin();
+         datagramIt != servicePackets.end(); datagramIt++) {
+        auto& datagram = *datagramIt;
+
+        if (datagram.iface != iface) continue;
+
+        sendUdpPacket(datagram.destination, datagram.data, datagram.iface);
 
         if (datagram.ackPacket && datagram.tracked) {
             logPacket(datagram.ackId, 0, PacketAction::AckSent,
                       datagram.destinationId, datagram.data.length());
         }
 
-        servicePackets.pop_front();
+        servicePackets.erase(datagramIt);
         return ResultType::Continue;
     }
+
+    if (iface != 0 || rayPackets.empty()) return ResultType::Continue;
 
     /* packet to send */
     RayPacket& packet = rayPackets.front();
 
     /* peer to send the packet to */
-    sendUdpPacket(packet.destination, packet.data());
+    sendUdpPacket(packet.destination, packet.data(), 0);
 
     /* do the necessary logging */
     if (packet.retransmission) {
@@ -870,12 +926,12 @@ ResultType LambdaWorker::handleUdpSend() {
     return ResultType::Continue;
 }
 
-ResultType LambdaWorker::handleUdpReceive() {
+ResultType LambdaWorker::handleUdpReceive(const size_t iface) {
     RECORD_INTERVAL("receiveUDP");
 
-    auto datagram = udpConnection[0].socket().recvfrom();
+    auto datagram = udpConnection[iface].socket().recvfrom();
     auto& data = datagram.second;
-    udpConnection[0].bytes_received += data.length();
+    udpConnection[iface].bytes_received += data.length();
 
     messageParser.parse(data);
     auto& messages = messageParser.completed_messages();
@@ -1091,12 +1147,15 @@ bool LambdaWorker::processMessage(const Message& message) {
     auto handleConnectTo = [this](const protobuf::ConnectTo& proto) {
         if (peers.count(proto.worker_id()) == 0 &&
             proto.worker_id() != *workerId) {
-            const auto dest = Address::decompose(proto.address());
-            peers.emplace(proto.worker_id(),
-                          Worker{proto.worker_id(), {dest.first, dest.second}});
+            auto& peer =
+                peers.emplace(proto.worker_id(), Worker{proto.worker_id()})
+                    .first->second;
 
-            addressToWorker.emplace(Address{dest.first, dest.second},
-                                    proto.worker_id());
+            for (size_t i = 0; i < min(2, proto.address_size()); i++) {
+                auto addrPair = Address::decompose(proto.address(i));
+                peer.address[i] = {addrPair.first, addrPair.second};
+                addressToWorker.emplace(peer.address[i], proto.worker_id());
+            }
         }
     };
 
@@ -1113,10 +1172,15 @@ bool LambdaWorker::processMessage(const Message& message) {
         cerr << "worker-id=" << *workerId << endl;
 
         /* send connection request */
-        Address addrCopy{coordinatorAddr};
-        peers.emplace(0, Worker{0, move(addrCopy)});
-        Message message = createConnectionRequest(peers.at(0));
-        servicePackets.emplace_front(coordinatorAddr, 0, message.str());
+        auto& peer = peers.emplace(0, Worker{0}).first->second;
+        peer.address[0] = peer.address[1] = coordinatorAddr;
+
+        for (size_t i = 0; i < 2; i++) {
+            Message message = createConnectionRequest(peers.at(0), i);
+            servicePackets.emplace_front(coordinatorAddr, 0, message.str());
+            servicePackets.front().iface = i;
+        }
+
         break;
     }
 
@@ -1173,9 +1237,10 @@ bool LambdaWorker::processMessage(const Message& message) {
         }
 
         auto& peer = peers.at(otherWorkerId);
-        auto message = createConnectionResponse(peer);
-        servicePackets.emplace_front(peer.address[0], otherWorkerId,
-                                     message.str());
+        auto message = createConnectionResponse(peer, proto.address_no());
+        servicePackets.emplace_front(peer.address[proto.address_no()],
+                                     otherWorkerId, message.str());
+        servicePackets.front().iface = proto.address_no();
         break;
     }
 
@@ -1191,9 +1256,19 @@ bool LambdaWorker::processMessage(const Message& message) {
 
         auto& peer = peers.at(otherWorkerId);
         peer.seed = proto.my_seed();
+
         if (peer.state != Worker::State::Connected &&
             proto.your_seed() == mySeed) {
-            peer.state = Worker::State::Connected;
+            peer.connected[proto.address_no()] = true;
+            peer.state =
+                (accumulate(peer.connected, peer.connected + 2, 0) == 2)
+                    ? Worker::State::Connected
+                    : Worker::State::Connecting;
+
+            if (peer.state != Worker::State::Connected) {
+                break;
+            }
+
             peer.nextKeepAlive = packet_clock::now() + KEEP_ALIVE_INTERVAL;
 
             for (const auto treeletId : proto.treelet_ids()) {
@@ -1249,7 +1324,8 @@ bool LambdaWorker::processMessage(const Message& message) {
         const uint32_t destination = c.be32();
         const uint32_t duration = c(4).be32();
         const uint32_t rate = c(8).be32();
-        initBenchmark(duration, destination, rate);
+        const uint32_t addressNo = c(12).be32();
+        initBenchmark(duration, destination, rate, addressNo);
         break;
     }
 
@@ -1272,14 +1348,17 @@ void LambdaWorker::run() {
         // timeouts treat -1 as positive infinity
         int min_timeout_ms = -1;
 
-        // If this connection is not within pace, it requests a timeout when it
-        // would be, so that we can re-poll and schedule it.
-        const int64_t ahead_us = udpConnection[0].micros_ahead_of_pace();
-        int64_t ahead_ms = ahead_us / 1000;
-        if (ahead_us != 0 && ahead_ms == 0) ahead_ms = 1;
+        for (size_t i = 0; i < 2; i++) {
+            // If this connection is not within pace, it requests a timeout when
+            // it would be, so that we can re-poll and schedule it.
+            const int64_t ahead_us = udpConnection[i].micros_ahead_of_pace();
+            int64_t ahead_ms = ahead_us / 1000;
+            if (ahead_us != 0 && ahead_ms == 0) ahead_ms = 1;
 
-        const int timeout_ms = udpConnection[0].within_pace() ? -1 : ahead_ms;
-        min_timeout_ms = min_neg_infinity(min_timeout_ms, timeout_ms);
+            const int timeout_ms =
+                udpConnection[i].within_pace() ? -1 : ahead_ms;
+            min_timeout_ms = min_neg_infinity(min_timeout_ms, timeout_ms);
+        }
 
         auto res = loop.loop_once(min_timeout_ms).result;
         if (res != PollerResult::Success && res != PollerResult::Timeout) break;

@@ -260,7 +260,7 @@ message GetWorker {
 
 message ConnectTo {
     uint64 worker_id = 1;
-    string address = 2;
+    repeated string address = 2;
 }
 
 message ConnectRequest {

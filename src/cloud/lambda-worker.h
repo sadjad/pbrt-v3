@@ -67,6 +67,7 @@ class LambdaWorker {
 
         WorkerId id;
         Address address[2];
+        bool connected[2] = {false};
         State state{State::Connecting};
         packet_clock::time_point nextKeepAlive{};
         int32_t seed{0};
@@ -74,9 +75,9 @@ class LambdaWorker {
 
         std::set<TreeletId> treelets{};
 
-        Worker(const WorkerId id, Address&& addr) : id(id) {
-            address[0] = std::move(addr);
-        }
+        Worker(const WorkerId id) : id(id) {}
+        Worker(const Worker &) = delete;
+        Worker(Worker &&) = default;
     };
 
     struct ServicePacket {
@@ -86,6 +87,7 @@ class LambdaWorker {
         bool ackPacket;
         uint64_t ackId;
         bool tracked;
+        uint32_t iface{0};
 
         ServicePacket(const Address& addr, const WorkerId destId,
                       std::string&& data, const bool ackPacket = false,
@@ -167,7 +169,9 @@ class LambdaWorker {
         Messages,
         NeededTreelets,
         UdpSend,
+        UdpSend2,
         UdpReceive,
+        UdpReceive2,
         RayAcks,
         WorkerStats,
         Diagnostics,
@@ -190,15 +194,18 @@ class LambdaWorker {
     Poller::Action::Result::Type handleMessages();
     Poller::Action::Result::Type handleNeededTreelets();
 
-    Poller::Action::Result::Type handleUdpSend();
-    Poller::Action::Result::Type handleUdpReceive();
+    Poller::Action::Result::Type handleUdpSend(const size_t iface);
+    Poller::Action::Result::Type handleUdpReceive(const size_t iface);
     Poller::Action::Result::Type handleRayAcknowledgements();
 
     Poller::Action::Result::Type handleWorkerStats();
     Poller::Action::Result::Type handleDiagnostics();
 
-    meow::Message createConnectionRequest(const Worker& peer);
-    meow::Message createConnectionResponse(const Worker& peer);
+    meow::Message createConnectionRequest(const Worker& peer,
+                                          const uint32_t iface);
+
+    meow::Message createConnectionResponse(const Worker& peer,
+                                           const uint32_t iface);
 
     void generateRays(const Bounds2i& cropWindow);
     void getObjects(const protobuf::GetObjects& objects);
@@ -214,7 +221,7 @@ class LambdaWorker {
                    const size_t packetSize, const size_t numRays = 0);
 
     void initBenchmark(const uint32_t duration, const uint32_t destination,
-                       const uint32_t rate);
+                       const uint32_t rate, const uint32_t addressNo);
 
     ////////////////////////////////////////////////////////////////////////////
     // MEMBER VARIABLES                                                       //

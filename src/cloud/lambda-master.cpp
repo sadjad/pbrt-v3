@@ -246,7 +246,9 @@ LambdaMaster::LambdaMaster(const string &scenePath, const uint16_t listenPort,
 
     loop.poller().add_action(Poller::Action(
         dummyFD, Direction::Out, bind(&LambdaMaster::handleConnectAll, this),
-        [this]() { return this->initializedWorkers == this->numberOfLambdas; },
+        [this]() {
+            return this->initializedWorkers == 2 * this->numberOfLambdas;
+        },
         []() { throw runtime_error("connectAll failed"); }));
 
     loop.poller().add_action(Poller::Action(
@@ -433,12 +435,13 @@ ResultType LambdaMaster::handleJobStart() {
 
             const uint32_t destination = workerPairs[worker.id - 1] + 1;
             const uint32_t duration = 30;
-            const uint32_t rate = (worker.id % 2) ? 0 : 1;
+            const uint32_t rate = 1;
+            const uint32_t addressNo = worker.id % 2;
 
             worker.connection->enqueue_write(
                 Message::str(0, OpCode::StartBenchmark,
                              put_field(destination) + put_field(duration) +
-                                 put_field(rate)));
+                                 put_field(rate) + put_field(addressNo)));
         }
 
         cerr << "done." << endl;
@@ -450,14 +453,18 @@ ResultType LambdaMaster::handleJobStart() {
 
 ResultType LambdaMaster::handleConnectAll() {
     ostringstream oss;
-    protobuf::ConnectTo proto;
 
     {
         protobuf::RecordWriter writer{&oss};
         for (auto &workerkv : workers) {
+            protobuf::ConnectTo proto;
+
             auto &worker = workerkv.second;
             proto.set_worker_id(worker.id);
-            proto.set_address(worker.udpAddress[0]->str());
+
+            for (size_t i = 0; i < 2; i++)
+                proto.add_address(worker.udpAddress[i]->str());
+
             writer.write(proto);
         }
     }
@@ -611,7 +618,10 @@ bool LambdaMaster::processWorkerRequest(const WorkerRequest &request) {
     auto makeMessage = [](const Worker &worker) {
         protobuf::ConnectTo proto;
         proto.set_worker_id(worker.id);
-        proto.set_address(worker.udpAddress[0]->str());
+
+        for (size_t i = 0; i < 2; i++)
+            proto.add_address(worker.udpAddress[i]->str());
+
         return Message::str(0, OpCode::ConnectTo, protoutil::to_string(proto));
     };
 
