@@ -513,85 +513,58 @@ ResultType LambdaWorker::handleOutQueue() {
             peers.at(*random::sample(candidates.begin(), candidates.end()));
 
         auto& peerSeqNo = sequenceNumbers[peer.address];
+        
 
-        string unpackedRayStr;
-        RayStatePtr unpackedRayPtr;
-
-        while (!outRays.empty() || !unpackedRayStr.empty()) {
-            ostringstream oss;
+        while(!outRays.empty()) {
+            string currentPacketStr;
+            currentPacketStr.resize(UDP_MTU_BYTES);
             size_t packetLen = 25;
             size_t rayCount = 0;
-
             vector<unique_ptr<RayState>> trackedRays;
-
-            {
-                protobuf::RecordWriter writer{&oss};
-
-                if (!unpackedRayStr.empty()) {
-                    rayCount++;
-                    packetLen = unpackedRayStr.length() + 4;
-                    writer.write(unpackedRayStr);
-
-                    if (unpackedRayPtr->trackRay) {
-                        trackedRays.push_back(move(unpackedRayPtr));
-                    }
-
-                    unpackedRayStr.clear();
+            
+            // fill in a new packet
+            while (packetLen < UDP_MTU_BYTES && !outRays.empty()) {
+                RayStatePtr ray = move(outRays.front());
+                // serialization of the this ray into the currentPacketStr failed
+                size_t bytesWritten = RayState::serialize_into_str(currentPacketStr, ray, packetLen, UDP_MTU_BYTES - packetLen);
+                if (bytesWritten == 0) {
+                    break; // break out of the loop and send the current packet
                 }
-
-                while (packetLen < UDP_MTU_BYTES && !outRays.empty()) {
-                    RayStatePtr ray = move(outRays.front());
-                    outRays.pop_front();
-                    outQueueSize--;
-
-                    string rayStr = RayState::serialize(ray);
-                    logRayAction(*ray, RayAction::Queued);
-
-                    const size_t len = rayStr.length() + 4;
-
-                    if (len + packetLen > UDP_MTU_BYTES) {
-                        unpackedRayStr.swap(rayStr);
-                        unpackedRayPtr = move(ray);
-                        break;
-                    }
-
-                    if (ray->trackRay) {
-                        trackedRays.push_back(move(ray));
-                    }
-
-                    packetLen += len;
-                    writer.write(rayStr);
-                    rayCount++;
+                // serialization succeeded
+                outRays.pop_front();
+                outQueueSize--;
+                packetLen += bytesWritten + 4;
+                if (ray->trackRay) {
+                    trackedRays.push_back(move(ray));
                 }
+                rayCount++;
             }
-
-            oss.flush();
+            currentPacketStr.resize(packetLen);
 
             const bool tracked = packetLogBD(randEngine);
 
-            RayPacket rayPacket{
+            // fill in the packet header
+            Message::str(currentPacketStr, *workerId, OpCode::SendRays, packetLen, config.sendReliably, peerSeqNo, tracked);
+            RayPacket rayPacket {
                 peer.address,
                 peer.id,
                 treeletId,
                 rayCount,
-                Message::str(*workerId, OpCode::SendRays, oss.str(),
-                             config.sendReliably, peerSeqNo, tracked),
+                move(currentPacketStr),
                 config.sendReliably,
                 peerSeqNo,
-                tracked};
+                tracked
+            };
 
             if (tracked) {
-                logPacket(peerSeqNo, 0, PacketAction::Queued, peer.id,
-                          rayPacket.data().length(), rayCount);
+                logPacket(peerSeqNo, 0, PacketAction::Queued, peer.id, rayPacket.data().length(), rayCount);
             }
-
+            
             rayPacket.trackedRays = move(trackedRays);
             rayPackets.emplace_back(move(rayPacket));
-
             peerSeqNo++;
         }
     }
-
     return ResultType::Continue;
 }
 

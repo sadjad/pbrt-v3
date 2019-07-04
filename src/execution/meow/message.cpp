@@ -48,6 +48,22 @@ string Message::str() const
                        sequence_number_, tracked_ );
 }
 
+void Message::str( std::string &message_str,
+                   const uint64_t sender_id,
+                   const OpCode opcode,
+                   const size_t payloadLength,
+                   const bool reliable,
+                   const uint64_t sequence_number, 
+                   const bool tracked ) {
+    put_field(message_str, static_cast<uint16_t>( 0 ), 0);
+    put_field(message_str, tracked, 2);
+    put_field(message_str, reliable, 3);
+    put_field(message_str, sender_id, 4 );
+    put_field(message_str, sequence_number, 12);
+    put_field(message_str, static_cast<uint32_t>( payloadLength ), 20);
+    message_str[24] = to_underlying(opcode);
+}
+
 std::string Message::str( const uint64_t sender_id,
                           const OpCode opcode,
                           const string & payload,

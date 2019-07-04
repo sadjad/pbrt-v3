@@ -64,6 +64,27 @@ string RayState::serialize(const RayStatePtr &rayState, const bool compress) {
     return result;
 }
 
+size_t RayState::serialize_into_str(std::string &result, const RayStatePtr &rayState, const size_t loc, const size_t bytes_left, const bool compress) {
+    const size_t size = rayState->Size();
+    if (size > bytes_left) {
+        return 0;
+    }
+
+    if (compress) {
+        const auto compressedSize =
+            LZ4_compress_default((const char*) rayState.get(), (char*)&result[loc], size, size);
+
+        if (compressedSize == 0) {
+            return 0;
+        }
+        return compressedSize;
+    } else {
+        memcpy(&result[loc], rayState.get(), size);
+        return size;
+    }
+}
+
+
 RayStatePtr RayState::deserialize(const string &data, const bool decompress) {
     RayStatePtr result = make_unique<RayState>();
 

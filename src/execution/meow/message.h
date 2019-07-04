@@ -90,6 +90,13 @@ namespace meow {
     size_t total_length() const { return 25 + payload_length(); }
 
     std::string str() const;
+    static void str( std::string& message_str,
+                     const uint64_t sender_id,
+                     const OpCode opcode,
+                     const size_t payloadLength,
+                     const bool reliable = false,
+                     const uint64_t sequence_number = 0,
+                     const bool tracked = false );
 
     static std::string str( const uint64_t sender_id,
                             const OpCode opcode,
