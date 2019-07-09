@@ -501,7 +501,7 @@ ResultType LambdaWorker::handleOutQueue() {
     RECORD_INTERVAL("handleOutQueue");
 
     outQueueTimer.reset();
-
+    cerr << "In handleOutQueue Function";
     for (auto& q : outQueue) {
         if (q.second.empty()) continue;
 
@@ -516,6 +516,7 @@ ResultType LambdaWorker::handleOutQueue() {
         
 
         while(!outRays.empty()) {
+            cout << "In !outRays.empty() loop";
             string currentPacketStr;
             currentPacketStr.resize(UDP_MTU_BYTES);
             size_t packetLen = 25;
@@ -526,7 +527,9 @@ ResultType LambdaWorker::handleOutQueue() {
             while (packetLen < UDP_MTU_BYTES && !outRays.empty()) {
                 RayStatePtr ray = move(outRays.front());
                 // serialization of the this ray into the currentPacketStr failed
+                cout << "Right before serialize into string";
                 size_t bytesWritten = RayState::serialize_into_str(currentPacketStr, ray, packetLen, UDP_MTU_BYTES - packetLen);
+                cout << "Failed at serializing a string";
                 if (bytesWritten == 0) {
                     break; // break out of the loop and send the current packet
                 }
