@@ -3,6 +3,12 @@
 
 #include <map>
 #include <memory>
+#include <list>
+#include <vector>
+#include <set>
+#include <map>
+#include <mutex>
+#include <shared_mutex>
 
 #include "cloud/raystate.h"
 #include "core/pbrt.h"
@@ -72,14 +78,14 @@ class CloudBVH : public Aggregate {
 
     mutable std::map<uint32_t, Treelet> treelets_;
     mutable std::map<uint32_t, std::shared_ptr<Primitive>> bvh_instances_;
-    mutable std::vector<std::unique_ptr<Transform>> transforms_;
+    mutable std::list<std::unique_ptr<Transform>> transforms_;
     mutable std::map<uint32_t, std::shared_ptr<TriangleMesh>> triangle_meshes_;
     mutable std::map<uint32_t, uint32_t> triangle_mesh_material_ids_;
     mutable std::map<uint32_t, std::shared_ptr<Material>> materials_;
-
+    mutable std::map<uint32_t, TreeletInfo> treelet_info_;
     mutable std::shared_ptr<Material> default_material;
 
-    mutable std::map<uint32_t, TreeletInfo> treelet_info_;
+    mutable std::shared_timed_mutex mutex_;
 
     void loadTreelet(const uint32_t root_id) const;
     void clear() const;
