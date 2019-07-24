@@ -30,6 +30,8 @@
 
  */
 
+#include <chrono>
+
 // integrators/path.cpp*
 #include "integrators/path.h"
 #include "bssrdf.h"
@@ -64,6 +66,11 @@ void PathIntegrator::Preprocess(const Scene &scene, Sampler &sampler) {
 Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
                             Sampler &sampler, MemoryArena &arena,
                             int depth) const {
+    thread_local static size_t _raysProcessed = 0;
+    thread_local static auto _start = std::chrono::steady_clock::now();
+    thread_local static auto _latest = std::chrono::steady_clock::now();
+    const static auto _logDuration = std::chrono::seconds{2};
+
     ProfilePhase p(Prof::SamplerIntegratorLi);
     Spectrum L(0.f), beta(1.f);
     RayDifferential ray(r);
@@ -78,7 +85,20 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
     // out of a medium and thus have their beta value increased.
     Float etaScale = 1;
 
+    const auto _now = std::chrono::steady_clock::now();
+
+    if (_now - _latest >= _logDuration) {
+        LOG(INFO) << "[RAYS] "
+                  << std::chrono::duration_cast<std::chrono::seconds>(_now - _start).count()
+                  << " " << _raysProcessed;
+
+        _latest = move(_now);
+        _raysProcessed = 0;
+    }
+
     for (bounces = 0;; ++bounces) {
+        _raysProcessed++;
+
         // Find next path vertex and accumulate contribution
         VLOG(2) << "Path tracer bounce " << bounces << ", current L = " << L
                 << ", beta = " << beta;
@@ -128,6 +148,8 @@ Spectrum PathIntegrator::Li(const RayDifferential &r, const Scene &scene,
         }
 
         // Sample BSDF to get new path direction
+        _raysProcessed++;
+
         Vector3f wo = -ray.d, wi;
         Float pdf;
         BxDFType flags;
