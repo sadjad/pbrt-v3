@@ -438,6 +438,7 @@ ResultType LambdaWorker::handleRayQueue() {
                 if (hit || emptyVisit) {
                     newRay.Ld = hit ? 0.f : newRay.Ld;
                     logRayAction(*newRayPtr, RayAction::Finished);
+                    workerStats.recordFinishedRay(*newRayPtr);
                     finishedQueue.push_back(move(newRayPtr));
                 } else {
                     processedRays.push_back(move(newRayPtr));
@@ -447,6 +448,7 @@ ResultType LambdaWorker::handleRayQueue() {
             } else if (emptyVisit) {
                 newRay.Ld = 0.f;
                 logRayAction(*newRayPtr, RayAction::Finished);
+                workerStats.recordFinishedRay(*newRayPtr);
                 finishedQueue.push_back(move(newRayPtr));
                 recordFinishedPath(pathId);
             }
@@ -463,6 +465,7 @@ ResultType LambdaWorker::handleRayQueue() {
 
             if (newRays.first.empty()) {
                 /* rayPtr is not touched if if Shade() returned nothing */
+                workerStats.recordFinishedRay(*rayPtr);
                 logRayAction(*rayPtr, RayAction::Finished);
             }
         } else {
