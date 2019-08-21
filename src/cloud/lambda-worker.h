@@ -8,7 +8,6 @@
 #include <random>
 #include <string>
 #include <tuple>
-
 #include "cloud/bvh.h"
 #include "cloud/lambda-master.h"
 #include "cloud/lambda.h"
@@ -227,6 +226,7 @@ class LambdaWorker {
 
     void generateRays(const Bounds2i& cropWindow);
     void getObjects(const protobuf::GetObjects& objects);
+    void addTreelets(const protobuf::AddTreelets& proto);
 
     void pushRayQueue(RayStatePtr&& state);
     RayStatePtr popRayQueue();

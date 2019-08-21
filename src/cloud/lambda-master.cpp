@@ -377,6 +377,9 @@ LambdaMaster::LambdaMaster(const string &scenePath, const uint16_t listenPort,
             doUniformAssign(workerIt->second);
         } else if (assignment & Assignment::All) {
             doAllAssign(workerIt->second);
+        } else if (assignment & Assignment::Dynamic) {
+            cout << "No assignments at the beginning; dynamic assignments." << "\n";
+            /* do not assign anything to any workers at the beginning (for now) */
         } else {
             throw runtime_error("unrecognized assignment type");
         }
@@ -404,6 +407,21 @@ ResultType LambdaMaster::handleJobStart() {
             }
         }
 
+        /* test ADD functionality:
+         * note: this is right now hardcoded for killeroo (and 1 worker)
+         * tells workers to load t0-t9 over time */
+        cout << "Will start assignment of treelets to workers " << "\n"; 
+        if (config.assignment & Assignment::Dynamic) {
+            for (TreeletId t = 0; t < 10; t++) {
+                for (auto &workerkv: workers) {
+                    auto &worker = workerkv.second;
+                    cout << "Going to assign " << t << " to worker " << worker.id << "\n";
+                    addTreelets(worker.id, { t });
+                }
+                /* sleep for 5 seconds */
+                std::this_thread::sleep_for(std::chrono::milliseconds(5000));
+            }
+        }
         break;
 
     case Task::NetworkTest: {
@@ -472,10 +490,12 @@ ResultType LambdaMaster::handleConnectAll() {
             *proto.add_object_ids() = to_protobuf(id);
         }
 
-        const string getDepsStr =
-            Message::str(0, OpCode::GetObjects, protoutil::to_string(proto));
-
-        worker.connection->enqueue_write(getDepsStr);
+        /* only send GetObjects message if objects are assigned to this worker */
+        if (worker.objects.size() > 0) {
+            const string getDepsStr =
+                Message::str(0, OpCode::GetObjects, protoutil::to_string(proto));
+            worker.connection->enqueue_write(getDepsStr);
+        }
         worker.connection->enqueue_write(connectAllStr);
     }
 
@@ -560,6 +580,18 @@ ResultType LambdaMaster::handleWorkerRequests() {
 
     swap(unprocessedRequests, pendingWorkerRequests);
     return ResultType::Continue;
+}
+
+void LambdaMaster::addTreelets(WorkerId workerId, const std::vector<TreeletId> treeletIds) {
+    auto &worker = workers.at(workerId);
+    protobuf::AddTreelets proto;
+    for (const auto treeletId: treeletIds) {
+        proto.add_treelet_id(treeletId);
+        SceneObjectInfo &info = 
+            sceneObjects.at(ObjectKey{ObjectType::Treelet, treeletId});
+        info.workers.insert(workerId);
+    }
+    worker.connection->enqueue_write(Message::str(0, OpCode::Add, protoutil::to_string(proto)));
 }
 
 ResultType LambdaMaster::handleWriteOutput() {
@@ -896,6 +928,7 @@ void usage(const char *argv0, int exitCode) {
          << "                               - uniform (default)" << endl
          << "                               - static" << endl
          << "                               - static+uniform" << endl
+         << "                               - dynamic" << endl
          << "                               - all" << endl
          << "  -f --finished-ray ACTION   what to do with finished rays" << endl
          << "                               - discard (default)" << endl
@@ -1010,6 +1043,8 @@ int main(int argc, char *argv[]) {
                 assignment = Assignment::Uniform;
             } else if (strcmp(optarg, "all") == 0) {
                 assignment = Assignment::All;
+            } else if (strcmp(optarg, "dynamic") == 0) {
+                assignment = Assignment::Dynamic;
             } else {
                 usage(argv[0], EXIT_FAILURE);
             }

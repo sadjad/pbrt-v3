@@ -36,6 +36,7 @@ struct Assignment {
     static constexpr int All        = (1 << 0);
     static constexpr int Static     = (1 << 1);
     static constexpr int Uniform    = (1 << 2);
+    static constexpr int Dynamic    = (1 << 3);
     // clang-format on
 };
 
@@ -130,6 +131,7 @@ class LambdaMaster {
     std::set<ObjectKey> getRecursiveDependencies(const ObjectKey &object);
     void assignObject(Worker &worker, const ObjectKey &object);
     void assignTreelet(Worker &worker, const TreeletId treeletId);
+    void addTreelets(WorkerId workerId, const std::vector<TreeletId> treeletIds);
 
     void assignBaseSceneObjects(Worker &worker);
 

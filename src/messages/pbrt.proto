@@ -288,6 +288,10 @@ message RayStats {
     uint64 finished_rays = 9;
 }
 
+message AddTreelets {
+   repeated uint32 treelet_id = 1; 
+}
+
 message QueueStats {
     uint64 ray = 1;
     uint64 finished = 2;

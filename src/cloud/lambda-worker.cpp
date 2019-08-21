@@ -25,11 +25,13 @@
 #include "core/transform.h"
 #include "execution/loop.h"
 #include "execution/meow/message.h"
+#include "execution/loop.h"
 #include "messages/utils.h"
 #include "net/address.h"
 #include "net/requests.h"
 #include "net/util.h"
 #include "storage/backend.h"
+#include "storage/backend_s3.h"
 #include "util/exception.h"
 #include "util/path.h"
 #include "util/random.h"
@@ -1051,6 +1053,41 @@ void LambdaWorker::generateRays(const Bounds2i& bounds) {
     }
 }
 
+void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
+    cout << "In addTreelets callback" << "\n";
+    auto downloadTreeletCallback = [this](const uint64_t id, const std::string & tag) {
+        uint32_t treeletId = std::atoi(tag.c_str());
+        (this->bvh).get()->loadTreelet(treeletId);
+
+        /* move rays off the pending queue */
+        if (this->pendingQueue.count(treeletId)) {
+            auto& treeletPending = this->pendingQueue[treeletId];
+            this->pendingQueueSize -= treeletPending.size();
+
+            while (!treeletPending.empty()) {
+                auto& front = treeletPending.front();
+                this->rayQueue.push_back(move(front));
+                treeletPending.pop_front();
+            }
+        }
+    };
+
+    auto failureCallback = [this](const uint64_t id, const std::string &tag) {
+        /* should this be a noop?
+         * should worker tell master? */
+    };
+    for (const auto treeletId : proto.treelet_id()) {
+        cout << "Trying to add treeletId " << treeletId;
+        std::string tag = std::to_string(treeletId);
+        std::ostringstream objectNameStream;
+        objectNameStream << "T" << treeletId;
+        std::string object = objectNameStream.str();
+        std::string write_path = ".";
+        S3StorageBackend * s3_backend = dynamic_cast<S3StorageBackend*>(storageBackend.get());
+        loop.s3_download(tag, *s3_backend,  object, write_path, downloadTreeletCallback, failureCallback);
+    }
+}
+
 void LambdaWorker::getObjects(const protobuf::GetObjects& objects) {
     vector<storage::GetRequest> requests;
     for (const protobuf::ObjectKey& objectKey : objects.object_ids()) {
@@ -1084,8 +1121,8 @@ RayStatePtr LambdaWorker::popRayQueue() {
 }
 
 bool LambdaWorker::processMessage(const Message& message) {
-    /* cerr << "[msg:" << Message::OPCODE_NAMES[to_underlying(message.opcode())]
-         << "]" << endl; */
+     cerr << "[msg:" << Message::OPCODE_NAMES[to_underlying(message.opcode())]
+         << "]" << endl; 
 
     auto handleConnectTo = [this](const protobuf::ConnectTo& proto) {
         if (peers.count(proto.worker_id()) == 0 &&
@@ -1249,6 +1286,14 @@ bool LambdaWorker::processMessage(const Message& message) {
             pushRayQueue(move(ray));
         }
 
+        break;
+    }
+
+    case OpCode::Add: {
+        cout << "In opcode add of parse message" << "\n";
+        protobuf::AddTreelets proto;
+        protoutil::from_string(message.payload(), proto);
+        addTreelets(proto);
         break;
     }
 
