@@ -56,7 +56,7 @@ class Message {
         "FinishedRays",
         "FinishedPaths",
         "StartBenchmark",
-        "Bye"
+        "Bye",
         "Add"};
 
     constexpr static size_t HEADER_LENGTH = 25;

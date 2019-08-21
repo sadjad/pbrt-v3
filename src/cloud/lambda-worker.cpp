@@ -1055,7 +1055,11 @@ void LambdaWorker::generateRays(const Bounds2i& bounds) {
 
 void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
     cout << "In addTreelets callback" << "\n";
+    for (const auto treeletId: proto.treelet_id()) {
+        cout << "Asked to add: " << treeletId << "\n";
+    }
     auto downloadTreeletCallback = [this](const uint64_t id, const std::string & tag) {
+        cout << "In s3 download " << "\n";
         uint32_t treeletId = std::atoi(tag.c_str());
         (this->bvh).get()->loadTreelet(treeletId);
 
@@ -1077,13 +1081,15 @@ void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
          * should worker tell master? */
     };
     for (const auto treeletId : proto.treelet_id()) {
-        cout << "Trying to add treeletId " << treeletId;
+        cout << "Trying to add treeletId " << treeletId << "\n";
         std::string tag = std::to_string(treeletId);
         std::ostringstream objectNameStream;
         objectNameStream << "T" << treeletId;
         std::string object = objectNameStream.str();
-        std::string write_path = ".";
+        std::string write_path = objectNameStream.str();
+        cout << "About to do weird dynamic cast" << "\n";
         S3StorageBackend * s3_backend = dynamic_cast<S3StorageBackend*>(storageBackend.get());
+        cout << "Entering s3 download" << "\n";
         loop.s3_download(tag, *s3_backend,  object, write_path, downloadTreeletCallback, failureCallback);
     }
 }

@@ -267,6 +267,7 @@ uint64_t ExecutionLoop::make_http_request(
 
     auto data_callback = [parser, connection_id, tag, response_callback](
                              shared_ptr<ConnectionType>, string &&data) {
+        cout << "At beginning of data callback " << "\n";
         parser->parse(data);
 
         if (not parser->empty()) {
@@ -274,7 +275,7 @@ uint64_t ExecutionLoop::make_http_request(
             parser->pop();
             return false;
         }
-
+        cout << "Parser was empty" << "\n";
         return true;
     };
 
@@ -283,12 +284,12 @@ uint64_t ExecutionLoop::make_http_request(
     };
 
     auto close_callback = [] {};
-
+    cout << "About to make http request connection " << "\n";
     auto connection = make_connection<ConnectionType>(
         address, data_callback, error_callback, close_callback);
-
+    cout << "Made connection? " << "\n";
     connection->write_buffer_ = move(request.str());
-
+    cout << "Tried to write to connection? " << "\n";
     return connection_id;
 }
 
@@ -333,20 +334,24 @@ uint64_t ExecutionLoop::s3_download(const string &tag,
     const HTTPRequest download_request =
         storage_backend.client().create_download_request(
             storage_backend.bucket(), object);
-
+    cout << "Made download request" << "\n";
     return make_http_request<SSLConnection>(
         tag, addr, download_request,
         [write_path, download_callback](const uint64_t id, const string &tag,
                                         const HTTPResponse &response) {
+            cout << "In write path, download callback" << "\n";
             FileDescriptor file{CheckSystemCall(
                 "open", open(write_path.c_str(), O_RDWR | O_TRUNC | O_CREAT,
                              S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH |
                                  S_IWOTH))};
+            cout << "Could not open file" << "\n";
 
             file.write(response.body(), true);
+            cout << "About to call the download callback " << "\n";
             download_callback(id, tag);
         },
         [failure_callback](const uint64_t id, const string &tag) {
+            cout << "In failure callback " << "\n";
             failure_callback(id, tag);
         });
 }
