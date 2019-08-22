@@ -1060,19 +1060,19 @@ void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
      * So the entire thing can be done asynchronously
      * The problem: what if we receive multiple add messages (?)
      */
-    pendingObjects.store(proto.size());
-    cout << "In addTreelets callback: asked to download: " << proto.size() << "\n";
-    auto downloadObjectCallback = [this, proto](const uint64_t id,
+    std::shared_ptr<int32_t> pendingObjects = std::make_shared<int32_t>(proto.size());
+    cout << "In addTreelets callback: asked to download: " << proto.size() << " objects.\n";
+    auto downloadObjectCallback = [this, proto, pendingObjects](const uint64_t id,
                                          const std::string & tag) {
         /* update a shared variable telling how many objects are left to download */
         cout << "Downloaded object: " << tag << "\n";
-        int32_t pending = this->pendingObjects.fetch_sub(1, std::memory_order_seq_cst) - 1;
-        cout << "Pending: " << this->pendingObjects << "\n";
-        if (pending == 0) {
+        *pendingObjects = *pendingObjects - 1;
+        cout << "Pending: " << *pendingObjects << "\n";
+        if (*pendingObjects == 0) {
             /* can go ahead and load the treelet into memory */
             for (const auto treeletId: proto.treelet_id()) {
                 this->bvh.get()->loadTreelet(treeletId);
-                cout << "Loaded treelet" << "\n";
+                cout << "Loaded treelet " << treeletId << ".\n";
                 /* move rays off the pending queue */        
                 if (this->pendingQueue.count(treeletId)) {
                     auto& treeletPending = this->pendingQueue[treeletId];
@@ -1086,10 +1086,12 @@ void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
                 }   
                 this->treeletIds.insert(treeletId);
             }
+            cout << "Inserted stuff into memory" << "\n";
         }
+        cout << "Exiting the callback" << "\n";
     };
 
-    auto failureCallback = [this](const uint64_t id, const std::string &tag) {
+    auto failureCallback = [this, proto, pendingObjects](const uint64_t id, const std::string &tag) {
         /* should this be a noop?
          * should worker tell master? */
     };

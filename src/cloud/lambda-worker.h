@@ -287,9 +287,6 @@ class LambdaWorker {
     std::map<TreeletId, std::pair<WorkerId, packet_clock::time_point>>
         workerForTreelet;  // used by the sender
 
-    /* Pending objects to download from most recent AddObjects message */
-    std::atomic<int32_t> pendingObjects;
-
     /* Sending rays to other nodes */
     uint64_t ackId{0};
     UDPConnection udpConnection{true, config.maxUdpRate};

@@ -401,6 +401,7 @@ ResultType LambdaMaster::handleJobStart() {
             if (worker.tile.initialized()) {
                 protobuf::GenerateRays proto;
                 *proto.mutable_crop_window() = to_protobuf(*worker.tile);
+                cout << "Sending genRayStr" << "\n";
                 const string genRaysStr = Message::str(
                     0, OpCode::GenerateRays, protoutil::to_string(proto));
                 worker.connection->enqueue_write(genRaysStr);
@@ -411,15 +412,16 @@ ResultType LambdaMaster::handleJobStart() {
          * note: this is right now hardcoded for killeroo (and 1 worker)
          * tells workers to load t0-t9 over time */
         cout << "Will start assignment of treelets to workers " << "\n"; 
+        this_thread::sleep_for(20s);
         if (config.assignment & Assignment::Dynamic) {
-            for (TreeletId t = 0; t < 10; t++) {
+            for (TreeletId t = 0; t < 4; t++) {
                 for (auto &workerkv: workers) {
                     auto &worker = workerkv.second;
                     cout << "Going to assign " << t << " to worker " << worker.id << "\n";
                     addTreelets(worker.id, { t });
                 }
                 /* sleep for 5 seconds */
-                this_thread::sleep_for(10s);
+                this_thread::sleep_for(20s);
             }
         }
         break;
@@ -486,6 +488,7 @@ ResultType LambdaMaster::handleConnectAll() {
         auto &worker = workerkv.second;
 
         protobuf::GetObjects proto;
+        cout << "Workers object size " << worker.objects.size() << "\n";
         for (const ObjectKey &id : worker.objects) {
             *proto.add_object_ids() = to_protobuf(id);
         }
@@ -598,7 +601,6 @@ void LambdaMaster::addTreelets(WorkerId workerId, const std::vector<TreeletId> t
             *proto.add_object_ids() = to_protobuf(obj);
             assignObject(worker, obj);
         }
-        cout << "treelets in worker" << workerId << "\n";
     }
     proto.set_size(size);
     worker.connection->enqueue_write(Message::str(0, OpCode::Add, protoutil::to_string(proto)));
