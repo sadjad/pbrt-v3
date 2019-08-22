@@ -378,8 +378,10 @@ LambdaMaster::LambdaMaster(const string &scenePath, const uint16_t listenPort,
         } else if (assignment & Assignment::All) {
             doAllAssign(workerIt->second);
         } else if (assignment & Assignment::Dynamic) {
-            cout << "No assignments at the beginning; dynamic assignments." << "\n";
-            /* do not assign anything to any workers at the beginning (for now) */
+            cout << "No assignments at the beginning; dynamic assignments."
+                 << "\n";
+            /* do not assign anything to any workers at the beginning (for now)
+             */
         } else {
             throw runtime_error("unrecognized assignment type");
         }
@@ -401,29 +403,35 @@ ResultType LambdaMaster::handleJobStart() {
             if (worker.tile.initialized()) {
                 protobuf::GenerateRays proto;
                 *proto.mutable_crop_window() = to_protobuf(*worker.tile);
-                cout << "Sending genRayStr" << "\n";
+                cout << "Sending genRayStr"
+                     << "\n";
                 const string genRaysStr = Message::str(
                     0, OpCode::GenerateRays, protoutil::to_string(proto));
                 worker.connection->enqueue_write(genRaysStr);
             }
         }
 
+        loop.poller().add_action(
+            Poller::Action(addTreeletTimer.fd, Direction::In,
+                           [this]() {
+                               addTreeletTimer.reset();
+
+                               for (auto &workerkv : this->workers) {
+                                   this->addTreelets(workerkv.second.id, {currentAddedTreelet});
+                               }
+
+                               if (++currentAddedTreelet == 10) {
+                                   return ResultType::CancelAll;
+                               }
+
+                               return ResultType::Continue;
+                           },
+                           []() { return true; },
+                           []() { throw runtime_error("error in timer"); }));
+
         /* test ADD functionality:
          * note: this is right now hardcoded for killeroo (and 1 worker)
          * tells workers to load t0-t9 over time */
-        cout << "Will start assignment of treelets to workers " << "\n"; 
-        this_thread::sleep_for(20s);
-        if (config.assignment & Assignment::Dynamic) {
-            for (TreeletId t = 0; t < 4; t++) {
-                for (auto &workerkv: workers) {
-                    auto &worker = workerkv.second;
-                    cout << "Going to assign " << t << " to worker " << worker.id << "\n";
-                    addTreelets(worker.id, { t });
-                }
-                /* sleep for 5 seconds */
-                this_thread::sleep_for(20s);
-            }
-        }
         break;
 
     case Task::NetworkTest: {
@@ -493,13 +501,15 @@ ResultType LambdaMaster::handleConnectAll() {
             *proto.add_object_ids() = to_protobuf(id);
         }
 
-        /* only send GetObjects message if objects are assigned to this worker */
+        /* only send GetObjects message if objects are assigned to this worker
+         */
         if (worker.objects.size() > 0) {
-            const string getDepsStr =
-                Message::str(0, OpCode::GetObjects, protoutil::to_string(proto));
+            const string getDepsStr = Message::str(0, OpCode::GetObjects,
+                                                   protoutil::to_string(proto));
             worker.connection->enqueue_write(getDepsStr);
         } else {
-            cout << "Not sending get objects; no objects to send" << "\n";
+            cout << "Not sending get objects; no objects to send"
+                 << "\n";
         }
         worker.connection->enqueue_write(connectAllStr);
     }
@@ -587,11 +597,12 @@ ResultType LambdaMaster::handleWorkerRequests() {
     return ResultType::Continue;
 }
 
-void LambdaMaster::addTreelets(WorkerId workerId, const std::vector<TreeletId> treeletIds) {
+void LambdaMaster::addTreelets(WorkerId workerId,
+                               const std::vector<TreeletId> treeletIds) {
     auto &worker = workers.at(workerId);
     protobuf::AddTreelets proto;
     uint32_t size = 0;
-    for (const auto treeletId: treeletIds) {
+    for (const auto treeletId : treeletIds) {
         proto.add_treelet_id(treeletId);
         size += 1;
         assignTreelet(worker, treeletId);
@@ -603,7 +614,8 @@ void LambdaMaster::addTreelets(WorkerId workerId, const std::vector<TreeletId> t
         }
     }
     proto.set_size(size);
-    worker.connection->enqueue_write(Message::str(0, OpCode::Add, protoutil::to_string(proto)));
+    worker.connection->enqueue_write(
+        Message::str(0, OpCode::Add, protoutil::to_string(proto)));
 }
 
 ResultType LambdaMaster::handleWriteOutput() {

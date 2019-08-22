@@ -212,6 +212,10 @@ class LambdaMaster {
     std::map<WorkerId, std::vector<TreeletId>> staticAssignments;
 
     const MasterConfiguration config;
+
+    // Temp
+    uint32_t currentAddedTreelet{0};
+    TimerFD addTreeletTimer{std::chrono::seconds{20}};
 };
 
 class Schedule {
