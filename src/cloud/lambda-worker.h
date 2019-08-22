@@ -8,6 +8,9 @@
 #include <random>
 #include <string>
 #include <tuple>
+#include <atomic>
+#include <thread>
+#include <chrono>
 #include "cloud/bvh.h"
 #include "cloud/lambda-master.h"
 #include "cloud/lambda.h"
@@ -283,6 +286,9 @@ class LambdaWorker {
 
     std::map<TreeletId, std::pair<WorkerId, packet_clock::time_point>>
         workerForTreelet;  // used by the sender
+
+    /* Pending objects to download from most recent AddObjects message */
+    std::atomic<int32_t> pendingObjects;
 
     /* Sending rays to other nodes */
     uint64_t ackId{0};

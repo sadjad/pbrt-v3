@@ -1054,24 +1054,37 @@ void LambdaWorker::generateRays(const Bounds2i& bounds) {
 }
 
 void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
-    cout << "In addTreelets callback" << "\n";
-    for (const auto treeletId: proto.treelet_id()) {
-        cout << "Asked to add: " << treeletId << "\n";
-    }
-    auto downloadTreeletCallback = [this](const uint64_t id, const std::string & tag) {
-        cout << "In s3 download " << "\n";
-        uint32_t treeletId = std::atoi(tag.c_str());
-        (this->bvh).get()->loadTreelet(treeletId);
+    /* problem with current design:
+     * this function blocks until th treelets are downloaded
+     * Is there a way in the callback to check when it's safe to load a treelet?
+     * So the entire thing can be done asynchronously
+     * The problem: what if we receive multiple add messages (?)
+     */
+    pendingObjects.store(proto.size());
+    cout << "In addTreelets callback: asked to download: " << proto.size() << "\n";
+    auto downloadObjectCallback = [this, proto](const uint64_t id,
+                                         const std::string & tag) {
+        /* update a shared variable telling how many objects are left to download */
+        cout << "Downloaded object: " << tag << "\n";
+        int32_t pending = this->pendingObjects.fetch_sub(1, std::memory_order_seq_cst) - 1;
+        cout << "Pending: " << this->pendingObjects << "\n";
+        if (pending == 0) {
+            /* can go ahead and load the treelet into memory */
+            for (const auto treeletId: proto.treelet_id()) {
+                this->bvh.get()->loadTreelet(treeletId);
+                cout << "Loaded treelet" << "\n";
+                /* move rays off the pending queue */        
+                if (this->pendingQueue.count(treeletId)) {
+                    auto& treeletPending = this->pendingQueue[treeletId];
+                    this->pendingQueueSize -= treeletPending.size();
 
-        /* move rays off the pending queue */
-        if (this->pendingQueue.count(treeletId)) {
-            auto& treeletPending = this->pendingQueue[treeletId];
-            this->pendingQueueSize -= treeletPending.size();
-
-            while (!treeletPending.empty()) {
-                auto& front = treeletPending.front();
-                this->rayQueue.push_back(move(front));
-                treeletPending.pop_front();
+                    while (!treeletPending.empty()) {
+                        auto& front = treeletPending.front();
+                        this->rayQueue.push_back(move(front));
+                        treeletPending.pop_front();
+                    }
+                }   
+                this->treeletIds.insert(treeletId);
             }
         }
     };
@@ -1080,17 +1093,28 @@ void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
         /* should this be a noop?
          * should worker tell master? */
     };
+    
+    S3StorageBackend * s3_backend = dynamic_cast<S3StorageBackend*>(storageBackend.get());
+    for (const protobuf::ObjectKey& objectKey : proto.object_ids()) {
+        const ObjectKey id = from_protobuf(objectKey);
+        std::string tag = id.to_string(); // both the tag and write path?
+        std::string write_path = id.to_string();
+        cout << "Trying to download " << tag << "\n";
+        loop.s3_download(tag, *s3_backend,
+                         tag, write_path,
+                        downloadObjectCallback, failureCallback);
+    }
+
     for (const auto treeletId : proto.treelet_id()) {
-        cout << "Trying to add treeletId " << treeletId << "\n";
         std::string tag = std::to_string(treeletId);
         std::ostringstream objectNameStream;
         objectNameStream << "T" << treeletId;
         std::string object = objectNameStream.str();
         std::string write_path = objectNameStream.str();
-        cout << "About to do weird dynamic cast" << "\n";
-        S3StorageBackend * s3_backend = dynamic_cast<S3StorageBackend*>(storageBackend.get());
-        cout << "Entering s3 download" << "\n";
-        loop.s3_download(tag, *s3_backend,  object, write_path, downloadTreeletCallback, failureCallback);
+        cout << "Trying to download treelet " << tag << "\n";
+        loop.s3_download(tag, *s3_backend, 
+                         object, write_path,
+                         downloadObjectCallback, failureCallback);
     }
 }
 

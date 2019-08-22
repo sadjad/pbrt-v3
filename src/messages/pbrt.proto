@@ -290,6 +290,8 @@ message RayStats {
 
 message AddTreelets {
    repeated uint32 treelet_id = 1; 
+   repeated ObjectKey object_ids = 2;
+   uint32 size = 3;
 }
 
 message QueueStats {

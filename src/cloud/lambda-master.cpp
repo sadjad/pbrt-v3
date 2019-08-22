@@ -412,7 +412,7 @@ ResultType LambdaMaster::handleJobStart() {
          * tells workers to load t0-t9 over time */
         cout << "Will start assignment of treelets to workers " << "\n"; 
         if (config.assignment & Assignment::Dynamic) {
-            for (TreeletId t = 0; t < 2; t++) {
+            for (TreeletId t = 0; t < 10; t++) {
                 for (auto &workerkv: workers) {
                     auto &worker = workerkv.second;
                     cout << "Going to assign " << t << " to worker " << worker.id << "\n";
@@ -587,13 +587,20 @@ ResultType LambdaMaster::handleWorkerRequests() {
 void LambdaMaster::addTreelets(WorkerId workerId, const std::vector<TreeletId> treeletIds) {
     auto &worker = workers.at(workerId);
     protobuf::AddTreelets proto;
+    uint32_t size = 0;
     for (const auto treeletId: treeletIds) {
         proto.add_treelet_id(treeletId);
-        SceneObjectInfo &info = 
-            sceneObjects.at(ObjectKey{ObjectType::Treelet, treeletId});
-        info.workers.insert(workerId);
+        size += 1;
+        assignTreelet(worker, treeletId);
+        for (const auto &obj : treeletFlattenDependencies[treeletId]) {
+            size += 1;
+            cout << "Asking worker to download " << obj.to_string() << "\n";
+            *proto.add_object_ids() = to_protobuf(obj);
+            assignObject(worker, obj);
+        }
         cout << "treelets in worker" << workerId << "\n";
     }
+    proto.set_size(size);
     worker.connection->enqueue_write(Message::str(0, OpCode::Add, protoutil::to_string(proto)));
 }
 
@@ -780,12 +787,12 @@ void LambdaMaster::run() {
     cerr << "Launching " << numberOfLambdas << " (+" << EXTRA_LAMBDAS
          << ") lambda(s)... ";
 
-    for (size_t i = 0; i < numberOfLambdas + EXTRA_LAMBDAS; i++) {
+    /*for (size_t i = 0; i < numberOfLambdas + EXTRA_LAMBDAS; i++) {
         loop.make_http_request<SSLConnection>(
             "start-worker", awsAddress, generateRequest(),
             [](const uint64_t, const string &, const HTTPResponse &) {},
             [](const uint64_t, const string &) {});
-    }
+    }*/
 
     cerr << "done." << endl;
 
