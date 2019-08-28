@@ -608,7 +608,7 @@ void LambdaMaster::addTreelets(WorkerId workerId,
         assignTreelet(worker, treeletId);
         for (const auto &obj : treeletFlattenDependencies[treeletId]) {
             size += 1;
-            cout << "Asking worker to download " << obj.to_string() << "\n";
+            cout << "Asking worker to download Object " << obj.to_string() << "for Treelet" << treeletId << ".\n";
             *proto.add_object_ids() = to_protobuf(obj);
             assignObject(worker, obj);
         }
@@ -801,12 +801,12 @@ void LambdaMaster::run() {
     cerr << "Launching " << numberOfLambdas << " (+" << EXTRA_LAMBDAS
          << ") lambda(s)... ";
 
-    /*for (size_t i = 0; i < numberOfLambdas + EXTRA_LAMBDAS; i++) {
+    for (size_t i = 0; i < numberOfLambdas + EXTRA_LAMBDAS; i++) {
         loop.make_http_request<SSLConnection>(
             "start-worker", awsAddress, generateRequest(),
             [](const uint64_t, const string &, const HTTPResponse &) {},
             [](const uint64_t, const string &) {});
-    }*/
+    }
 
     cerr << "done." << endl;
 
