@@ -33,6 +33,8 @@ class Message {
         StartBenchmark,
         Bye,
         Add,
+        Drop,
+        Nack,
 
         COUNT
     };
@@ -57,7 +59,9 @@ class Message {
         "FinishedPaths",
         "StartBenchmark",
         "Bye",
-        "Add"};
+        "Add",
+        "Drop",
+        "Nack"};
 
     constexpr static size_t HEADER_LENGTH = 25;
 

@@ -200,6 +200,9 @@ void CloudBVH::loadTreelet(const uint32_t root_id) const {
     treelet.nodes = move(nodes);
 }
 
+void CloudBVH::dropTreelet(const uint32_t root_id) const {
+    // TODO: implement this function handler
+}
 void CloudBVH::Trace(RayState &rayState) {
     SurfaceInteraction isect;
 

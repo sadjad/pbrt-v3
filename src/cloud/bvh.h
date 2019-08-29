@@ -36,7 +36,7 @@ class CloudBVH : public Aggregate {
     void Trace(RayState &rayState);
     bool Intersect(RayState &rayState, SurfaceInteraction *isect) const;
     void loadTreelet(const uint32_t root_id) const;
-
+    void dropTreelet(const uint32_t root_id) const;
     const TreeletInfo &GetInfo(const uint32_t treelet_id) {
         loadTreelet(treelet_id);
         return treelet_info_.at(treelet_id);

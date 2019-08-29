@@ -1,16 +1,16 @@
 #ifndef PBRT_CLOUD_LAMBDA_WORKER_H
 #define PBRT_CLOUD_LAMBDA_WORKER_H
 
+#include <atomic>
+#include <chrono>
 #include <cstring>
 #include <deque>
 #include <fstream>
 #include <iostream>
 #include <random>
 #include <string>
-#include <tuple>
-#include <atomic>
 #include <thread>
-#include <chrono>
+#include <tuple>
 #include "cloud/bvh.h"
 #include "cloud/lambda-master.h"
 #include "cloud/lambda.h"
@@ -230,6 +230,7 @@ class LambdaWorker {
     void generateRays(const Bounds2i& cropWindow);
     void getObjects(const protobuf::GetObjects& objects);
     void addTreelets(const protobuf::AddTreelets& proto);
+    void dropTreelets(const protobuf::DropTreelets& proto);
 
     void pushRayQueue(RayStatePtr&& state);
     RayStatePtr popRayQueue();
@@ -325,7 +326,7 @@ class LambdaWorker {
     size_t outQueueSize{0};
     std::deque<uint64_t> finishedPathIds{};
 
-    std::map<TreeletId, std::vector<WorkerId>> treeletToWorker{};
+    std::map<TreeletId, std::set<WorkerId>> treeletToWorker{};
     std::set<TreeletId> neededTreelets{};
     std::set<TreeletId> requestedTreelets{};
 

@@ -294,6 +294,16 @@ message AddTreelets {
    uint32 size = 3;
 }
 
+message DropTreelets {
+    repeated uint32 treelet_id = 1;
+    repeated ObjectKey object_ids = 2;
+}
+
+message Nack {
+    uint64 worker_id = 1;
+    repeated uint32 treelet_id = 2;
+}
+
 message QueueStats {
     uint64 ray = 1;
     uint64 finished = 2;

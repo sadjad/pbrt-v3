@@ -395,7 +395,6 @@ ResultType LambdaMaster::handleJobStart() {
     set<uint32_t> paired{0};
 
     generationStart = now();
-
     switch (config.task) {
     case Task::RayTracing:
         for (auto &workerkv : workers) {
@@ -417,7 +416,8 @@ ResultType LambdaMaster::handleJobStart() {
                                addTreeletTimer.reset();
 
                                for (auto &workerkv : this->workers) {
-                                   this->addTreelets(workerkv.second.id, {currentAddedTreelet});
+                                   this->addTreelets(workerkv.second.id,
+                                                     {currentAddedTreelet});
                                }
 
                                if (++currentAddedTreelet == 10) {
@@ -429,9 +429,6 @@ ResultType LambdaMaster::handleJobStart() {
                            []() { return true; },
                            []() { throw runtime_error("error in timer"); }));
 
-        /* test ADD functionality:
-         * note: this is right now hardcoded for killeroo (and 1 worker)
-         * tells workers to load t0-t9 over time */
         break;
 
     case Task::NetworkTest: {
@@ -608,7 +605,8 @@ void LambdaMaster::addTreelets(WorkerId workerId,
         assignTreelet(worker, treeletId);
         for (const auto &obj : treeletFlattenDependencies[treeletId]) {
             size += 1;
-            cout << "Asking worker to download Object " << obj.to_string() << "for Treelet" << treeletId << ".\n";
+            cout << "Asking worker to download Object " << obj.to_string()
+                 << "for Treelet" << treeletId << ".\n";
             *proto.add_object_ids() = to_protobuf(obj);
             assignObject(worker, obj);
         }

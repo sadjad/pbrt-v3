@@ -131,7 +131,8 @@ class LambdaMaster {
     std::set<ObjectKey> getRecursiveDependencies(const ObjectKey &object);
     void assignObject(Worker &worker, const ObjectKey &object);
     void assignTreelet(Worker &worker, const TreeletId treeletId);
-    void addTreelets(WorkerId workerId, const std::vector<TreeletId> treeletIds);
+    void addTreelets(WorkerId workerId,
+                     const std::vector<TreeletId> treeletIds);
 
     void assignBaseSceneObjects(Worker &worker);
 

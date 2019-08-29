@@ -25,7 +25,6 @@
 #include "core/transform.h"
 #include "execution/loop.h"
 #include "execution/meow/message.h"
-#include "execution/loop.h"
 #include "messages/utils.h"
 #include "net/address.h"
 #include "net/requests.h"
@@ -684,6 +683,8 @@ ResultType LambdaWorker::handleRayAcknowledgements() {
         auto& receivedSeqNos = receivedPacketSeqNos[addr];
 
         /* Let's construct the ack message for this worker */
+        /* If the sequence number is in the missing list, add information into
+         * ack */
         string ack{};
         ack += put_field(trafficShare);
         ack += put_field(receivedSeqNos.smallest_not_in_set());
@@ -887,7 +888,6 @@ ResultType LambdaWorker::handleUdpReceive() {
         if (message.reliable()) {
             const auto seqNo = message.sequence_number();
             toBeAcked.insert(datagram.first);
-
             auto& received = receivedPacketSeqNos[datagram.first];
 
             if (message.tracked()) {
@@ -930,7 +930,7 @@ ResultType LambdaWorker::handleUdpReceive() {
             }
 
             it = messages.erase(it);
-        } else if (message.opcode() == OpCode::SendRays) {
+        } else if (message.opcode() == OpCode::Ack) {
             activeSenders[message.sender_id()] = packet_clock::now();
         }
     }
@@ -1060,20 +1060,24 @@ void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
      * So the entire thing can be done asynchronously
      * The problem: what if we receive multiple add messages (?)
      */
-    std::shared_ptr<int32_t> pendingObjects = std::make_shared<int32_t>(proto.size());
-    cout << "In addTreelets callback: asked to download: " << proto.size() << " objects.\n";
-    auto downloadObjectCallback = [this, proto, pendingObjects](const uint64_t id,
-                                         const std::string & tag) {
-        /* update a shared variable telling how many objects are left to download */
+    std::shared_ptr<int32_t> pendingObjects =
+        std::make_shared<int32_t>(proto.size());
+    cout << "In addTreelets callback: asked to download: " << proto.size()
+         << " objects.\n";
+    auto downloadObjectCallback = [this, proto, pendingObjects](
+                                      const uint64_t id,
+                                      const std::string& tag) {
+        /* update a shared variable telling how many objects are left to
+         * download */
         cout << "Downloaded object: " << tag << "\n";
         *pendingObjects = *pendingObjects - 1;
         cout << "Pending: " << *pendingObjects << "\n";
         if (*pendingObjects == 0) {
             /* can go ahead and load the treelet into memory */
-            for (const auto treeletId: proto.treelet_id()) {
+            for (const auto treeletId : proto.treelet_id()) {
                 this->bvh.get()->loadTreelet(treeletId);
                 cout << "Loaded treelet " << treeletId << ".\n";
-                /* move rays off the pending queue */        
+                /* move rays off the pending queue */
                 if (this->pendingQueue.count(treeletId)) {
                     auto& treeletPending = this->pendingQueue[treeletId];
                     this->pendingQueueSize -= treeletPending.size();
@@ -1083,28 +1087,32 @@ void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
                         this->rayQueue.push_back(move(front));
                         treeletPending.pop_front();
                     }
-                }   
+                }
                 this->treeletIds.insert(treeletId);
+                this->treeletToWorker[treeletId].insert(*workerId);
             }
-            cout << "Inserted stuff into memory" << "\n";
+            cout << "Inserted stuff into memory"
+                 << "\n";
         }
-        cout << "Exiting the callback" << "\n";
+        cout << "Exiting the callback"
+             << "\n";
     };
 
-    auto failureCallback = [this, proto, pendingObjects](const uint64_t id, const std::string &tag) {
+    auto failureCallback = [this, proto, pendingObjects](
+                               const uint64_t id, const std::string& tag) {
         /* should this be a noop?
          * should worker tell master? */
     };
-    
-    S3StorageBackend * s3_backend = dynamic_cast<S3StorageBackend*>(storageBackend.get());
+
+    S3StorageBackend* s3_backend =
+        dynamic_cast<S3StorageBackend*>(storageBackend.get());
     for (const protobuf::ObjectKey& objectKey : proto.object_ids()) {
         const ObjectKey id = from_protobuf(objectKey);
-        std::string tag = id.to_string(); // both the tag and write path?
+        std::string tag = id.to_string();  // both the tag and write path?
         std::string write_path = id.to_string();
         cout << "Trying to download " << tag << "\n";
-        loop.s3_download(tag, *s3_backend,
-                         tag, write_path,
-                        downloadObjectCallback, failureCallback);
+        loop.s3_download(tag, *s3_backend, tag, write_path,
+                         downloadObjectCallback, failureCallback);
     }
 
     for (const auto treeletId : proto.treelet_id()) {
@@ -1114,9 +1122,34 @@ void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
         std::string object = objectNameStream.str();
         std::string write_path = objectNameStream.str();
         cout << "Trying to download treelet " << tag << "\n";
-        loop.s3_download(tag, *s3_backend, 
-                         object, write_path,
+        loop.s3_download(tag, *s3_backend, object, write_path,
                          downloadObjectCallback, failureCallback);
+    }
+}
+
+void LambdaWorker::dropTreelets(const protobuf::DropTreelets& proto) {
+    // first, handle the current rayQueue
+    // TODO: just process rays requiring treelets that will be dropped
+    cout << "In drop message"
+         << "\n";
+    while (!rayQueue.empty()) {
+        handleRayQueue();
+    }
+    cout << "Finished handling rayQueue"
+         << "\n";
+
+    for (const auto treeletId : proto.treelet_id()) {
+        treeletIds.erase(treeletId);
+        bvh.get()->dropTreelet(treeletId);  // currently a NOOP
+        std::ostringstream objectNameStream;
+        objectNameStream << "T" << treeletId;
+        std::string file_path = objectNameStream.str();
+        CheckSystemCall("remove", remove(file_path.c_str()));
+    }
+    for (const protobuf::ObjectKey& objectKey : proto.object_ids()) {
+        const ObjectKey id = from_protobuf(objectKey);
+        std::string file_path = id.to_string();
+        CheckSystemCall("remove", remove(file_path.c_str()));
     }
 }
 
@@ -1153,8 +1186,8 @@ RayStatePtr LambdaWorker::popRayQueue() {
 }
 
 bool LambdaWorker::processMessage(const Message& message) {
-     cerr << "[msg:" << Message::OPCODE_NAMES[to_underlying(message.opcode())]
-         << "]" << endl; 
+    cerr << "[msg:" << Message::OPCODE_NAMES[to_underlying(message.opcode())]
+         << "]" << endl;
 
     auto handleConnectTo = [this](const protobuf::ConnectTo& proto) {
         if (peers.count(proto.worker_id()) == 0 &&
@@ -1276,7 +1309,7 @@ bool LambdaWorker::processMessage(const Message& message) {
 
             for (const auto treeletId : proto.treelet_ids()) {
                 peer.treelets.insert(treeletId);
-                treeletToWorker[treeletId].push_back(otherWorkerId);
+                treeletToWorker[treeletId].insert(otherWorkerId);
                 neededTreelets.erase(treeletId);
                 requestedTreelets.erase(treeletId);
 
@@ -1304,6 +1337,9 @@ bool LambdaWorker::processMessage(const Message& message) {
         const char* data = message.payload().data();
         const uint32_t dataLen = message.payload().length();
         uint32_t offset = 0;
+        protobuf::Nack nack;
+        nack.set_worker_id(*workerId);
+        bool nacked = false;
 
         while (offset < dataLen) {
             const auto len = *reinterpret_cast<const uint32_t*>(data + offset);
@@ -1315,17 +1351,59 @@ bool LambdaWorker::processMessage(const Message& message) {
             offset += len;
 
             logRayAction(*ray, RayAction::Received, message.sender_id());
-            pushRayQueue(move(ray));
+            TreeletId treelet = (*ray).toVisitTop().treelet;
+            // if we don't have the ray, move it to the pendingQueue or outQueue
+            if (treeletIds.find(treelet) == treeletIds.end()) {
+                if (treeletToWorker.count(treelet)) {
+                    logRayAction(*ray, RayAction::Queued);
+                    workerStats.recordSendingRay(*ray);
+                    outQueue[treelet].push_back(move(ray));
+                    outQueueSize++;
+                } else {
+                    logRayAction(*ray, RayAction::Pending);
+                    workerStats.recordPendingRay(*ray);
+                    neededTreelets.insert(treelet);
+                    pendingQueue[treelet].push_back(move(ray));
+                    pendingQueueSize++;
+                }
+                // send message back to worker saying we don't service this
+                // treelet
+                nacked = true;
+                nack.add_treelet_id(treelet);
+            } else {
+                pushRayQueue(move(ray));
+            }
         }
+        if (nacked) {
+            Message nackMessage(*workerId, OpCode::Nack,
+                                protoutil::to_string(nack));
+            auto& peer = peers.at(message.sender_id());
+            servicePackets.emplace_front(peer.address, peer.id,
+                                         nackMessage.str());
+        }
+        break;
+    }
 
+    case OpCode::Nack: {
+        protobuf::Nack proto;
+        protoutil::from_string(message.payload(), proto);
+        for (const auto treeletId : proto.treelet_id()) {
+            treeletToWorker[treeletId].erase(proto.worker_id());
+        }
         break;
     }
 
     case OpCode::Add: {
-        cout << "In opcode add of parse message" << "\n";
         protobuf::AddTreelets proto;
         protoutil::from_string(message.payload(), proto);
         addTreelets(proto);
+        break;
+    }
+
+    case OpCode::Drop: {
+        protobuf::DropTreelets proto;
+        protoutil::from_string(message.payload(), proto);
+        dropTreelets(proto);
         break;
     }
 
