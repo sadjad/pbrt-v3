@@ -304,6 +304,16 @@ message Nack {
     repeated uint32 treelet_id = 2;
 }
 
+message WorkerDelta {
+    uint64 worker_id = 1;
+    repeated uint32 treelet_id = 2;
+}
+
+message MapDelta {
+    repeated WorkerDelta additions = 1;
+    repeated WorkerDelta deletions = 2;
+}
+
 message QueueStats {
     uint64 ray = 1;
     uint64 finished = 2;

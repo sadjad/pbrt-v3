@@ -397,6 +397,15 @@ ResultType LambdaMaster::handleJobStart() {
     generationStart = now();
     switch (config.task) {
     case Task::RayTracing:
+        // first assign half and half
+        protobuf::MapDelta firstDelta;
+        std::vector<TreeletId> first_half = {0,1,2,3,4};
+        std::vector<TreeletId> second_half = {5,6,7,8,9};
+        protobuf::WorkerDelta worker0_addition = addTreelets(0, first_half);
+        protobuf::WorkerDelta worker1_addition = addTreelets(1, first_half);
+        *firstDelta.mutable_additions() = &worker0_addition;
+        *firstDelta.mutable_additions() = &worker1_addition;
+        sendDelta(firstDelta);
         for (auto &workerkv : workers) {
             auto &worker = workerkv.second;
             if (worker.tile.initialized()) {
@@ -409,25 +418,32 @@ ResultType LambdaMaster::handleJobStart() {
                 worker.connection->enqueue_write(genRaysStr);
             }
         }
-
+        
         loop.poller().add_action(
-            Poller::Action(addTreeletTimer.fd, Direction::In,
-                           [this]() {
-                               addTreeletTimer.reset();
-
-                               for (auto &workerkv : this->workers) {
-                                   this->addTreelets(workerkv.second.id,
-                                                     {currentAddedTreelet});
-                               }
-
-                               if (++currentAddedTreelet == 10) {
-                                   return ResultType::CancelAll;
-                               }
-
-                               return ResultType::Continue;
-                           },
-                           []() { return true; },
-                           []() { throw runtime_error("error in timer"); }));
+            Poller::Action(dropTreeletTimer.fd, Direction::In,
+                [this]() {
+                    dropTreeletTimer.reset();
+                    std::vector<TreeletId> first_half = {0,1,2,3,4};
+                    std::vector<TreeletId> second_half = {5,6,7,8,9};
+                    protobuf::MapDelta nextDelta;
+                    if (counter == 0) {
+                        nextDelta.add_deletions(&(dropTreelets(0, first_half)));
+                        nextDelta.add_deletions(&(dropTreelets(1, second_half)));
+                        sendDelta(nextDelta);
+                        counter++;
+                        return ResultType::Continue;
+                    } else if (counter == 1) {
+                        nextDelta.add_additions(&(addTreelets(0, second_half)));
+                        nextDelta.add_additions(&(addTreelets(1, first_half)));
+                        sendDelta(nextDelta);
+                        return ResultType::CancelAll;
+                    } else {
+                        cout << "Error, counter shouldn't be " << counter << "\n";
+                        return ResultType::CancelAll;
+                    }
+                },
+                []() { return true; },
+                []() { throw runtime_error("error in timer"); }));
 
         break;
 
@@ -594,27 +610,64 @@ ResultType LambdaMaster::handleWorkerRequests() {
     return ResultType::Continue;
 }
 
-void LambdaMaster::addTreelets(WorkerId workerId,
+void LambdaMaster::sendDelta(protobuf::MapDelta mapDelta) {
+    for (const auto &workerkv : workers) {
+        const auto &worker = workerkv.second;
+        worker.connection->enqueue_write(
+            Message::str(0, OpCode::UpdateMapping, protoutil::to_string(mapDelta)));
+    }
+}
+
+protobuf::WorkerDelta LambdaMaster::addTreelets(WorkerId workerId,
                                const std::vector<TreeletId> treeletIds) {
     auto &worker = workers.at(workerId);
     protobuf::AddTreelets proto;
+    protobuf::WorkerDelta delta;
+    delta.set_worker_id(workerId);
     uint32_t size = 0;
     for (const auto treeletId : treeletIds) {
         proto.add_treelet_id(treeletId);
+        delta.add_treelet_id(treeletId);
         size += 1;
+        // takes care of assigning the objects too
         assignTreelet(worker, treeletId);
         for (const auto &obj : treeletFlattenDependencies[treeletId]) {
             size += 1;
             cout << "Asking worker to download Object " << obj.to_string()
                  << "for Treelet" << treeletId << ".\n";
             *proto.add_object_ids() = to_protobuf(obj);
-            assignObject(worker, obj);
         }
     }
     proto.set_size(size);
     worker.connection->enqueue_write(
         Message::str(0, OpCode::Add, protoutil::to_string(proto)));
+    return delta;
 }
+
+protobuf::WorkerDelta LambdaMaster::dropTreelets(WorkerId workerId,
+                                const std::vector<TreeletId> treeletIds) {
+    auto &worker = workers.at(workerId);
+    protobuf::DropTreelets proto;
+    protobuf::WorkerDelta delta;
+    delta.set_worker_id(workerId);
+    std::set<ObjectKey> objectsToDrop;
+    for (const auto treeletId: treeletIds) {
+        proto.add_treelet_id(treeletId);
+        delta.add_treelet_id(treeletId);
+        for (const auto &obj : treeletFlattenDependencies[treeletId]) {
+            objectsToDrop.insert(obj);
+        }
+    }
+    for (const auto &obj: objectsToDrop) {
+        cout << "Asking worker to drop Object " << obj.to_string() << ".\n";
+        *proto.add_object_ids() = to_protobuf(obj);
+    }
+    worker.connection->enqueue_write(
+        Message::str(0, OpCode::Drop, protoutil::to_string(proto)));
+    return delta;
+}
+
+
 
 ResultType LambdaMaster::handleWriteOutput() {
     writeOutputTimer.reset();
@@ -799,12 +852,12 @@ void LambdaMaster::run() {
     cerr << "Launching " << numberOfLambdas << " (+" << EXTRA_LAMBDAS
          << ") lambda(s)... ";
 
-    for (size_t i = 0; i < numberOfLambdas + EXTRA_LAMBDAS; i++) {
+    /*for (size_t i = 0; i < numberOfLambdas + EXTRA_LAMBDAS; i++) {
         loop.make_http_request<SSLConnection>(
             "start-worker", awsAddress, generateRequest(),
             [](const uint64_t, const string &, const HTTPResponse &) {},
             [](const uint64_t, const string &) {});
-    }
+    }*/
 
     cerr << "done." << endl;
 
@@ -870,11 +923,28 @@ void LambdaMaster::assignObject(Worker &worker, const ObjectKey &object) {
     }
 }
 
+void LambdaMaster::dropObject(Worker &worker, const ObjectKey &object) {
+    if (worker.objects.count(object) != 0) {
+        SceneObjectInfo &info = sceneObjects.at(object);
+        info.workers.erase(worker.id);
+        worker.objects.erase(object);
+        worker.freeSpace += info.size;
+    }   
+}
+
 void LambdaMaster::assignTreelet(Worker &worker, const TreeletId treeletId) {
     assignObject(worker, {ObjectType::Treelet, treeletId});
 
     for (const auto &obj : treeletFlattenDependencies[treeletId]) {
         assignObject(worker, obj);
+    }
+}
+
+void LambdaMaster::dropTreelet(Worker &worker, const TreeletId treeletId) {
+    dropObject(worker, {ObjectType::Treelet, treeletId});
+
+    for (const auto &obj: treeletFlattenDependencies[treeletId]) {
+        dropObject(worker, obj);
     }
 }
 

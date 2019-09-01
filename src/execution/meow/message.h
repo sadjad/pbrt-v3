@@ -35,6 +35,7 @@ class Message {
         Add,
         Drop,
         Nack,
+        UpdateMapping,
 
         COUNT
     };
@@ -61,7 +62,8 @@ class Message {
         "Bye",
         "Add",
         "Drop",
-        "Nack"};
+        "Nack",
+        "UpdateMapping"};
 
     constexpr static size_t HEADER_LENGTH = 25;
 

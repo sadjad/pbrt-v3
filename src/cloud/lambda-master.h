@@ -130,10 +130,14 @@ class LambdaMaster {
     /* Assigning Objects */
     std::set<ObjectKey> getRecursiveDependencies(const ObjectKey &object);
     void assignObject(Worker &worker, const ObjectKey &object);
+    void dropObject(Worker &worker, const ObjectKey &object);
     void assignTreelet(Worker &worker, const TreeletId treeletId);
-    void addTreelets(WorkerId workerId,
+    void dropTreelet(Worker &worker, const TreeletId treeletId);
+    protobuf::WorkerDelta addTreelets(WorkerId workerId,
                      const std::vector<TreeletId> treeletIds);
-
+    protobuf::WorkerDelta dropTreelets(WorkerId workerId,
+                      const std::vector<TreeletId> treeletIds);
+    void sendDelta(protobuf::MapDelta mapDelta);
     void assignBaseSceneObjects(Worker &worker);
 
     void updateObjectUsage(const Worker &worker);
@@ -216,7 +220,8 @@ class LambdaMaster {
 
     // Temp
     uint32_t currentAddedTreelet{0};
-    TimerFD addTreeletTimer{std::chrono::seconds{20}};
+    uint32_t counter{0};
+    TimerFD dropTreeletTimer{std::chrono::seconds{15}};
 };
 
 class Schedule {

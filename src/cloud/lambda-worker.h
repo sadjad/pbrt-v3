@@ -231,7 +231,9 @@ class LambdaWorker {
     void getObjects(const protobuf::GetObjects& objects);
     void addTreelets(const protobuf::AddTreelets& proto);
     void dropTreelets(const protobuf::DropTreelets& proto);
-
+    void updateMapping(const protobuf::MapDelta& proto);
+    
+    void handleRaysWithTreelets(std::set<TreeletId> treelets);
     void pushRayQueue(RayStatePtr&& state);
     RayStatePtr popRayQueue();
 
@@ -326,9 +328,10 @@ class LambdaWorker {
     size_t outQueueSize{0};
     std::deque<uint64_t> finishedPathIds{};
 
-    std::map<TreeletId, std::set<WorkerId>> treeletToWorker{};
+    std::map<TreeletId, std::vector<WorkerId>> treeletToWorker{};
     std::set<TreeletId> neededTreelets{};
     std::set<TreeletId> requestedTreelets{};
+    std::set<TreeletId> pendingTreelets{};
 
     /* Always-on FD */
     FileDescriptor dummyFD{STDOUT_FILENO};
