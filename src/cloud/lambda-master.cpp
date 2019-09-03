@@ -398,14 +398,6 @@ ResultType LambdaMaster::handleJobStart() {
     switch (config.task) {
     case Task::RayTracing:
         // first assign half and half
-        protobuf::MapDelta firstDelta;
-        std::vector<TreeletId> first_half = {0,1,2,3,4};
-        std::vector<TreeletId> second_half = {5,6,7,8,9};
-        protobuf::WorkerDelta worker0_addition = addTreelets(0, first_half);
-        protobuf::WorkerDelta worker1_addition = addTreelets(1, first_half);
-        *firstDelta.mutable_additions() = &worker0_addition;
-        *firstDelta.mutable_additions() = &worker1_addition;
-        sendDelta(firstDelta);
         for (auto &workerkv : workers) {
             auto &worker = workerkv.second;
             if (worker.tile.initialized()) {
@@ -418,29 +410,33 @@ ResultType LambdaMaster::handleJobStart() {
                 worker.connection->enqueue_write(genRaysStr);
             }
         }
-        
+        {
+            cout << "Sending first deltas yay!" << "\n";
+            protobuf::MapDelta firstDelta;
+            *firstDelta.add_additions() = addTreelets(1, {0});
+            sendDelta(firstDelta);
+        }
         loop.poller().add_action(
             Poller::Action(dropTreeletTimer.fd, Direction::In,
                 [this]() {
                     dropTreeletTimer.reset();
-                    std::vector<TreeletId> first_half = {0,1,2,3,4};
-                    std::vector<TreeletId> second_half = {5,6,7,8,9};
                     protobuf::MapDelta nextDelta;
-                    if (counter == 0) {
-                        nextDelta.add_deletions(&(dropTreelets(0, first_half)));
-                        nextDelta.add_deletions(&(dropTreelets(1, second_half)));
-                        sendDelta(nextDelta);
-                        counter++;
+                    *nextDelta.add_deletions() = dropTreelets(1, {currentAddedTreelet});
+                    *nextDelta.add_additions() = addTreelets(2, {currentAddedTreelet});
+
+                    if (currentAddedTreelet + 1 < 10) {
+                        *nextDelta.add_additions() = addTreelets(1, {currentAddedTreelet + 1});
+                    }
+                    sendDelta(nextDelta);
+
+                    if (currentAddedTreelet + 1 < 10) {
+                        currentAddedTreelet++;
                         return ResultType::Continue;
-                    } else if (counter == 1) {
-                        nextDelta.add_additions(&(addTreelets(0, second_half)));
-                        nextDelta.add_additions(&(addTreelets(1, first_half)));
-                        sendDelta(nextDelta);
-                        return ResultType::CancelAll;
                     } else {
-                        cout << "Error, counter shouldn't be " << counter << "\n";
                         return ResultType::CancelAll;
                     }
+                    
+
                 },
                 []() { return true; },
                 []() { throw runtime_error("error in timer"); }));
@@ -630,6 +626,7 @@ protobuf::WorkerDelta LambdaMaster::addTreelets(WorkerId workerId,
         delta.add_treelet_id(treeletId);
         size += 1;
         // takes care of assigning the objects too
+        cout << "Trying to assign " << treeletId << " to " << workerId << "\n";
         assignTreelet(worker, treeletId);
         for (const auto &obj : treeletFlattenDependencies[treeletId]) {
             size += 1;

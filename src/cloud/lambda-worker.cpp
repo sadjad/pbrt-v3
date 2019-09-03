@@ -406,88 +406,6 @@ void LambdaWorker::logRayAction(const RayState& state, const RayAction action,
     TLOG(RAY) << oss.str();
 }
 
-/* handles rays in ray queue with any treelets in given vector
- * used for handling rays before the drop message */
-void LambdaWorker::handleRaysWithTreelets(std::set<TreeletId> treelets) {
-    RECORD_INTERVAL("handleRaysWithTreelets");
-
-    auto recordFinishedPath = [this](const uint64_t pathId) {
-        this->workerStats.recordFinishedPath();
-        this->finishedPathIds.push_back(pathId);
-    };
-
-    std::deque<RayStatePtr> ignoredRays = {};
-    deque<RayStatePtr> processedRays;
-    while (!rayQueue.empty()) {
-        RayStatePtr rayPtr = popRayQueue();
-        RayState& ray = *rayPtr;
-
-        const uint64_t pathId = ray.PathID();
-        if (!ray.toVisitEmpty() && treelets.count(ray.toVisitTop().treelet)) {
-            logRayAction(ray, RayAction::Traced);
-            const uint32_t rayTreelet = ray.toVisitTop().treelet;
-            auto newRayPtr = CloudIntegrator::Trace(move(rayPtr), bvh);
-            auto& newRay = *newRayPtr;
-
-            const bool hit = newRay.hit;
-            const bool emptyVisit = newRay.toVisitEmpty();
-
-            if (newRay.isShadowRay) {
-                if (hit || emptyVisit) {
-                    newRay.Ld = hit ? 0.f : newRay.Ld;
-                    logRayAction(*newRayPtr, RayAction::Finished);
-                    workerStats.recordFinishedRay(*newRayPtr);
-                    finishedQueue.push_back(move(newRayPtr));
-                } else {
-                    processedRays.push_back(move(newRayPtr));
-                }
-            } else if (!emptyVisit || hit) {
-                processedRays.push_back(move(newRayPtr));
-            } else if (emptyVisit) {
-                newRay.Ld = 0.f;
-                logRayAction(*newRayPtr, RayAction::Finished);
-                workerStats.recordFinishedRay(*newRayPtr);
-                finishedQueue.push_back(move(newRayPtr));
-                recordFinishedPath(pathId);
-            }
-        } else {
-            ignoredRays.push_back(move(rayPtr));
-        }
-    }
-
-    while (!processedRays.empty()) {
-        RayStatePtr ray = move(processedRays.front());
-        processedRays.pop_front();
-
-        workerStats.recordDemandedRay(*ray);
-        const TreeletId nextTreelet = ray->CurrentTreelet();
-
-        /* if we have the next treelet and aren't about to delete it*/
-        if ((treeletIds.count(nextTreelet)) && !(treelets.count(nextTreelet))) {
-            pushRayQueue(move(ray));
-        } else {
-            ray->Serialize();
-                
-            if (treeletToWorker.count(nextTreelet)) {
-                logRayAction(*ray, RayAction::Queued);
-                workerStats.recordSendingRay(*ray);
-                outQueue[nextTreelet].push_back(move(ray));
-                outQueueSize++;
-            } else {
-                logRayAction(*ray, RayAction::Pending);
-                workerStats.recordPendingRay(*ray);
-                neededTreelets.insert(nextTreelet);
-                pendingQueue[nextTreelet].push_back(move(ray));
-                pendingQueueSize++;
-            }
-        }
-    }
-
-    /* move back pointer for rays we didn't trace */
-    rayQueue = move(ignoredRays);
-
-}
-
 ResultType LambdaWorker::handleRayQueue() {
     RECORD_INTERVAL("handleRayQueue");
 
@@ -564,20 +482,17 @@ ResultType LambdaWorker::handleRayQueue() {
 
         if (treeletIds.count(nextTreelet)) {
             pushRayQueue(move(ray));
-        } else {
+        } else if (pendingTreelets.count(nextTreelet)) {
+            pushPendingQueue(move(ray), nextTreelet);
+        } else   {
             ray->Serialize();
-
             if (treeletToWorker.count(nextTreelet)) {
                 logRayAction(*ray, RayAction::Queued);
                 workerStats.recordSendingRay(*ray);
                 outQueue[nextTreelet].push_back(move(ray));
                 outQueueSize++;
             } else {
-                logRayAction(*ray, RayAction::Pending);
-                workerStats.recordPendingRay(*ray);
-                neededTreelets.insert(nextTreelet);
-                pendingQueue[nextTreelet].push_back(move(ray));
-                pendingQueueSize++;
+                pushPendingQueue(move(ray), nextTreelet);
             }
         }
     }
@@ -1136,26 +1051,30 @@ void LambdaWorker::generateRays(const Bounds2i& bounds) {
 }
 
 void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
+    /* add to pending treelets so we know not to nack these treelets*/
     for (const auto treeletId : proto.treelet_id()) {
         pendingTreelets.insert(treeletId);
     }
+
     std::shared_ptr<int32_t> pendingObjects =
         std::make_shared<int32_t>(proto.size());
-    cout << "In addTreelets callback: asked to download: " << proto.size()
-         << " objects.\n";
     auto downloadObjectCallback = [this, proto, pendingObjects](
                                       const uint64_t id,
                                       const std::string& tag) {
         /* update a shared variable telling how many objects are left to
          * download */
-        cout << "Downloaded object: " << tag << "\n";
+        cout << "In download object callback" << "\n";
         *pendingObjects = *pendingObjects - 1;
-        cout << "Pending: " << *pendingObjects << "\n";
         if (*pendingObjects == 0) {
+            cout << "Pending object is 0" << "\n";
             /* can go ahead and load the treelet into memory */
             for (const auto treeletId : proto.treelet_id()) {
+                cout << "Trying to load " << treeletId << "\n";
                 this->bvh.get()->loadTreelet(treeletId);
                 cout << "Loaded treelet " << treeletId << ".\n";
+                this->treeletIds.insert(treeletId);
+                pendingTreelets.erase(treeletId);
+                cout << "Updated treeletIds and pendingTreelets for " << treeletId << "\n";
                 /* move rays off the pending queue */
                 if (this->pendingQueue.count(treeletId)) {
                     auto& treeletPending = this->pendingQueue[treeletId];
@@ -1167,15 +1086,20 @@ void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
                         treeletPending.pop_front();
                     }
                 }
-                this->treeletIds.insert(treeletId);
-                this->treeletToWorker[treeletId].push_back(*workerId);
-                pendingTreelets.erase(treeletId);
+
+                /* check outQueue for any rays for this treelet */
+                if (this->outQueue.count(treeletId)) {
+                    auto& treeletOut = this->outQueue[treeletId];
+                    this->outQueueSize -= treeletOut.size();
+
+                    while(!treeletOut.empty()) {
+                        auto &front = treeletOut.front();
+                        this->rayQueue.push_back(move(front));
+                        treeletOut.pop_front();
+                    }
+                }
             }
-            cout << "Inserted stuff into memory"
-                 << "\n";
         }
-        cout << "Exiting the callback"
-             << "\n";
     };
 
     auto failureCallback = [this, proto, pendingObjects](
@@ -1190,7 +1114,6 @@ void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
         const ObjectKey id = from_protobuf(objectKey);
         std::string tag = id.to_string();  // both the tag and write path?
         std::string write_path = id.to_string();
-        cout << "Trying to download " << tag << "\n";
         loop.s3_download(tag, *s3_backend, tag, write_path,
                          downloadObjectCallback, failureCallback);
     }
@@ -1201,7 +1124,6 @@ void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
         objectNameStream << "T" << treeletId;
         std::string object = objectNameStream.str();
         std::string write_path = objectNameStream.str();
-        cout << "Trying to download treelet " << tag << "\n";
         loop.s3_download(tag, *s3_backend, object, write_path,
                          downloadObjectCallback, failureCallback);
     }
@@ -1212,7 +1134,15 @@ void LambdaWorker::dropTreelets(const protobuf::DropTreelets& proto) {
     // TODO: just process rays requiring treelets that will be dropped
     cout << "In drop message"
          << "\n";
+
+    /* first: delete the treelets from treeletIds 
+     * so we know not to put these rays back in the ray queue */
+    for (const auto treeletId: proto.treelet_id()) {
+        treeletIds.erase(treeletId);
+    }
+
     while (!rayQueue.empty()) {
+        cout << "Handling ray queue" << "\n";
         handleRayQueue();
     }
     cout << "Finished handling rayQueue"
@@ -1220,10 +1150,14 @@ void LambdaWorker::dropTreelets(const protobuf::DropTreelets& proto) {
 
     for (const auto treeletId : proto.treelet_id()) {
         cout << "Dropping T " << treeletId << " from memory" << "\n";
-        treeletIds.erase(treeletId);
         bvh.get()->dropTreelet(treeletId);  // currently a NOOP
         std::ostringstream objectNameStream;
+        objectNameStream << "T" << treeletId;
+        std::string file_path = objectNameStream.str();
+        CheckSystemCall("remove", remove(file_path.c_str()));
+
     }
+
     for (const protobuf::ObjectKey& objectKey : proto.object_ids()) {
         const ObjectKey id = from_protobuf(objectKey);
         std::string file_path = id.to_string();
@@ -1236,20 +1170,27 @@ void LambdaWorker::dropTreelets(const protobuf::DropTreelets& proto) {
 void LambdaWorker::updateMapping(const protobuf::MapDelta& proto) {
     cout << "Processing updateMapping from the master" << "\n";
     for (const protobuf::WorkerDelta& workerDelta: proto.additions()) {
+        if (workerDelta.worker_id() == *workerId) {
+            continue;
+        }
         for (const TreeletId treeletId: workerDelta.treelet_id()) {
             auto& mapping = treeletToWorker[treeletId];
-            if (std::find(mapping.begin(), mapping.end(), workerDelta.worker_id()) != mapping.end()) {
-                treeletToWorker[treeletId].push_back(workerDelta.worker_id());
+            if (std::count(mapping.begin(), mapping.end(), workerDelta.worker_id()) == 0) {
+                mapping.push_back(workerDelta.worker_id());
             }
         }
     }
 
     for (const protobuf::WorkerDelta& workerDelta: proto.deletions()) {
+        if (workerDelta.worker_id() == *workerId) {
+            continue;
+        }
         for (const TreeletId treeletId: workerDelta.treelet_id()) {
             auto& mapping = treeletToWorker[treeletId];
             mapping.erase(std::remove(mapping.begin(), mapping.end(), workerDelta.worker_id()), mapping.end());
         }
     }
+    cout << "finshed processing updateMapping from the master" << "\n";
 }
 
 void LambdaWorker::getObjects(const protobuf::GetObjects& objects) {
@@ -1282,6 +1223,14 @@ RayStatePtr LambdaWorker::popRayQueue() {
     workerStats.recordProcessedRay(*state);
 
     return state;
+}
+
+void LambdaWorker::pushPendingQueue(RayStatePtr&& ray, TreeletId treelet) {
+    logRayAction(*ray, RayAction::Pending);
+    workerStats.recordPendingRay(*ray);
+    neededTreelets.insert(treelet);
+    pendingQueue[treelet].push_back(move(ray));
+    pendingQueueSize++;
 }
 
 bool LambdaWorker::processMessage(const Message& message) {
@@ -1407,7 +1356,6 @@ bool LambdaWorker::processMessage(const Message& message) {
             peer.nextKeepAlive = packet_clock::now() + KEEP_ALIVE_INTERVAL;
 
             for (const auto treeletId : proto.treelet_ids()) {
-                peer.treelets.insert(treeletId);
                 treeletToWorker[treeletId].push_back(otherWorkerId);
                 neededTreelets.erase(treeletId);
                 requestedTreelets.erase(treeletId);
@@ -1436,9 +1384,6 @@ bool LambdaWorker::processMessage(const Message& message) {
         const char* data = message.payload().data();
         const uint32_t dataLen = message.payload().length();
         uint32_t offset = 0;
-        protobuf::Nack nack;
-        nack.set_worker_id(*workerId);
-        bool nacked = false;
 
         while (offset < dataLen) {
             const auto len = *reinterpret_cast<const uint32_t*>(data + offset);
@@ -1452,45 +1397,20 @@ bool LambdaWorker::processMessage(const Message& message) {
             logRayAction(*ray, RayAction::Received, message.sender_id());
             TreeletId treelet = (*ray).toVisitTop().treelet;
             // if we don't have the ray, move it to the pendingQueue or outQueue
-            if (!treeletIds.count(treelet) || !pendingTreelets.count(treelet)) {
+            if (treeletIds.count(treelet)) {
+                pushRayQueue(move(ray));
+            } else if (pendingTreelets.count(treelet)) {
+                pushPendingQueue(move(ray), treelet);
+            } else {
                 if (treeletToWorker.count(treelet)) {
                     logRayAction(*ray, RayAction::Queued);
                     workerStats.recordSendingRay(*ray);
                     outQueue[treelet].push_back(move(ray));
                     outQueueSize++;
                 } else {
-                    logRayAction(*ray, RayAction::Pending);
-                    workerStats.recordPendingRay(*ray);
-                    neededTreelets.insert(treelet);
-                    pendingQueue[treelet].push_back(move(ray));
-                    pendingQueueSize++;
+                    pushPendingQueue(move(ray), treelet);
                 }
-                // send message back to worker saying we don't service this
-                // treelet
-                nacked = true;
-            } else {
-                pushRayQueue(move(ray));
             }
-        }
-        if (nacked) {
-            for (TreeletId treeletId: treeletIds) {
-                nack.add_treelet_id(treeletId);
-            }
-            Message nackMessage(*workerId, OpCode::Nack,
-                                protoutil::to_string(nack));
-            auto& peer = peers.at(message.sender_id());
-            servicePackets.emplace_front(peer.address, peer.id,
-                                         nackMessage.str());
-        }
-        break;
-    }
-
-    case OpCode::Nack: {
-        protobuf::Nack proto;
-        protoutil::from_string(message.payload(), proto);
-        for (const auto treeletId : proto.treelet_id()) {
-            auto& mapping = treeletToWorker[treeletId];
-            mapping.erase(std::remove(mapping.begin(), mapping.end(), proto.worker_id()), mapping.end());
         }
         break;
     }

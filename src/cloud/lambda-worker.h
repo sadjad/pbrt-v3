@@ -80,8 +80,6 @@ class LambdaWorker {
 
         Pacer pacer{true, DEFAULT_SEND_RATE};
 
-        std::set<TreeletId> treelets{};
-
         Worker(const WorkerId id, Address&& addr)
             : id(id), address(std::move(addr)) {}
 
@@ -233,9 +231,9 @@ class LambdaWorker {
     void dropTreelets(const protobuf::DropTreelets& proto);
     void updateMapping(const protobuf::MapDelta& proto);
     
-    void handleRaysWithTreelets(std::set<TreeletId> treelets);
     void pushRayQueue(RayStatePtr&& state);
     RayStatePtr popRayQueue();
+    void pushPendingQueue(RayStatePtr&& ray, TreeletId treelet);
 
     void logRayAction(const RayState& state, const RayAction action,
                       const WorkerId otherParty = -1);
