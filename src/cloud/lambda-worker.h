@@ -228,6 +228,7 @@ class LambdaWorker {
     void generateRays(const Bounds2i& cropWindow);
     void getObjects(const protobuf::GetObjects& objects);
     void addTreelets(const protobuf::AddTreelets& proto);
+    void printTreelets();
     void dropTreelets(const protobuf::DropTreelets& proto);
     void updateMapping(const protobuf::MapDelta& proto);
     

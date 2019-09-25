@@ -409,6 +409,7 @@ void LambdaWorker::logRayAction(const RayState& state, const RayAction action,
 ResultType LambdaWorker::handleRayQueue() {
     RECORD_INTERVAL("handleRayQueue");
 
+    cout << "Trying to handle ray queue\n";
     auto recordFinishedPath = [this](const uint64_t pathId) {
         this->workerStats.recordFinishedPath();
         this->finishedPathIds.push_back(pathId);
@@ -484,8 +485,10 @@ ResultType LambdaWorker::handleRayQueue() {
         const TreeletId nextTreelet = ray->CurrentTreelet();
 
         if (treeletIds.count(nextTreelet)) {
+            cout << "Pushing treelet " << nextTreelet << " onto rayQueue\n";
             pushRayQueue(move(ray));
         } else if (pendingTreelets.count(nextTreelet)) {
+            cout << "Pushing treelet " << nextTreelet << " onto the pendingQueue because it is downloading\n";
             pushPendingQueue(move(ray), nextTreelet);
         } else   {
             ray->Serialize();
@@ -500,6 +503,7 @@ ResultType LambdaWorker::handleRayQueue() {
         }
     }
 
+    cout << "Finished handling rayQueue\n";
     return ResultType::Continue;
 }
 
@@ -1032,6 +1036,7 @@ void LambdaWorker::generateRays(const Bounds2i& bounds) {
             const auto nextTreelet = state.CurrentTreelet();
 
             if (treeletIds.count(nextTreelet)) {
+                cout << "Pushing treelet " << nextTreelet << " onto rayQueue\n";
                 pushRayQueue(move(statePtr));
             } else {
                 statePtr->Serialize();
@@ -1055,6 +1060,7 @@ void LambdaWorker::generateRays(const Bounds2i& bounds) {
 
 void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
     /* add to pending treelets so we know not to nack these treelets*/
+    printTreelets();
     for (const auto treeletId : proto.treelet_id()) {
         pendingTreelets.insert(treeletId);
     }
@@ -1103,6 +1109,7 @@ void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
                 }
             }
         }
+        printTreelets();
     };
 
     auto failureCallback = [this, proto, pendingObjects](
@@ -1132,12 +1139,23 @@ void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
     }
 }
 
+void LambdaWorker::printTreelets() {
+    std::ostringstream objectNameStream;
+    objectNameStream << "Treelets Set: [";
+    for (const auto treeletId: treeletIds) {
+        objectNameStream << "T" << treeletId << ",";
+    }
+
+    objectNameStream << "]\n";
+    cout << objectNameStream.str();
+}
+
 void LambdaWorker::dropTreelets(const protobuf::DropTreelets& proto) {
     // first, handle the current rayQueue
     // TODO: just process rays requiring treelets that will be dropped
     cout << "In drop message"
          << "\n";
-
+    printTreelets();
     /* first: delete the treelets from treeletIds 
      * so we know not to put these rays back in the ray queue */
     for (const auto treeletId: proto.treelet_id()) {
@@ -1169,6 +1187,7 @@ void LambdaWorker::dropTreelets(const protobuf::DropTreelets& proto) {
         CheckSystemCall("remove", remove(file_path.c_str()));
         cout << "Dropped from filesystem: " << id.to_string() << "\n";
     }
+    printTreelets();
 }
 
 void LambdaWorker::updateMapping(const protobuf::MapDelta& proto) {
@@ -1411,7 +1430,7 @@ bool LambdaWorker::processMessage(const Message& message) {
             TreeletId treelet = (*ray).toVisitTop().treelet;
             // if we don't have the ray, move it to the pendingQueue or outQueue
             if (treeletIds.count(treelet)) {
-                /*cout << "Pushing ray for treelet T" << treelet << " to ray queue" << "\n";*/
+                cout << "Pushing ray for treelet T" << treelet << " to ray queue" << "\n";
                 pushRayQueue(move(ray));
             } else if (pendingTreelets.count(treelet)) {
                 cout << "Pushing ray for treelet T" << treelet << " to pending queue" << "\n";
