@@ -421,14 +421,24 @@ ResultType LambdaMaster::handleJobStart() {
                 [this]() {
                     dropTreeletTimer.reset();
                     protobuf::MapDelta nextDelta;
+                    // ask the first worker to drop the stuff for treelet 1
                     *nextDelta.add_deletions() = dropTreelets(1, {currentAddedTreelet});
+                    // ask the second worker to add the stuff for treelet 1
                     *nextDelta.add_additions() = addTreelets(2, {currentAddedTreelet});
+                    cout << "Sent next add and drop: " << currentAddedTreelet << "\n";
 
                     if (currentAddedTreelet + 1 < 10) {
                         *nextDelta.add_additions() = addTreelets(1, {currentAddedTreelet + 1});
                     }
-                    sendDelta(nextDelta);
 
+                    // once it has the update mapping -- it would think it has treelet 1
+                    // and all the stuff for 0 would be on the pending queue
+                    // can eventually be sent over to the second worker
+                    // worker 2 can also send treelets for treelet 1 to worker 1
+                    // possible problem: it thinks it has treelet 1 but it doesn't
+                    // or worker 2 sends stuff to worker 1 for treelet 1?
+                    sendDelta(nextDelta);
+                    cout << "Sent delta for adding T" << currentAddedTreelet + 1 << "\n";
                     if (currentAddedTreelet + 1 < 10) {
                         currentAddedTreelet++;
                         return ResultType::Continue;
@@ -616,6 +626,7 @@ void LambdaMaster::sendDelta(protobuf::MapDelta mapDelta) {
 
 protobuf::WorkerDelta LambdaMaster::addTreelets(WorkerId workerId,
                                const std::vector<TreeletId> treeletIds) {
+    cout << "Add treelets function" << "\n";
     auto &worker = workers.at(workerId);
     protobuf::AddTreelets proto;
     protobuf::WorkerDelta delta;
@@ -638,6 +649,7 @@ protobuf::WorkerDelta LambdaMaster::addTreelets(WorkerId workerId,
     proto.set_size(size);
     worker.connection->enqueue_write(
         Message::str(0, OpCode::Add, protoutil::to_string(proto)));
+    cout << "Enqueued add message to worker " << workerId << "\n";
     return delta;
 }
 
