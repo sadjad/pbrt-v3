@@ -235,6 +235,11 @@ class LambdaWorker {
     void pushRayQueue(RayStatePtr&& state);
     RayStatePtr popRayQueue();
     void pushPendingQueue(RayStatePtr&& ray, TreeletId treelet);
+    void pushOutQueue(RayStatePtr&& ray, TreeletId treelet);
+    void moveOutToPendingQueue(TreeletId treelet);
+    void moveOutToRayQueue(TreeletId treelet);
+    void movePendingToRayQueue(TreeletId treelet);
+    void movePendingToOutQueue(TreeletId treelet);
 
     void logRayAction(const RayState& state, const RayAction action,
                       const WorkerId otherParty = -1);
