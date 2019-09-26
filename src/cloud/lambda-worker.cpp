@@ -1176,7 +1176,7 @@ void LambdaWorker::dropTreelets(const protobuf::DropTreelets& proto) {
         std::ostringstream objectNameStream;
         objectNameStream << "T" << treeletId;
         std::string file_path = objectNameStream.str();
-        CheckSystemCall("remove", remove(file_path.c_str()));
+        //CheckSystemCall("remove", remove(file_path.c_str()));
         cout << "Finished Dropping T " << treeletId << " from memory" << "\n";
     }
 
@@ -1184,7 +1184,7 @@ void LambdaWorker::dropTreelets(const protobuf::DropTreelets& proto) {
         const ObjectKey id = from_protobuf(objectKey);
         std::string file_path = id.to_string();
         cout << "Trying to drop: " << id.to_string() << "\n";
-        CheckSystemCall("remove", remove(file_path.c_str()));
+        //CheckSystemCall("remove", remove(file_path.c_str()));
         cout << "Dropped from filesystem: " << id.to_string() << "\n";
     }
     printTreelets();
@@ -1219,8 +1219,28 @@ void LambdaWorker::updateMapping(const protobuf::MapDelta& proto) {
         for (const TreeletId treeletId: workerDelta.treelet_id()) {
             auto& mapping = treeletToWorker[treeletId];
             mapping.erase(std::remove(mapping.begin(), mapping.end(), workerDelta.worker_id()), mapping.end());
+
+            // if the list is empty, remove the corresponding treelets from the out queue
+            if (mapping.size() == 0) {
+                // remove any treelets for this treeletId from the outQueue
+                auto& treeletOut = outQueue[treeletId];
+                outQueueSize -= treeletOut.size();
+                // going to the ray queue or the pending queue?
+                while(!treeletOut.empty()) {
+                    auto &front = treeletOut.front();
+                    if (treeletIds.count(treeletId)) {
+                        pushRayQueue(move(front));
+                    } else {
+                        pushPendingQueue(move(front), treeletId);
+                    }
+                    treeletOut.pop_front();
+                }
+                outQueue.erase(treeletId);
+            }
         }
     }
+
+    // TODO: check the pending queue to service anything that might need to be moved to the out queue
     cout << "finshed processing updateMapping from the master" << "\n";
 }
 

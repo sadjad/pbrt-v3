@@ -3,12 +3,18 @@
 
 #include <iterator>
 #include <random>
-
+#include <stdexcept>
+#include <iostream>
 namespace pbrt {
 namespace random {
 
 template <typename Iter, typename RandomGenerator>
 Iter sample(Iter start, Iter end, RandomGenerator& g) {
+    if (start == end) {
+        std::cout << "AHHHHHHHHH THE LIST WE ARE TRYING TO GET A SAMPLE FROM IS EMPTY" << std::endl;
+        throw std::runtime_error("the list is empty");
+    }
+    
     std::uniform_int_distribution<> dis(0, std::distance(start, end) - 1);
     std::advance(start, dis(g));
     return start;
