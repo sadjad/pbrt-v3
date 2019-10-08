@@ -12,11 +12,15 @@
 #include "shapes/triangle.h"
 #include "util/optional.h"
 
+#include <mutex>
+#include <shared_mutex>
+
 namespace pbrt {
 
 struct TreeletNode;
 
 class CloudBVH : public Aggregate {
+  
   public:
     struct TreeletInfo {
         std::set<uint32_t> children{};
@@ -85,6 +89,9 @@ class CloudBVH : public Aggregate {
     void clear() const;
 
     Transform identity_transform_;
+
+    //loadTree mutex
+    mutable std::shared_timed_mutex mutex_;
 };
 
 std::shared_ptr<CloudBVH> CreateCloudBVH(const ParamSet &ps);
