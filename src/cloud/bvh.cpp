@@ -4,6 +4,8 @@
 #include <stack>
 #include <thread>
 
+#include <mutex> 
+#include <shared_mutex>
 #include "accelerators/bvh.h"
 #include "cloud/manager.h"
 #include "core/parallel.h"
@@ -14,16 +16,13 @@
 #include "messages/utils.h"
 #include "pbrt.pb.h"
 #include "shapes/triangle.h"
-
 using namespace std;
 
+//using global mutex
 namespace pbrt {
 
 CloudBVH::CloudBVH(const uint32_t bvh_root) : bvh_root_(bvh_root) {
-    if (MaxThreadIndex() > 1) {
-        throw runtime_error("Cannot use CloudBVH with multiple threads");
-    }
-
+    
     unique_ptr<Float[]> color(new Float[3]);
     color[0] = 0.f;
     color[1] = 0.5;
@@ -36,17 +35,14 @@ CloudBVH::CloudBVH(const uint32_t bvh_root) : bvh_root_(bvh_root) {
     map<string, shared_ptr<Texture<Float>>> fTex;
     map<string, shared_ptr<Texture<Spectrum>>> sTex;
     TextureParams textureParams(params, emptyParams, fTex, sTex);
+
     default_material.reset(CreateMatteMaterial(textureParams));
 }
 
 Bounds3f CloudBVH::WorldBound() const {
-    static bool got_it = false;
 
-    if (not got_it) {
-        loadTreelet(bvh_root_);
-        got_it = true;
-    }
-
+    loadTreelet(bvh_root_);
+    std::shared_lock<std::shared_timed_mutex> WorldBound_lock(mutex_);
     return treelets_[bvh_root_].nodes[0].bounds;
 }
 
@@ -54,7 +50,9 @@ void CloudBVH::loadTreelet(const uint32_t root_id) const {
     if (treelets_.count(root_id)) {
         return; /* this tree is already loaded */
     }
-
+     
+    std::lock_guard<std::shared_timed_mutex> loadTreelet_lock(mutex_);
+    
     TreeletInfo &info = treelet_info_[root_id];
 
     vector<TreeletNode> nodes;
@@ -197,7 +195,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id) const {
         q.emplace(index, LEFT);
     }
 
-    treelet.nodes = move(nodes);
+    treelet.nodes = move(nodes);    
 }
 
 void CloudBVH::Trace(RayState &rayState) {
@@ -210,6 +208,7 @@ void CloudBVH::Trace(RayState &rayState) {
     const uint32_t currentTreelet = rayState.toVisitTop().treelet;
     loadTreelet(currentTreelet); /* we don't load any other treelets */
 
+
     bool hasTransform = false;
     bool transformChanged = false;
 
@@ -221,6 +220,8 @@ void CloudBVH::Trace(RayState &rayState) {
 
         RayState::TreeletNode current = move(top);
         rayState.toVisitPop();
+
+        std::shared_lock<std::shared_timed_mutex> Trace_lock(mutex_);
 
         auto &treelet = treelets_[current.treelet];
         auto &node = treelet.nodes[current.node];
@@ -315,6 +316,9 @@ bool CloudBVH::Intersect(RayState &rayState, SurfaceInteraction *isect) const {
     auto &hit = rayState.hitNode;
     loadTreelet(hit.treelet);
 
+
+    std::shared_lock<std::shared_timed_mutex> Intersect_lock(mutex_);
+
     auto &treelet = treelets_[hit.treelet];
     auto &node = treelet.nodes[hit.node];
     auto &primitives = treelet.primitives;
@@ -352,6 +356,9 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
 
     while (true) {
         loadTreelet(current.first);
+
+        std::shared_lock<std::shared_timed_mutex> Intersect_lock_2(mutex_);
+
         auto &treelet = treelets_[current.first];
         auto &node = treelet.nodes[current.second];
 
@@ -402,6 +409,9 @@ bool CloudBVH::IntersectP(const Ray &ray) const {
 
     while (true) {
         loadTreelet(current.first);
+
+        std::shared_lock<std::shared_timed_mutex> IntersectP_lock(mutex_);
+
         auto &treelet = treelets_[current.first];
         auto &node = treelet.nodes[current.second];
 
@@ -441,6 +451,7 @@ bool CloudBVH::IntersectP(const Ray &ray) const {
 }
 
 void CloudBVH::clear() const {
+    std::lock_guard<std::shared_timed_mutex> clear_lock(mutex_);
     treelets_.clear();
     bvh_instances_.clear();
     transforms_.clear();
