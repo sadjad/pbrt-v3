@@ -22,10 +22,6 @@ using namespace std;
 namespace pbrt {
 
 CloudBVH::CloudBVH(const uint32_t bvh_root) : bvh_root_(bvh_root) {
-   // if (MaxThreadIndex() > 1) {
-    //   throw runtime_error("Cannot use CloudBVH with multiple threads");
-  //  }
-  
     
     unique_ptr<Float[]> color(new Float[3]);
     color[0] = 0.f;
@@ -40,15 +36,10 @@ CloudBVH::CloudBVH(const uint32_t bvh_root) : bvh_root_(bvh_root) {
     map<string, shared_ptr<Texture<Spectrum>>> sTex;
     TextureParams textureParams(params, emptyParams, fTex, sTex);
 
-    //std::lock_guard<std::shared_timed_mutex> guard(default_mat_mutex_);
     default_material.reset(CreateMatteMaterial(textureParams));
 }
 
 Bounds3f CloudBVH::WorldBound() const {
-    
-    //locks so as to not allow others to access treelets_ while 
-    //returning data, thereby not corrupting the current read
-    //std::lock_guard<std::shared_timed_mutex> guard(WorldBound_mutex_);
 
     loadTreelet(bvh_root_);
     std::shared_lock<std::shared_timed_mutex> WorldBound_lock(mutex_);
@@ -60,8 +51,6 @@ void CloudBVH::loadTreelet(const uint32_t root_id) const {
         return; /* this tree is already loaded */
     }
      
-    //first thread to reach gets lock access
-    //std::unique_lock<std::shared_timed_mutex> writer_lock(mutex_,std::defer_lock);
     std::lock_guard<std::shared_timed_mutex> loadTreelet_lock(mutex_);
     
     TreeletInfo &info = treelet_info_[root_id];
