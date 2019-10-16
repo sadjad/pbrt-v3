@@ -6,3 +6,20 @@ src/objs
 
 /build
 /build-debug
+scenes/X/CAMERA
+scenes/X/LIGHTS
+scenes/X/MANIFEST
+scenes/X/MAT0
+scenes/X/MAT1
+scenes/X/SAMPLER
+scenes/X/SCENE
+scenes/X/T0
+scenes/X/T1
+scenes/X/T2
+scenes/X/T3
+scenes/X/T4
+scenes/X/T5
+scenes/X/T6
+scenes/X/T7
+scenes/X/T8
+scenes/X/T9
