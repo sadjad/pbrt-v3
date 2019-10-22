@@ -253,6 +253,14 @@ class LambdaWorker {
     void pushRayQueue(RayStatePtr&& state);
     RayStatePtr popRayQueue();
 
+    void pushPendingQueue(RayStatePtr&& state, TreeletId treelet);
+    void pushOutQueue(RayStatePtr&& state, TreeletId treelet);
+
+    void moveOutToRayQueue(TreeletId treelet);
+    void moveOutToPendingQueue(TreeletId treelet);
+    void movePendingToRayQueue(TreeletId treelet);
+    void movePendingToOutQueue(TreeletId treelet);
+
     void logRayAction(const RayState& state, const RayAction action,
                       const WorkerId otherParty = -1);
 
@@ -344,6 +352,7 @@ class LambdaWorker {
     std::vector<std::shared_ptr<Light>> lights{};
     std::shared_ptr<CloudBVH> bvh;
     std::set<uint32_t> treeletIds{};
+    std::set<uint32_t> pendingTreeletIds{};
     MemoryArena arena;
 
     /* Rays */
