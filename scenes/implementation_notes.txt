@@ -1,0 +1,84 @@
+Implementation Notes for Dynamic Allocation
+
+System changes that need to be made:
+- Master needs to support a "dynamic allocation" node where assignments are not sent to the treelets initially
+- Master needs the ability to query the current worker to treelet assignment (which may include packing) and make changes to it
+- Master should have some class that deals with these scheduling decisions that reads the relevant statistics and sends updates whenever
+- Master needs a way to send mapping deltas to workers
+- Master needs a way to send add treelets or delete treelet messages to workers so workers can update their state
+**** LEASES FOR SCHEDULING ***
+-  Every now and then -- master sends a message to everyone about a new mapping change (and when it is valid from and when it is valid too)
+- On the workers -- the mapping of treelets to workers should be updated to reflect that the map has EXPIRATION TIMES
+    => the hope is that the expiration times eliminate a lot of the correctness edge cases happening so the scheduling should hopefully
+- On the workers, in addition:
+    - Should add new functions to add treelets/objects and delete treelets/objects
+    - Also be cleaner about the rayQueue, pendingQueue and outQueue:
+    - outQueue is for stuff addressed to a treelet but the worker hasn't been found yet
+    - pendingQueue is stuff that we don't know where it's supposed to go
+    - rayQueue is for stuff that has to be traced
+- Question: do we always want to trace stuff what we have the treelet for?
+    - Sometimes, there's no other worker available -- so we have to do it
+    - Otherwise -- there's another worker available -- so maybe we should send it forward
+    - It's unclear which is the better policy
+
+- What do we do when we add a treelet?
+    - Do we go through the outQueue and pendingQueue to trace the stuff for that treelet?
+    - Or do we just start tracing new stuff
+
+What do we do when we update the mapping?
+- Need to check the outQueue for anything that might have no workers for it -- and move them to the pending queue
+- Need to check the pendingQueue for anything now that has workers -- and move it to the outQueue -- because we can now service them!
+
+- When sending:
+    - The worker randomly shuffles all the keys in the outQueue (i.e. treelets for which there is a list of workers)
+    - For each key/treelet --> it calls random.sample on the array of workers for that treelets
+    - We want to make sure the random sample function is never (or the random shuffle function) is never called on an empty thingy
+
+
+**** BARRIERS FOR SCHEDULING *****
+- All the same stuff as before, but the correctness mechanics are much easier because the master has the ability to send stop and start messages -- which make the workers stop what they are doing
+
+What's the cleanest way to re-implement this?
+- On the worker:
+    - State changes that need to happen:
+        => Need to add this pendingTreelets thing -- treelets that you are trying to download "asynchronously"
+        => Need to change the treelet to worker mapping to include these expiration times:
+            - std::Map<TreeletId, std::vector<std::pair(WorkerId, time)>> treeletToWorker{}
+        => Everytime you process the outQueue -- you need to check the expiration times (in handleUDPSend):
+            - change the (if workerForTreelet[treeletId].count() && workerForTreeletId[treeletId].second >= now) to also include && workerForTreelet[treeletId] has not reached expiration time:
+            - be careful about how you implement this part exactly
+    - The new messages are:
+        => Add treelet
+            - update the pendingTreelets while downloading stuff
+            - update the final treelets vector when everything is downloaded
+            - move anything from the outQueue to self
+            - move anything from the pendingQueue to the rayQueue
+        => Drop treelet
+            - remove this treelet from the treelets so stuff doesn't go back into the rayQueue
+            - process everything in the rayQueue for this treelet
+            - should be it (?)
+        => updateMapping
+            - update the mapping (for everything except self -- or maybe good to keep self consistent too)
+            - move anything in the pendingQueue that now has something to send to someone to the outQueue
+            - move anything in the outQueue now doesn't have anywhere to go to the pendingQueue
+            - and need to delete the corresponding entry in the outQueue
+        => stopSending
+            - change a flag
+            - worker needs to acknowledge
+
+        => when everyone gets the update
+            - worker needs to acknowledge
+            - look at enqueue_write for an example for sending Acks back
+        => continueSending
+            - change a flag
+            - no ack needed
+        => handleUDPSend:
+            - if the flag is on, don't do anything
+            - need to stop doing anything if there are no entries in the outQueue (which well could happen)
+        => Need to still handle the case of getting something that we don't have the treelet anymore
+        => changing getPacket:
+            - if the treelet is pending, put it in the pending queue
+            - if we don't have the treelet anymore, put it in the out queue or the pending queue
+- On the master:
+    - Add a class to deal with everything
+    - I.e. keep all the state based on the mapping and the statistics coming from the worker and make algorithmic decisions

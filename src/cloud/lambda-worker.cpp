@@ -788,6 +788,11 @@ ResultType LambdaWorker::handleUdpSend() {
             return ResultType::Continue;
         }
     }
+    
+    // need to add a case when the outQueue is empty,
+    // so we don't perform the random_shuffle on an empty array
+    // tbh maybe that will fix everything
+    // or will there be more issues
 
     vector<TreeletId> myTreelets;
     myTreelets.reserve(outQueue.size());
