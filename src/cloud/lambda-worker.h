@@ -329,6 +329,7 @@ class LambdaWorker {
     uint64_t ackId{0};
     UDPConnection udpConnection{true, config.maxUdpRate};
     std::deque<ServicePacket> servicePackets{};
+    bool currentlySending{true};
 
     /* outgoing rays */
     std::deque<RayPacket> rayPackets{};

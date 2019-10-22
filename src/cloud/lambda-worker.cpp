@@ -192,7 +192,7 @@ LambdaWorker::LambdaWorker(const string& coordinatorIP,
     eventAction[Event::UdpSend] = loop.poller().add_action(Poller::Action(
         udpConnection, Direction::Out, bind(&LambdaWorker::handleUdpSend, this),
         [this]() {
-            return udpConnection.within_pace() &&
+            return currentlySending && udpConnection.within_pace() &&
                    (!servicePackets.empty() || !rayPackets.empty() ||
                     outQueueSize > 0);
         },
