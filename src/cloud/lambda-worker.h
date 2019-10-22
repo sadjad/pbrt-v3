@@ -38,8 +38,9 @@ constexpr std::chrono::milliseconds KEEP_ALIVE_INTERVAL{40'000};
 constexpr std::chrono::milliseconds FINISHED_PATHS_INTERVAL{2'500};
 constexpr std::chrono::milliseconds PACKET_TIMEOUT{20};
 constexpr std::chrono::milliseconds INACTIVITY_THRESHOLD{1'00};
-//constexpr std::chrono::milliseconds TREELET_PEER_TIMEOUT{200};
+// constexpr std::chrono::milliseconds TREELET_PEER_TIMEOUT{200};
 constexpr std::chrono::milliseconds RECONNECTS_INTERVAL{2'000};
+constexpr std::chrono::milliseconds MAX_EXPIRATION{900'000};
 
 constexpr uint64_t DEFAULT_SEND_RATE{1'400 * 8};
 
@@ -364,7 +365,9 @@ class LambdaWorker {
     size_t outQueueSize{0};
     std::deque<uint64_t> finishedPathIds{};
 
-    std::map<TreeletId, std::vector<WorkerId>> treeletToWorker{};
+    std::map<TreeletId,
+             std::vector<std::pair<WorkerId, packet_clock::time_point>>>
+        treeletToWorker{};
     std::set<TreeletId> neededTreelets{};
     std::set<TreeletId> requestedTreelets{};
 
