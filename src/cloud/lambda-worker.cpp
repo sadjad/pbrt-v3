@@ -920,15 +920,33 @@ ResultType LambdaWorker::handleUdpSend() {
         auto& queue = outQueue[treeletId];
         auto& queueLengthBytes = outQueueLengthBytes[treeletId];
 
-        /* (2) pick a worker to send to */
+        /* (2) purge expired entries from treeletToWorker mapping */
+        auto& candidates = treeletToWorker[treeletId];
+        auto it = candidates.begin();
+        while (it != candidates.end()) {
+            if (it->second >= packet_clock::now()) {
+                if (workerForTreelet.count(treeletId) &&
+                    it->first == workerForTreelet[treeletId].first) {
+                    workerForTreelet.erase(treeletId);
+                }
+                it = candidates.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        if (candidates.size() == 0) {
+            continue;
+        }
+
+        /* (3) pick a worker to send to */
         WorkerId peerId;
 
         if (workerForTreelet.count(treeletId) &&
             workerForTreelet[treeletId].second >= now) {
             peerId = workerForTreelet[treeletId].first;
         } else {
-            const auto& candidates = treeletToWorker[treeletId];
-            peerId = *random::sample(candidates.begin(), candidates.end());
+            peerId =
+                random::sample(candidates.begin(), candidates.end())->first;
             workerForTreelet[treeletId].first = peerId;
             workerForTreelet[treeletId].second = now + 4 * INACTIVITY_THRESHOLD;
         }
@@ -1194,8 +1212,7 @@ void LambdaWorker::generateRays(const Bounds2i& bounds) {
 
                 if (pendingTreeletIds.count(nextTreelet)) {
                     pushPendingQueue(move(statePtr), nextTreelet);
-                }
-                else if (treeletToWorker.count(nextTreelet)) {
+                } else if (treeletToWorker.count(nextTreelet)) {
                     pushOutQueue(move(statePtr), nextTreelet);
                 } else {
                     pushPendingQueue(move(statePtr), nextTreelet);
@@ -1247,7 +1264,7 @@ void LambdaWorker::pushPendingQueue(RayStatePtr&& state, TreeletId treelet) {
 
 void LambdaWorker::pushOutQueue(RayStatePtr&& state, TreeletId treelet) {
     logRayAction(*state, RayAction::Queued);
-    //workerStats.recordSendingRay(*state);
+    // workerStats.recordSendingRay(*state);
     outQueueLengthBytes[treelet] += state->SerializedSize();
     outQueue[treelet].push_back(move(state));
     outQueueSize++;
@@ -1423,7 +1440,8 @@ bool LambdaWorker::processMessage(const Message& message) {
 
             for (const auto treeletId : proto.treelet_ids()) {
                 peer.treelets.insert(treeletId);
-                treeletToWorker[treeletId].push_back(otherWorkerId);
+                treeletToWorker[treeletId].push_back(std::make_pair(
+                    otherWorkerId, packet_clock::now() + MAX_EXPIRATION));
                 neededTreelets.erase(treeletId);
                 requestedTreelets.erase(treeletId);
 
