@@ -32,6 +32,12 @@ class Message {
         FinishedPaths,
         StartBenchmark,
         Bye,
+        AddTreelets,
+        DropTreelets,
+        UpdateMapping,
+        StopSending,
+        StartSending,
+        StoppedSending,
 
         COUNT
     };
@@ -55,7 +61,14 @@ class Message {
         "FinishedRays",
         "FinishedPaths",
         "StartBenchmark",
-        "Bye"};
+        "Bye",
+        "AddTreelets",
+        "DropTreelets",
+        "UpdateMapping",
+        "StopSending",
+        "StartSending",
+        "StoppedSending",
+    };
 
     constexpr static size_t HEADER_LENGTH = 25;
 
