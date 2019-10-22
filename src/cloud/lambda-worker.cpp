@@ -491,19 +491,12 @@ ResultType LambdaWorker::handleRayQueue() {
 
             workerStats.recordGeneratedBytes(nextTreelet,
                                              ray->SerializedSize());
-
-            if (treeletToWorker.count(nextTreelet)) {
-                logRayAction(*ray, RayAction::Queued);
-                workerStats.recordSendingRay(*ray);
-                outQueueLengthBytes[nextTreelet] += ray->SerializedSize();
-                outQueue[nextTreelet].push_back(move(ray));
-                outQueueSize++;
+            if (pendingTreeletIds.count(nextTreelet)) {
+                pushPendingQueue(move(ray), nextTreelet);
+            } else if (treeletToWorker.count(nextTreelet)) {
+                pushOutQueue(move(ray), nextTreelet);
             } else {
-                logRayAction(*ray, RayAction::Pending);
-                workerStats.recordPendingRay(*ray);
-                neededTreelets.insert(nextTreelet);
-                pendingQueue[nextTreelet].push_back(move(ray));
-                pendingQueueSize++;
+                pushPendingQueue(move(ray), nextTreelet);
             }
         }
     }
@@ -1138,18 +1131,13 @@ void LambdaWorker::generateRays(const Bounds2i& bounds) {
                 workerStats.recordGeneratedBytes(nextTreelet,
                                                  state.SerializedSize());
 
-                if (treeletToWorker.count(nextTreelet)) {
-                    logRayAction(state, RayAction::Queued);
-                    workerStats.recordSendingRay(state);
-                    outQueueLengthBytes[nextTreelet] += state.SerializedSize();
-                    outQueue[nextTreelet].push_back(move(statePtr));
-                    outQueueSize++;
+                if (pendingTreeletIds.count(nextTreelet)) {
+                    pushPendingQueue(move(statePtr), nextTreelet);
+                }
+                else if (treeletToWorker.count(nextTreelet)) {
+                    pushOutQueue(move(statePtr), nextTreelet);
                 } else {
-                    logRayAction(state, RayAction::Pending);
-                    workerStats.recordPendingRay(state);
-                    neededTreelets.insert(nextTreelet);
-                    pendingQueue[nextTreelet].push_back(move(statePtr));
-                    pendingQueueSize++;
+                    pushPendingQueue(move(statePtr), nextTreelet);
                 }
             }
         }
@@ -1186,6 +1174,68 @@ RayStatePtr LambdaWorker::popRayQueue() {
     workerStats.recordProcessedRay(*state);
 
     return state;
+}
+
+void LambdaWorker::pushPendingQueue(RayStatePtr&& state, TreeletId treelet) {
+    logRayAction(*state, RayAction::Pending);
+    workerStats.recordPendingRay(*state);
+    neededTreelets.insert(treelet);
+    pendingQueue[treelet].push_back(move(state));
+    pendingQueueSize++;
+}
+
+void LambdaWorker::pushOutQueue(RayStatePtr&& state, TreeletId treelet) {
+    logRayAction(*state, RayAction::Queued);
+    //workerStats.recordSendingRay(*state);
+    outQueueLengthBytes[treelet] += state->SerializedSize();
+    outQueue[treelet].push_back(move(state));
+    outQueueSize++;
+}
+
+void LambdaWorker::moveOutToRayQueue(TreeletId treelet) {
+    auto& treeletOut = outQueue[treelet];
+    outQueueSize -= treeletOut.size();
+    while (!treeletOut.empty()) {
+        auto& front = treeletOut.front();
+        pushRayQueue(move(front));
+        treeletOut.pop_front();
+    }
+    outQueue.erase(treelet);
+    outQueueLengthBytes.erase(treelet);
+}
+
+void LambdaWorker::moveOutToPendingQueue(TreeletId treelet) {
+    auto& treeletOut = outQueue[treelet];
+    outQueueSize -= treeletOut.size();
+    while (!treeletOut.empty()) {
+        auto& front = treeletOut.front();
+        pushPendingQueue(move(front), treelet);
+        treeletOut.pop_front();
+    }
+    outQueue.erase(treelet);
+    outQueueLengthBytes.erase(treelet);
+}
+
+void LambdaWorker::movePendingToRayQueue(TreeletId treelet) {
+    auto& treeletPending = pendingQueue[treelet];
+    pendingQueueSize -= treeletPending.size();
+    while (!treeletPending.empty()) {
+        auto& front = treeletPending.front();
+        pushRayQueue(move(front));
+        treeletPending.pop_front();
+    }
+    pendingQueue.erase(treelet);
+}
+
+void LambdaWorker::movePendingToOutQueue(TreeletId treelet) {
+    auto& treeletPending = pendingQueue[treelet];
+    pendingQueueSize -= treeletPending.size();
+    while (!treeletPending.empty()) {
+        auto& front = treeletPending.front();
+        pushOutQueue(move(front), treelet);
+        treeletPending.pop_front();
+    }
+    pendingQueue.erase(treelet);
 }
 
 bool LambdaWorker::processMessage(const Message& message) {
@@ -1317,20 +1367,7 @@ bool LambdaWorker::processMessage(const Message& message) {
                 requestedTreelets.erase(treeletId);
 
                 if (pendingQueue.count(treeletId)) {
-                    auto& treeletPending = pendingQueue[treeletId];
-                    auto& treeletOut = outQueue[treeletId];
-                    auto& treeletOutLen = outQueueLengthBytes[treeletId];
-
-                    outQueueSize += treeletPending.size();
-                    pendingQueueSize -= treeletPending.size();
-
-                    while (!treeletPending.empty()) {
-                        auto& front = treeletPending.front();
-                        workerStats.recordSendingRay(*front);
-                        treeletOutLen += front->SerializedSize();
-                        treeletOut.push_back(move(front));
-                        treeletPending.pop_front();
-                    }
+                    movePendingToOutQueue(treeletId);
                 }
             }
         }
