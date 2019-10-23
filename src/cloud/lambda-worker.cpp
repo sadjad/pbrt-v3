@@ -2,7 +2,6 @@
 
 #include <getopt.h>
 #include <glog/logging.h>
-#include <stdlib.h>
 #include <sys/resource.h>
 #include <sys/timerfd.h>
 #include <cstdlib>
