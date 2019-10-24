@@ -50,6 +50,9 @@ class CloudBVH : public Aggregate {
         return treelet_info_.at(treelet_id);
     }
 
+    void loadTreelet(const uint32_t root_id) const;
+    void dropTreelet(const uint32_t treelet_id) const;
+
   private:
     enum Child { LEFT = 0, RIGHT = 1 };
 
@@ -90,7 +93,6 @@ class CloudBVH : public Aggregate {
 
     mutable std::map<uint32_t, TreeletInfo> treelet_info_;
 
-    void loadTreelet(const uint32_t root_id) const;
     void clear() const;
 
     // returns array of Bounds3f with structure of Treelet's internal BVH nodes

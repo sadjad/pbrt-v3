@@ -38,6 +38,7 @@ struct Assignment {
     static constexpr int Static     = (1 << 1);
     static constexpr int Uniform    = (1 << 2);
     static constexpr int Debug      = (1 << 3); /* only assigns T0 to one worker */
+    static constexpr int Dynamic = ( 1 << 4);
     // clang-format on
 };
 
@@ -135,7 +136,15 @@ class LambdaMaster {
     /* Assigning Objects */
     std::set<ObjectKey> getRecursiveDependencies(const ObjectKey &object);
     void assignObject(Worker &worker, const ObjectKey &object);
+    void removeObject(Worker &worker, const ObjectKey &object);
     void assignTreelet(Worker &worker, const TreeletId treeletId);
+    void removeTreelet(Worker &worker, const TreeletId treeletId);
+    void addTreelets(WorkerId workerId,
+                     const std::vector<TreeletId> treeletIds);
+    void dropTreelets(WorkerId workerId,
+                      const std::vector<TreeletId> treeletIds);
+
+    void sendMapDelta(protobuf::UpdateMapping updateMapping);
 
     void assignBaseSceneObjects(Worker &worker);
 
@@ -228,6 +237,11 @@ class LambdaMaster {
     bool canSendTiles{false};
 
     const MasterConfiguration config;
+
+    /* Temp for Dynamic Allocation Testing */
+    uint32_t currentAddedTreelet{0};
+    uint32_t counter{0};
+    TimerFD dropTreeletTimer{std::chrono::seconds{15}};
 };
 
 class Schedule {

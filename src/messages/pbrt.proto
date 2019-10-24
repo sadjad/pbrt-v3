@@ -294,18 +294,6 @@ message UpdateMapping {
     repeated WorkerDelta additions = 1;
 }
 
-message StopSending {
-    uint64 worker_id = 1;
-}
-
-message StartSending {
-    uint64 worker_id = 1;
-}
-
-message StoppedSending {
-    uint64 worker_id = 1;
-}
-
 message ConnectResponse {
     uint64 worker_id = 1;
     int32 my_seed = 2;
