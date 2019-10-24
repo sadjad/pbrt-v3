@@ -847,6 +847,9 @@ ResultType LambdaWorker::handleUdpSend() {
         myTreelets.push_back(kv.first);
     }
 
+    if (myTreelets.size() == 0) {
+        return ResultType::Continue;
+    }
     random_shuffle(myTreelets.begin(), myTreelets.end());
 
     auto now = packet_clock::now();
@@ -857,20 +860,10 @@ ResultType LambdaWorker::handleUdpSend() {
         auto& queueLengthBytes = outQueueLengthBytes[treeletId];
 
         /* (2) purge expired entries from treeletToWorker mapping */
-        auto& candidates = treeletToWorker[treeletId];
-        auto it = candidates.begin();
-        while (it != candidates.end()) {
-            if (it->second >= packet_clock::now()) {
-                if (workerForTreelet.count(treeletId) &&
-                    it->first == workerForTreelet[treeletId].first) {
-                    workerForTreelet.erase(treeletId);
-                }
-                it = candidates.erase(it);
-            } else {
-                ++it;
-            }
-        }
-        if (candidates.size() == 0) {
+        purgeCandidateMap(treeletId);
+        if (treeletToWorker.count(treeletId) == 0) {
+            /* remove the entry and move any rays back to the pending queue */
+            moveOutToPendingQueue(treeletId);
             continue;
         }
 
@@ -881,6 +874,7 @@ ResultType LambdaWorker::handleUdpSend() {
             workerForTreelet[treeletId].second >= now) {
             peerId = workerForTreelet[treeletId].first;
         } else {
+            auto& candidates = treeletToWorker[treeletId];
             peerId =
                 random::sample(candidates.begin(), candidates.end())->first;
             workerForTreelet[treeletId].first = peerId;
@@ -1255,6 +1249,168 @@ void LambdaWorker::movePendingToOutQueue(TreeletId treelet) {
     pendingQueue.erase(treelet);
 }
 
+void LambdaWorker::purgeCandidateMap(TreeletId treelet) {
+    auto& candidates = treeletToWorker[treelet];
+    auto it = candidates.begin();
+    while (it != candidates.end()) {
+        if (it->second <= packet_clock::now()) {
+            if (workerForTreelet.count(treelet) &&
+                it->first == workerForTreelet[treelet].first) {
+                workerForTreelet.erase(treelet);
+            }
+            it = candidates.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    if (candidates.size() == 0) {
+        treeletToWorker.erase(treelet);
+    }
+}
+
+void LambdaWorker::printTreelets() {
+    std::ostringstream objectNameStream;
+    objectNameStream << "Treelets Set: [";
+    for (const auto treeletId : treeletIds) {
+        objectNameStream << "T" << treeletId << ",";
+    }
+
+    objectNameStream << "]\n";
+    cout << objectNameStream.str();
+}
+
+void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
+    printTreelets();
+    for (const auto treeletId : proto.treelet_id()) {
+        pendingTreeletIds.insert(treeletId);
+    }
+
+    std::shared_ptr<int32_t> pendingObjects =
+        std::make_shared<int32_t>(proto.size());
+    auto downloadObjectCallback = [this, proto, pendingObjects](
+                                      const uint64_t id,
+                                      const std::string& tag) {
+        *pendingObjects = *pendingObjects - 1;
+        if (*pendingObjects == 0) {
+            for (const auto treeletId : proto.treelet_id()) {
+                this->bvh.get()->loadTreelet(treeletId);
+                this->treeletIds.insert(treeletId);
+                this->pendingTreeletIds.erase(treeletId);
+                moveOutToRayQueue(treeletId);
+                movePendingToRayQueue(treeletId);
+            }
+            printTreelets();
+        }
+    };
+
+    auto failureCallback = [this, proto, pendingObjects](
+                               const uint64_t id, const std::string& tag) {
+        /* noop */
+    };
+
+    S3StorageBackend* s3_backend =
+        dynamic_cast<S3StorageBackend*>(storageBackend.get());
+    for (const protobuf::ObjectKey& objectKey : proto.object_ids()) {
+        const ObjectKey id = from_protobuf(objectKey);
+        loop.s3_download(id.to_string(), *s3_backend, id.to_string(),
+                         id.to_string(), downloadObjectCallback,
+                         failureCallback);
+    }
+
+    for (const auto treeletId : proto.treelet_id()) {
+        std::ostringstream objectName;
+        objectName << "T" << treeletId;
+        loop.s3_download(std::to_string(treeletId), *s3_backend,
+                         objectName.str(), objectName.str(),
+                         downloadObjectCallback, failureCallback);
+    }
+}
+
+void LambdaWorker::dropTreelets(const protobuf::DropTreelets& proto) {
+    /* delete treelets from set of treelets */
+    for (const auto treeletId : proto.treelet_id()) {
+        treeletIds.erase(treeletId);
+    }
+
+    /* process everything in the rayQueue*/
+    while (!rayQueue.empty()) {
+        handleRayQueue();
+    }
+
+    /* drop the treelet from memory */
+    for (const auto treeletId : proto.treelet_id()) {
+        bvh.get()->dropTreelet(treeletId);
+        std::ostringstream objectName;
+        objectName << "T" << treeletId;
+        std::string file_path = objectName.str();
+        // TODO: figure out why this system call doesn't work
+        // CheckSystemCall("remove", remove(file_path.c_str()));
+        cout << "Dropped T " << treeletId << " from memory"
+             << "\n";
+    }
+
+    /* drop associated objects from filesystem */
+    for (const protobuf::ObjectKey& objectKey : proto.object_ids()) {
+        const ObjectKey id = from_protobuf(objectKey);
+        std::string file_path = id.to_string();
+        // TODO: figure out why the remove system call is buggy
+        // CheckSystemCall("remove", remove(file_path.c_str()));
+    }
+}
+
+void LambdaWorker::updateMapping(const protobuf::UpdateMapping& proto) {
+    // TODO: is it necessary to redo this check here? We already do it in
+    // handleUdpSend
+    /* purge the map for expired entries */
+    for (const auto& kv : treeletToWorker) {
+        TreeletId treeletId = kv.first;
+        purgeCandidateMap(treeletId);
+    }
+
+    /* process the additions */
+    for (const protobuf::WorkerDelta& workerDelta : proto.additions()) {
+        if (workerDelta.worker_id() == *workerId) {
+            continue;
+        }
+        for (const protobuf::MappingEntry& mappingEntry :
+             workerDelta.treelets()) {
+            auto& mapping = treeletToWorker[mappingEntry.treelet_id()];
+            auto expirationTime =
+                std::chrono::milliseconds(mappingEntry.expiration_time());
+            /* erase any entries with the same workerId first */
+            auto predicate =
+                [workerDelta](
+                    const std::pair<WorkerId, packet_clock::time_point> p) {
+                    return p.first == workerDelta.worker_id();
+                };
+            mapping.erase(
+                std::remove_if(mapping.begin(), mapping.end(), predicate),
+                mapping.end());
+            mapping.push_back(std::make_pair(
+                workerDelta.worker_id(), packet_clock::now() + expirationTime));
+        }
+    }
+
+    /* move any necessary rays between queues */
+    for (const auto& kv : outQueue) {
+        TreeletId treeletId = kv.first;
+        if (treeletIds.count(treeletId)) {
+            moveOutToRayQueue(treeletId);
+        } else if (treeletToWorker.count(treeletId) == 0) {
+            moveOutToPendingQueue(treeletId);
+        }
+    }
+
+    for (const auto& kv : pendingQueue) {
+        TreeletId treeletId = kv.first;
+        if (treeletIds.count(treeletId)) {
+            movePendingToRayQueue(treeletId);
+        } else if (treeletToWorker.count(treeletId) != 0) {
+            movePendingToOutQueue(treeletId);
+        }
+    }
+}
+
 bool LambdaWorker::processMessage(const Message& message) {
     /* cerr << "[msg:" << Message::OPCODE_NAMES[to_underlying(message.opcode())]
          << "]" << endl; */
@@ -1379,7 +1535,17 @@ bool LambdaWorker::processMessage(const Message& message) {
 
             for (const auto treeletId : proto.treelet_ids()) {
                 peer.treelets.insert(treeletId);
-                treeletToWorker[treeletId].push_back(std::make_pair(
+                auto& mapping = treeletToWorker[treeletId];
+                /* erase any entries with the same workerId first */
+                auto predicate =
+                    [otherWorkerId](
+                        const std::pair<WorkerId, packet_clock::time_point> p) {
+                        return p.first == otherWorkerId;
+                    };
+                mapping.erase(
+                    std::remove_if(mapping.begin(), mapping.end(), predicate),
+                    mapping.end());
+                mapping.push_back(std::make_pair(
                     otherWorkerId, packet_clock::now() + MAX_EXPIRATION));
                 neededTreelets.erase(treeletId);
                 requestedTreelets.erase(treeletId);
@@ -1420,6 +1586,39 @@ bool LambdaWorker::processMessage(const Message& message) {
             pushRayQueue(move(ray));
         }
 
+        break;
+    }
+
+    case OpCode::AddTreelets: {
+        protobuf::AddTreelets proto;
+        protoutil::from_string(message.payload(), proto);
+        addTreelets(proto);
+        break;
+    }
+
+    case OpCode::DropTreelets: {
+        protobuf::DropTreelets proto;
+        protoutil::from_string(message.payload(), proto);
+        dropTreelets(proto);
+        break;
+    }
+
+    case OpCode::UpdateMapping: {
+        protobuf::UpdateMapping proto;
+        protoutil::from_string(message.payload(), proto);
+        updateMapping(proto);
+        break;
+    }
+
+    case OpCode::StopSending: {
+        currentlySending = false;
+        coordinatorConnection->enqueue_write(
+            Message::str(*workerId, OpCode::StoppedSending, ""));
+        break;
+    }
+
+    case OpCode::StartSending: {
+        currentlySending = true;
         break;
     }
 

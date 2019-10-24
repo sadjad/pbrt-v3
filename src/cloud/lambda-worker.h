@@ -261,6 +261,13 @@ class LambdaWorker {
     void moveOutToPendingQueue(TreeletId treelet);
     void movePendingToRayQueue(TreeletId treelet);
     void movePendingToOutQueue(TreeletId treelet);
+    void purgeCandidateMap(TreeletId treelet);
+
+    void printTreelets();
+
+    void addTreelets(const protobuf::AddTreelets& proto);
+    void dropTreelets(const protobuf::DropTreelets& proto);
+    void updateMapping(const protobuf::UpdateMapping& proto);
 
     void logRayAction(const RayState& state, const RayAction action,
                       const WorkerId otherParty = -1);

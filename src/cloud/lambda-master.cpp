@@ -395,6 +395,18 @@ LambdaMaster::LambdaMaster(const uint16_t listenPort,
             }
         };
 
+        auto doDynamicAssign = [this](Worker &worker) {
+            if (worker.id == 1) {
+                for (TreeletId i = 0; i < 5; i++) {
+                    assignTreelet(worker, i);
+                }
+            } else if (worker.id == 2) {
+                for (TreeletId i = 5; i < 10; i++) {
+                    assignTreelet(worker, i);
+                }
+            }
+        };
+
         auto doAllAssign = [this](Worker &worker) {
             for (const auto &t : treeletIds) {
                 assignTreelet(worker, t.id);
@@ -430,6 +442,9 @@ LambdaMaster::LambdaMaster(const uint16_t listenPort,
             doAllAssign(workerIt->second);
         } else if (assignment & Assignment::Debug) {
             doDebugAssign(workerIt->second);
+        } else if (assignment & Assignment::Dynamic) {
+            doDynamicAssign(workerIt->second);
+            /* for dynamic assignments, do nothing at the beginning */
         } else {
             throw runtime_error("unrecognized assignment type");
         }
@@ -456,6 +471,25 @@ ResultType LambdaMaster::handleJobStart() {
                 worker.connection->enqueue_write(genRaysStr);
             }
         }
+
+        {
+            // TODO: first delta -- assign the treelet 0 to the first worker
+            // with expiration time 15
+            // TODO: maybe add functions to deal with constructing the deltas
+        }
+
+        loop.poller().add_action(
+            Poller::Action(dropTreeletTimer.fd, Direction::In,
+                           [this]() {
+                               // tell the first worker to drop the first
+                               // treelet add the previous treelet to the second
+                               // worker Send the update mapping; the second
+                               // worker forever has the treelet the first
+                               // worker will delete the treelet going forward
+                               return ResultType::Continue;
+                           },
+                           []() { return true; },
+                           []() { throw runtime_error("error in timer"); }));
 
         break;
 
@@ -950,11 +984,69 @@ void LambdaMaster::assignObject(Worker &worker, const ObjectKey &object) {
     }
 }
 
+void LambdaMaster::removeObject(Worker &worker, const ObjectKey &object) {
+    if (worker.objects.count(object) != 0) {
+        SceneObjectInfo &info = sceneObjects.at(object);
+        info.workers.insert(worker.id);
+        worker.objects.insert(object);
+        worker.freeSpace += info.size;
+    }
+}
+
 void LambdaMaster::assignTreelet(Worker &worker, const TreeletId treeletId) {
     assignObject(worker, {ObjectType::Treelet, treeletId});
 
     for (const auto &obj : treeletFlattenDependencies[treeletId]) {
         assignObject(worker, obj);
+    }
+}
+
+void LambdaMaster::removeTreelet(Worker &worker, const TreeletId treeletId) {
+    removeObject(worker, {ObjectType::Treelet, treeletId});
+
+    // all other objects needed by this worker
+    for (const auto &obj : treeletFlattenDependencies[treeletId]) {
+        // TODO: if object is not needed by the other treelets this worker has
+        // then tell the worker to drop this object
+    }
+}
+
+void LambdaMaster::addTreelets(WorkerId workerId,
+                               const std::vector<TreeletId> treelets) {
+    protobuf::AddTreelets proto;
+    uint32_t size = 0;
+    auto &worker = workers.at(workerId);
+    for (const auto treeletId : treelets) {
+        proto.add_treelet_id(treeletId);
+        assignTreelet(worker, treeletId);
+        size += 1;
+        for (const auto &obj : treeletFlattenDependencies[treeletId]) {
+            *proto.add_object_ids() = to_protobuf(obj);
+            size += 1;
+        }
+        proto.set_size(size);
+        worker.connection->enqueue_write(
+            Message::str(0, OpCode::AddTreelets, protoutil::to_string(proto)));
+    }
+}
+
+void LambdaMaster::dropTreelets(WorkerId workerId,
+                                const std::vector<TreeletId> treelets) {
+    protobuf::DropTreelets proto;
+    auto &worker = workers.at(workerId);
+    for (const auto treeletId : treelets) {
+        proto.add_treelet_id(treeletId);
+        removeTreelet(worker, treeletId);
+    }
+    worker.connection->enqueue_write(
+        Message::str(0, OpCode::DropTreelets, protoutil::to_string(proto)));
+}
+
+void LambdaMaster::sendMapDelta(protobuf::UpdateMapping updateMapping) {
+    for (const auto &workerkv : workers) {
+        const auto &worker = workerkv.second;
+        worker.connection->enqueue_write(Message::str(
+            0, OpCode::DropTreelets, protoutil::to_string(updateMapping)));
     }
 }
 
@@ -1166,6 +1258,8 @@ int main(int argc, char *argv[]) {
                 assignment = Assignment::All;
             } else if (name == "debug") {
                 assignment = Assignment::Debug;
+            } else if (name == "dynamic") {
+                assignment = Assignment::Dynamic;
             } else {
                 usage(argv[0], EXIT_FAILURE);
             }
