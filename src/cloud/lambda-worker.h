@@ -391,6 +391,9 @@ class LambdaWorker {
     };
 
     struct BenchmarkData {
+        std::queue<uint64_t> toBeAcked{};
+        Address ackDestination{};
+
         probe_clock::time_point start{};
         probe_clock::time_point end{};
 

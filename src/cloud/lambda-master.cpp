@@ -459,32 +459,32 @@ ResultType LambdaMaster::handleJobStart() {
         /* assign pairs randomly */
         mt19937 g{random_device()()};
 
-        vector<uint32_t> workerPairs(numberOfLambdas);
-        vector<uint32_t> sendToReceiver(numberOfLambdas / 2);
-        iota(sendToReceiver.begin(), sendToReceiver.end(), 0);
-        shuffle(sendToReceiver.begin(), sendToReceiver.end(), g);
+        map<WorkerId, WorkerId> senderToReceiver{};
+        vector<WorkerId> allWorkers(numberOfLambdas);
+        iota(allWorkers.begin(), allWorkers.end(), 0);
+        shuffle(allWorkers.begin(), allWorkers.end(), g);
 
         for (size_t i = 0; i < numberOfLambdas / 2; i++) {
-            const size_t sender = 2 * i;
-            const size_t receiver = 2 * sendToReceiver[i] + 1;
-            workerPairs[sender] = receiver;
-            workerPairs[receiver] = sender;
+            senderToReceiver[allWorkers[i] + 1] =
+                allWorkers[i + numberOfLambdas / 2] + 1;
         }
 
         for (auto &workerkv : workers) {
             auto &worker = workerkv.second;
 
-            LOG(INFO) << "[WORKER] " << worker.id << ","
-                      << worker.udpAddress->str();
+            const uint32_t destination =
+                (senderToReceiver.count(worker.id) > 0)
+                    ? (senderToReceiver.at(worker.id))
+                    : 0;
 
-            const uint32_t destination = workerPairs[worker.id - 1] + 1;
             const uint32_t duration = 30;
-            const uint32_t rate = (worker.id % 2) ? 0 : 1;
+            const uint32_t rate = 0;
+
+            string message =
+                put_field(destination) + put_field(duration) + put_field(rate);
 
             worker.connection->enqueue_write(
-                Message::str(0, OpCode::StartBenchmark,
-                             put_field(destination) + put_field(duration) +
-                                 put_field(rate)));
+                Message::str(0, OpCode::StartBenchmark, move(message)));
         }
 
         cerr << "done." << endl;

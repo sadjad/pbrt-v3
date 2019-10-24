@@ -231,36 +231,82 @@ void LambdaWorker::initBenchmark(const uint32_t duration,
         udpConnection.set_rate(rate);
     }
 
+    cout << "initBenchmark: " << destination << ' ' << duration << ' ' << rate
+         << '\n';
+
+    const bool isSender = (destination != 0);
+    Optional<Address> destinationAddr;
+
+    if (destination != 0) {
+        destinationAddr.reset(peers.at(destination).address);
+    }
+
     /* (2) set up new udpReceive and udpSend actions */
     eventAction[Event::UdpReceive] = loop.poller().add_action(Poller::Action(
         udpConnection, Direction::In,
-        [this]() {
+        [this, destinationAddr]() {
+            cout << "receive\n";
             auto datagram = udpConnection.recvfrom();
             benchmarkData.checkpoint.bytesReceived += datagram.second.length();
             benchmarkData.checkpoint.packetsReceived++;
+
+            if (destinationAddr.initialized()) {
+                /* this is a sender */
+                const uint64_t rtt =
+                    duration_cast<microseconds>(
+                        packet_clock::now().time_since_epoch())
+                        .count() -
+                    *reinterpret_cast<uint64_t*>(
+                        &datagram.second[Message::HEADER_LENGTH]);
+
+                TLOG(RTT) << rtt;
+            } else {
+                /* this is a receiver */
+                benchmarkData.ackDestination = move(datagram.first);
+                benchmarkData.toBeAcked.push(*reinterpret_cast<uint64_t*>(
+                    &datagram.second[Message::HEADER_LENGTH]));
+            }
+
             return ResultType::Continue;
         },
         [this]() { return true; },
         []() { throw runtime_error("udp in failed"); }));
 
-    if (destination) {
-        const Address address = peers.at(destination).address;
+    eventAction[Event::UdpSend] = loop.poller().add_action(Poller::Action(
+        udpConnection, Direction::Out,
+        [this, destinationAddr]() {
+            cout << "send\n";
+            static string packet =
+                Message::str(*workerId, OpCode::Ping, string(1350, 'x'));
 
-        eventAction[Event::UdpSend] = loop.poller().add_action(Poller::Action(
-            udpConnection, Direction::Out,
-            [this, address]() {
-                const static string packet =
-                    Message::str(*workerId, OpCode::Ping, string(1300, 'x'));
-                udpConnection.sendto(address, packet);
+            if (destinationAddr.initialized()) {
+                /* this is a sender */
+                *reinterpret_cast<uint64_t*>(&packet[Message::HEADER_LENGTH]) =
+                    duration_cast<microseconds>(
+                        packet_clock::now().time_since_epoch())
+                        .count();
 
-                benchmarkData.checkpoint.bytesSent += packet.length();
-                benchmarkData.checkpoint.packetsSent++;
+                udpConnection.sendto(*destinationAddr, packet);
+            } else {
+                /* this is a receiver */
+                *reinterpret_cast<uint64_t*>(&packet[Message::HEADER_LENGTH]) =
+                    benchmarkData.toBeAcked.front();
+                benchmarkData.toBeAcked.pop();
+                udpConnection.sendto(benchmarkData.ackDestination, packet);
 
-                return ResultType::Continue;
-            },
-            [this]() { return udpConnection.within_pace(); },
-            []() { throw runtime_error("udp out failed"); }));
-    }
+                TLOG(QUEUE) << benchmarkData.toBeAcked.size();
+            }
+
+            benchmarkData.checkpoint.bytesSent += packet.length();
+            benchmarkData.checkpoint.packetsSent++;
+
+            return ResultType::Continue;
+        },
+        [this, destination]() {
+            return (destination == 0 && !benchmarkData.toBeAcked.empty()) ||
+                   (destination != 0 && udpConnection.within_pace());
+        },
+        []() { throw runtime_error("udp out failed"); }));
 
     benchmarkTimer = make_unique<TimerFD>(seconds{duration});
     checkpointTimer = make_unique<TimerFD>(seconds{1});
