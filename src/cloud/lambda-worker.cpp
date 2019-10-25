@@ -548,8 +548,6 @@ ResultType LambdaWorker::handleRayQueue() {
         if (treeletIds.count(nextTreelet)) {
             pushRayQueue(move(ray));
         } else {
-            ray->Serialize();
-
             workerStats.recordGeneratedBytes(nextTreelet,
                                              ray->SerializedSize());
             if (pendingTreeletIds.count(nextTreelet)) {
@@ -919,13 +917,17 @@ ResultType LambdaWorker::handleUdpSend() {
     auto now = packet_clock::now();
 
     for (const auto& treeletId : myTreelets) {
+        // cout << "Trying to send for treeletId " << treeletId << "\n";
         /* (1) pick a treelet randomly */
         auto& queue = outQueue[treeletId];
         auto& queueLengthBytes = outQueueLengthBytes[treeletId];
 
         /* (2) purge expired entries from treeletToWorker mapping */
+        // cout << "About to do the purge for treeletId " << treeletId << "\n";
         purgeCandidateMap(treeletId);
+        // cout << "Did the purge for treeletId " << treeletId << "\n";
         if (treeletToWorker.count(treeletId) == 0) {
+            // cout << "treeletToWorker empty for treeletId " << treeletId << "\n";
             /* remove the entry and move any rays back to the pending queue */
             moveOutToPendingQueue(treeletId);
             continue;
@@ -945,12 +947,13 @@ ResultType LambdaWorker::handleUdpSend() {
             workerForTreelet[treeletId].second = now + 4 * INACTIVITY_THRESHOLD;
         }
 
+        // cout << "Found peer: " << peerId << " for worker " << *workerId << " to send " << treeletId << "\n";
         auto& peer = peers.at(peerId);
 
         if (!peer.pacer.within_pace()) {
             continue;
         }
-
+        // cout << "in pace to send to : " << peerId << " from worker " << *workerId << " to send " << treeletId << "\n";
         if (now - peer.lastReceivedAck > INACTIVITY_THRESHOLD) {
             peer.pacer.set_rate(DEFAULT_SEND_RATE);
         }
@@ -968,25 +971,36 @@ ResultType LambdaWorker::handleUdpSend() {
         packet.setTracked(tracked);
         packet.setQueueLength(queueLengthBytes);
 
+       //  cout << "About to construct packet to send to : " << peerId << " from worker " << *workerId << " to send " << treeletId << "\n";
         while (!queue.empty()) {
+            // cout << "In while loop to send to : " << peerId << " from worker " << *workerId << " to send " << treeletId << "\n";
             auto& ray = queue.front();
+            // cout << "Popped from queue : " << peerId << " from worker " << *workerId << " to send " << treeletId << "\n";
             const auto size = ray->SerializedSize();
 
             if (size == 0) {
+                // cout << "Ray is size 0 : " << peerId << " from worker " << *workerId << " to send " << treeletId << "\n";
                 throw runtime_error("ray is not serialized");
             }
 
-            if (size + packet.length() > UDP_MTU_BYTES) break;
+            if (size + packet.length() > UDP_MTU_BYTES) {
+                // cout << "Packet is already to large to send to : " << peerId << " from worker " << *workerId << " to send " << treeletId << "\n";
+                break;
+            }
 
+            // cout << "Adding first ray to send to: " << peerId << " from worker " << *workerId << " to send " << treeletId << "\n";
             packet.addRay(move(ray));
 
             queue.pop_front();
+            // cout << "Popped the front of the queue to send to : " << peerId << " from worker " << *workerId << " to send " << treeletId << "\n";
             queueLengthBytes -= size;
             outQueueSize--;
         }
 
         if (queue.empty()) {
+            // cout << "Outqueue for " << treeletId << "is empty\n";
             outQueue.erase(treeletId);
+            outQueueLengthBytes.erase(treeletId);
         }
 
         if (tracked) {
@@ -996,7 +1010,9 @@ ResultType LambdaWorker::handleUdpSend() {
 
         peerSeqNo++;
 
+        // cout << "Made packet for treeletId " << treeletId << "\n";
         sendRayPacket(peer, move(packet));
+        // cout << "Actually sent for treeletId " << treeletId << "\n";
         break;
     }
 
@@ -1199,7 +1215,6 @@ void LambdaWorker::generateRays(const Bounds2i& bounds) {
             if (treeletIds.count(nextTreelet)) {
                 pushRayQueue(move(statePtr));
             } else {
-                statePtr->Serialize();
 
                 workerStats.recordGeneratedBytes(nextTreelet,
                                                  state.SerializedSize());
@@ -1249,6 +1264,7 @@ RayStatePtr LambdaWorker::popRayQueue() {
 }
 
 void LambdaWorker::pushPendingQueue(RayStatePtr&& state, TreeletId treelet) {
+    state->Serialize();
     logRayAction(*state, RayAction::Pending);
     workerStats.recordPendingRay(*state);
     neededTreelets.insert(treelet);
@@ -1257,6 +1273,7 @@ void LambdaWorker::pushPendingQueue(RayStatePtr&& state, TreeletId treelet) {
 }
 
 void LambdaWorker::pushOutQueue(RayStatePtr&& state, TreeletId treelet) {
+    state->Serialize();
     logRayAction(*state, RayAction::Queued);
     // workerStats.recordSendingRay(*state);
     outQueueLengthBytes[treelet] += state->SerializedSize();
@@ -1265,6 +1282,7 @@ void LambdaWorker::pushOutQueue(RayStatePtr&& state, TreeletId treelet) {
 }
 
 void LambdaWorker::moveOutToRayQueue(TreeletId treelet) {
+    // cout << "Moving from out to ray queue on worker " << *workerId << "\n";
     auto& treeletOut = outQueue[treelet];
     outQueueSize -= treeletOut.size();
     while (!treeletOut.empty()) {
@@ -1274,9 +1292,11 @@ void LambdaWorker::moveOutToRayQueue(TreeletId treelet) {
     }
     outQueue.erase(treelet);
     outQueueLengthBytes.erase(treelet);
+    // cout << "Done moving from out to ray queue on worker " << *workerId << "\n";
 }
 
 void LambdaWorker::moveOutToPendingQueue(TreeletId treelet) {
+    // cout << "Moving from out to pending queue on worker " << *workerId << "\n";
     auto& treeletOut = outQueue[treelet];
     outQueueSize -= treeletOut.size();
     while (!treeletOut.empty()) {
@@ -1286,9 +1306,11 @@ void LambdaWorker::moveOutToPendingQueue(TreeletId treelet) {
     }
     outQueue.erase(treelet);
     outQueueLengthBytes.erase(treelet);
+    // cout << "Done moving from out to pending queue on worker " << *workerId << "\n";
 }
 
 void LambdaWorker::movePendingToRayQueue(TreeletId treelet) {
+    // cout << "Moving from pending to ray queue on worker " << *workerId << "\n";
     auto& treeletPending = pendingQueue[treelet];
     pendingQueueSize -= treeletPending.size();
     while (!treeletPending.empty()) {
@@ -1297,9 +1319,11 @@ void LambdaWorker::movePendingToRayQueue(TreeletId treelet) {
         treeletPending.pop_front();
     }
     pendingQueue.erase(treelet);
+    // cout << "Done moving from pending to ray queue on worker " << *workerId << "\n";
 }
 
 void LambdaWorker::movePendingToOutQueue(TreeletId treelet) {
+    // cout << "Moving from pending to out queue on worker " << *workerId << "\n";
     auto& treeletPending = pendingQueue[treelet];
     pendingQueueSize -= treeletPending.size();
     while (!treeletPending.empty()) {
@@ -1308,6 +1332,7 @@ void LambdaWorker::movePendingToOutQueue(TreeletId treelet) {
         treeletPending.pop_front();
     }
     pendingQueue.erase(treelet);
+    // cout << "Done moving from pending to out queue on worker " << *workerId << "\n";
 }
 
 void LambdaWorker::purgeCandidateMap(TreeletId treelet) {
@@ -1340,7 +1365,27 @@ void LambdaWorker::printTreelets() {
     cout << objectNameStream.str();
 }
 
+void LambdaWorker::printCandidateMap() {
+    std::ostringstream candidates;
+    candidates << "Candidates: {";
+    for (auto& kv: treeletToWorker) {
+        TreeletId treeletId = kv.first;
+        candidates << "T" << treeletId << ":[";
+        auto& candidate_map = kv.second;
+        auto info = candidate_map.begin();
+        while (info != candidate_map.end()) {
+            auto t = duration_cast<std::chrono::milliseconds>(info->second - packet_clock::now());
+            candidates << "(" << info->first << "," << t.count() <<"),";
+            ++info;
+        }
+        candidates << "],";
+    }
+    candidates << "}\n";
+    cout << candidates.str();
+}
+
 void LambdaWorker::addTreelets(const protobuf::AddTreelets& proto) {
+    cout << "Worker " << *workerId << " received addTreelets message\n";
     printTreelets();
     for (const auto treeletId : proto.treelet_id()) {
         pendingTreeletIds.insert(treeletId);
@@ -1423,10 +1468,14 @@ void LambdaWorker::updateMapping(const protobuf::UpdateMapping& proto) {
     // TODO: is it necessary to redo this check here? We already do it in
     // handleUdpSend
     /* purge the map for expired entries */
+    printCandidateMap();
+    cout << "Worker " << *workerId << " is about to purge candidate map\n";
     for (const auto& kv : treeletToWorker) {
         TreeletId treeletId = kv.first;
         purgeCandidateMap(treeletId);
     }
+    cout << "Worker " << *workerId << " just purged candidate map\n";
+    printCandidateMap();
 
     /* process the additions */
     for (const protobuf::WorkerDelta& workerDelta : proto.additions()) {
@@ -1436,6 +1485,7 @@ void LambdaWorker::updateMapping(const protobuf::UpdateMapping& proto) {
         for (const protobuf::MappingEntry& mappingEntry :
              workerDelta.treelets()) {
             auto& mapping = treeletToWorker[mappingEntry.treelet_id()];
+            cout << "Worker " << *workerId << " received mapEntry(" << mappingEntry.treelet_id()  << "," << mappingEntry.expiration_time() << ") for worker" << workerDelta.worker_id() << "\n";
             auto expirationTime =
                 std::chrono::milliseconds(mappingEntry.expiration_time());
             /* erase any entries with the same workerId first */
@@ -1470,6 +1520,7 @@ void LambdaWorker::updateMapping(const protobuf::UpdateMapping& proto) {
             movePendingToOutQueue(treeletId);
         }
     }
+    printCandidateMap();
 }
 
 bool LambdaWorker::processMessage(const Message& message) {
@@ -1596,9 +1647,9 @@ bool LambdaWorker::processMessage(const Message& message) {
 
             for (const auto treeletId : proto.treelet_ids()) {
                 peer.treelets.insert(treeletId);
-                auto& mapping = treeletToWorker[treeletId];
+                // auto& mapping = treeletToWorker[treeletId];
                 /* erase any entries with the same workerId first */
-                auto predicate =
+                /*auto predicate =
                     [otherWorkerId](
                         const std::pair<WorkerId, packet_clock::time_point> p) {
                         return p.first == otherWorkerId;
@@ -1607,7 +1658,7 @@ bool LambdaWorker::processMessage(const Message& message) {
                     std::remove_if(mapping.begin(), mapping.end(), predicate),
                     mapping.end());
                 mapping.push_back(std::make_pair(
-                    otherWorkerId, packet_clock::now() + MAX_EXPIRATION));
+                    otherWorkerId, packet_clock::now() + MAX_EXPIRATION));*/
                 neededTreelets.erase(treeletId);
                 requestedTreelets.erase(treeletId);
 
@@ -1644,7 +1695,19 @@ bool LambdaWorker::processMessage(const Message& message) {
             }
 
             logRayAction(*ray, RayAction::Received, message.sender_id());
-            pushRayQueue(move(ray));
+            /* if we dropped the treelet, need to put it on outQueue or rayQueue */
+            if (treeletIds.count(ray->CurrentTreelet())) {
+                pushRayQueue(move(ray));
+            } else if (pendingTreeletIds.count(ray->CurrentTreelet())) {
+                // cout << "Received ray for treelet " << ray->CurrentTreelet() << " and putting it in the pending queue because in pending\n";
+                pushPendingQueue(move(ray), ray->CurrentTreelet());
+            } else if (treeletToWorker.count(ray->CurrentTreelet()) != 0) {
+                // cout << "Received ray for treelet " << ray->CurrentTreelet() << " and putting it in the out queue\n";
+                pushOutQueue(move(ray), ray->CurrentTreelet());
+            } else {
+                // cout << "Received ray for treelet " << ray->CurrentTreelet() << " and putting it in the pending queue\n";
+                pushPendingQueue(move(ray), ray->CurrentTreelet());
+            }
         }
 
         break;
@@ -1658,6 +1721,7 @@ bool LambdaWorker::processMessage(const Message& message) {
     }
 
     case OpCode::DropTreelets: {
+        cout << "Worker " << *workerId << " received drop treelet message\n";
         protobuf::DropTreelets proto;
         protoutil::from_string(message.payload(), proto);
         dropTreelets(proto);

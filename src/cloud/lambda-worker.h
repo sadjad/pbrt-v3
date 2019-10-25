@@ -264,6 +264,7 @@ class LambdaWorker {
     void purgeCandidateMap(TreeletId treelet);
 
     void printTreelets();
+    void printCandidateMap();
 
     void addTreelets(const protobuf::AddTreelets& proto);
     void dropTreelets(const protobuf::DropTreelets& proto);

@@ -441,7 +441,7 @@ LambdaMaster::LambdaMaster(const uint16_t listenPort,
         } else if (assignment & Assignment::Debug) {
             doDebugAssign(workerIt->second);
         } else if (assignment & Assignment::Dynamic) {
-            doDynamicAssign(workerIt->second);
+            // doDynamicAssign(workerIt->second);
             /* for dynamic assignments, do nothing at the beginning */
         } else {
             throw runtime_error("unrecognized assignment type");
@@ -910,12 +910,12 @@ void LambdaMaster::run() {
     cerr << "Launching " << numberOfLambdas << " (+" << EXTRA_LAMBDAS
          << ") lambda(s)... ";
 
-    for (size_t i = 0; i < numberOfLambdas + EXTRA_LAMBDAS; i++) {
+    /*for (size_t i = 0; i < numberOfLambdas + EXTRA_LAMBDAS; i++) {
         loop.make_http_request<SSLConnection>(
             "start-worker", awsAddress, generateRequest(),
             [](const uint64_t, const string &, const HTTPResponse &) {},
             [](const uint64_t, const string &) {});
-    }
+    }*/
 
     cerr << "done." << endl;
 
@@ -1047,7 +1047,7 @@ void LambdaMaster::sendMapDelta(protobuf::UpdateMapping updateMapping) {
     for (const auto &workerkv : workers) {
         const auto &worker = workerkv.second;
         worker.connection->enqueue_write(Message::str(
-            0, OpCode::DropTreelets, protoutil::to_string(updateMapping)));
+            0, OpCode::UpdateMapping, protoutil::to_string(updateMapping)));
     }
 }
 
