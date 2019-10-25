@@ -443,7 +443,7 @@ LambdaMaster::LambdaMaster(const uint16_t listenPort,
         } else if (assignment & Assignment::Debug) {
             doDebugAssign(workerIt->second);
         } else if (assignment & Assignment::Dynamic) {
-            doDynamicAssign(workerIt->second);
+            // doDynamicAssign(workerIt->second);
             /* for dynamic assignments, do nothing at the beginning */
         } else {
             throw runtime_error("unrecognized assignment type");
@@ -473,20 +473,61 @@ ResultType LambdaMaster::handleJobStart() {
         }
 
         {
-            // TODO: first delta -- assign the treelet 0 to the first worker
-            // with expiration time 15
-            // TODO: maybe add functions to deal with constructing the deltas
+            addTreelets(1, {0});
+            protobuf::UpdateMapping firstUpdate;
+            protobuf::WorkerDelta workerDelta;
+            workerDelta.set_worker_id(1);
+            protobuf::MappingEntry mappingEntry;
+            mappingEntry.set_treelet_id(0); // treelet 0
+            mappingEntry.set_expiration_time(10000); // 10 seconds
+            *workerDelta.add_treelets() = mappingEntry;
+            *firstUpdate.add_additions() = workerDelta;
+            sendMapDelta(firstUpdate);
         }
 
         loop.poller().add_action(
             Poller::Action(dropTreeletTimer.fd, Direction::In,
                            [this]() {
-                               // tell the first worker to drop the first
-                               // treelet add the previous treelet to the second
-                               // worker Send the update mapping; the second
-                               // worker forever has the treelet the first
-                               // worker will delete the treelet going forward
-                               return ResultType::Continue;
+                                dropTreeletTimer.reset();
+                                protobuf::UpdateMapping update;
+                                protobuf::WorkerDelta worker2Delta;
+                                
+                                // tell worker 1 to drop the current treelet
+                                dropTreelets(1, {currentAddedTreelet});
+                                
+                                // tell worker 2 to add current treelet
+                                addTreelets(2, {currentAddedTreelet});
+
+                                // add the worker 2 addition to the mapping update
+                                protobuf::MappingEntry worker2Addition;
+                                worker2Delta.set_worker_id(2);
+                                worker2Addition.set_treelet_id(currentAddedTreelet);
+                                worker2Addition.set_expiration_time(300000); // approx 5 minutes
+                                *worker2Delta.add_treelets() = worker2Addition;
+                                *update.add_additions() = worker2Delta;
+
+                                if (currentAddedTreelet + 1 < 10) {
+                                    // tell worker 1 to add the next treelet
+                                    addTreelets(1, {currentAddedTreelet + 1});
+
+                                    // add worker 1 addition (with shorter lease) to the mapping update
+                                    protobuf::WorkerDelta worker1Delta;
+                                    worker1Delta.set_worker_id(1);
+                                    protobuf::MappingEntry worker1Addition;
+                                    worker1Addition.set_treelet_id(currentAddedTreelet + 1);
+                                    worker1Addition.set_expiration_time(10000);
+                                    *worker1Delta.add_treelets() = worker1Addition;
+                                    *update.add_additions() = worker1Delta;
+                                }
+
+                                sendMapDelta(update);
+                                
+                                if (currentAddedTreelet + 1 == 10) {
+                                    return ResultType::CancelAll;
+                                }
+                                
+                                currentAddedTreelet += 1;
+                                return ResultType::Continue;
                            },
                            []() { return true; },
                            []() { throw runtime_error("error in timer"); }));
@@ -909,12 +950,12 @@ void LambdaMaster::run() {
     cerr << "Launching " << numberOfLambdas << " (+" << EXTRA_LAMBDAS
          << ") lambda(s)... ";
 
-    for (size_t i = 0; i < numberOfLambdas + EXTRA_LAMBDAS; i++) {
+    /*for (size_t i = 0; i < numberOfLambdas + EXTRA_LAMBDAS; i++) {
         loop.make_http_request<SSLConnection>(
             "start-worker", awsAddress, generateRequest(),
             [](const uint64_t, const string &, const HTTPResponse &) {},
             [](const uint64_t, const string &) {});
-    }
+    }*/
 
     cerr << "done." << endl;
 
@@ -1046,7 +1087,7 @@ void LambdaMaster::sendMapDelta(protobuf::UpdateMapping updateMapping) {
     for (const auto &workerkv : workers) {
         const auto &worker = workerkv.second;
         worker.connection->enqueue_write(Message::str(
-            0, OpCode::DropTreelets, protoutil::to_string(updateMapping)));
+            0, OpCode::UpdateMapping, protoutil::to_string(updateMapping)));
     }
 }
 
