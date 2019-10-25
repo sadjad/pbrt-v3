@@ -13,6 +13,7 @@
 #include "cloud/lambda.h"
 #include "cloud/manager.h"
 #include "cloud/stats.h"
+#include "cloud/scheduler.h"
 #include "core/camera.h"
 #include "core/geometry.h"
 #include "core/transform.h"
@@ -220,6 +221,7 @@ class LambdaMaster {
     WorkerStats workerStats{};
     std::chrono::seconds workerStatsInterval;
     size_t initializedWorkers{0};
+    TreeletScheduler treeletScheduler;
 
     /* Static Assignments */
     void loadStaticAssignment(const uint32_t assignmentId,
@@ -242,6 +244,11 @@ class LambdaMaster {
     uint32_t currentAddedTreelet{0};
     uint32_t counter{0};
     TimerFD dropTreeletTimer{std::chrono::seconds{15}};
+    TimerFD rebalanceTimer{std::chrono::seconds{10}};
+
+    /* TODO: execute the schedule given by the scheduler*/
+    void executeSchedule();
+
 };
 
 class Schedule {
