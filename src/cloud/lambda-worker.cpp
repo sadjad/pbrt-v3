@@ -1442,8 +1442,13 @@ void LambdaWorker::updateMapping(const protobuf::UpdateMapping& proto) {
     }
 
     /* move any necessary rays between queues */
+    vector<TreeletId> keys;
+
     for (const auto& kv : outQueue) {
-        TreeletId treeletId = kv.first;
+        keys.push_back(kv.first);
+    }
+
+    for (const auto& treeletId : keys) {
         if (treeletIds.count(treeletId)) {
             moveOutToRayQueue(treeletId);
         } else if (treeletToWorker.count(treeletId) == 0) {
@@ -1451,14 +1456,20 @@ void LambdaWorker::updateMapping(const protobuf::UpdateMapping& proto) {
         }
     }
 
+    keys.clear();
+
     for (const auto& kv : pendingQueue) {
-        TreeletId treeletId = kv.first;
+        keys.push_back(kv.first);
+    }
+
+    for (const auto& treeletId : keys) {
         if (treeletIds.count(treeletId)) {
             movePendingToRayQueue(treeletId);
         } else if (treeletToWorker.count(treeletId) != 0) {
             movePendingToOutQueue(treeletId);
         }
     }
+
     printCandidateMap();
 }
 
