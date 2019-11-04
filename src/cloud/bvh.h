@@ -23,7 +23,7 @@ class CloudBVH : public Aggregate {
     struct TreeletInfo {
         std::set<uint32_t> children{};
         std::set<uint32_t> instances{};
-        std::vector<Bounds3f> treeletNodeBounds;
+        std::vector<std::tuple<Bounds3f, uint32_t>> treeletNodeBounds;
         Bounds3f bounds{};
     };
 
@@ -44,7 +44,7 @@ class CloudBVH : public Aggregate {
         loadTreelet(treelet_id);
         treelet_info_.at(treelet_id).bounds = WorldBound();
         treelet_info_.at(treelet_id).treeletNodeBounds =
-            getTreeletNodeBounds(treelet_id, 4);
+            getTreeletNodeBounds(treelet_id, 8);
         // treelet_info_.at(treelet_id).worldNode =
         // treelets_.at(treelet_id).nodes[0];
         return treelet_info_.at(treelet_id);
@@ -94,13 +94,17 @@ class CloudBVH : public Aggregate {
     void clear() const;
 
     // returns array of Bounds3f with structure of Treelet's internal BVH nodes
-    std::vector<Bounds3f> getTreeletNodeBounds(
+    std::vector<std::tuple<Bounds3f, uint32_t>> getTreeletNodeBounds(
         const uint32_t treelet_id, const int recursionLimit = 4) const;
 
     void recurseBVHNodes(const int depth, const int recursionLimit,
                          const int idx, const Treelet &currTreelet,
-                         const TreeletNode &currNode,
-                         std::vector<Bounds3f> &treeletBounds) const;
+                         const TreeletNode &currNode,const uint32_t treelet_id,
+                         std::vector<std::tuple<Bounds3f, uint32_t>> &treeletBounds) const;
+    // void recurseBVHNodes(const int depth, const int recursionLimit,
+    //                            const int idx, const Treelet &currTreelet,
+    //                            const TreeletNode &currNode, const uint32_t treelet_id,
+    //                            std::vector<std::tuple<Bounds3f,const uint32_t>> &treeletBounds) const
 
     Transform identity_transform_;
 };

@@ -48,7 +48,19 @@ void generateReport(const roost::path &scenePath,
     }
 }
 
-string toString(const Bounds3f &bounds) {
+// extra toString for tuple object 
+string toString(const std::tuple<Bounds3f,uint32_t>& boundTuple){
+    ostringstream oss;
+    Bounds3f bounds = get<0>(boundTuple);
+    uint32_t treeletID = get<1>(boundTuple);
+    oss << fixed << setprecision(3) << "[[[" << bounds.pMin.x << ','
+        << bounds.pMin.y << ',' << bounds.pMin.z << "],[" << bounds.pMax.x
+        << ',' << bounds.pMax.y << ',' << bounds.pMax.z << "]]," <<treeletID << "]";
+
+    return oss.str();
+}
+
+string toString(const Bounds3f &bounds) { 
     ostringstream oss;
 
     oss << fixed << setprecision(3) << "[[" << bounds.pMin.x << ','
@@ -73,11 +85,12 @@ void printTreeletInfo(const map<uint32_t, CloudBVH::TreeletInfo> &treeletInfo,
 
         cout << "BVH_NODES [";
         for (int i = 1; i < info.treeletNodeBounds.size(); i++) {
-            if (info.treeletNodeBounds[i].pMin.x >
-                info.treeletNodeBounds[i].pMax.x) {
+            if ((get<0>(info.treeletNodeBounds[i]).pMin.x >
+                get<0>(info.treeletNodeBounds[i]).pMax.x ) && 
+                get<1>(info.treeletNodeBounds[i]) == 0) {
                 cout << "null";
 
-            } else {
+            } else { //TODO: need to output not just bounds but also Treelet ID 
                 cout << toString(info.treeletNodeBounds[i]);
             }
 
