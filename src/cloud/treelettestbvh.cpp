@@ -2,6 +2,7 @@
 #include "paramset.h"
 #include "stats.h"
 #include <algorithm>
+#include <fstream>
 
 using namespace std;
 
@@ -28,10 +29,22 @@ TreeletTestBVH::TreeletTestBVH(vector<shared_ptr<Primitive>> p,
                                int maxTreeletBytes, int maxPrimsInNode,
                                SplitMethod splitMethod)
         : BVHAccel(p, maxPrimsInNode, splitMethod) {
+
+    std::array<std::unordered_map<uint64_t, std::unordered_map<uint64_t, uint64_t>>, 8> prevRun;
+    ifstream file("/home/bps/distribrt/out.graph");
+    string line;
+    while(getline(file, line)) {
+        stringstream strm(line);
+        unsigned i;
+        uint64_t src, dst, rayCount;
+        strm >> i >> src >> dst >> rayCount;
+        prevRun[i][src][dst] = rayCount;
+    }
+
     origTreeletAllocation = origAssignTreelets(maxTreeletBytes);
     for (unsigned i = 0; i < 8; i++) {
         Vector3f dir = computeRayDir(i);
-        graphs[i] = createTraversalGraph(dir);
+        graphs[i] = createTraversalGraph(dir, prevRun[i]);
         treeletAllocations[i] = computeTreelets(graphs[i], maxTreeletBytes);
     }
 }
@@ -42,6 +55,15 @@ TreeletTestBVH::TreeletTestBVH(vector<shared_ptr<Primitive>> p,
     : BVHAccel(p, maxPrimsInNode, splitMethod),
       treeletAllocations(move(treelets))
 {}
+
+TreeletTestBVH::~TreeletTestBVH() {
+    ofstream file("/tmp/out.graph");
+    for (int i = 0; i < 8; i++) {
+        for (const Edge &edge: graphs[i].edgeList) {
+            file << i << " " << edge.src << " " << edge.dst << " " << edge.rayCount << endl;
+        }
+    }
+}
 
 shared_ptr<TreeletTestBVH> CreateTreeletTestBVH(
     vector<shared_ptr<Primitive>> prims, const ParamSet &ps) {
@@ -62,8 +84,8 @@ shared_ptr<TreeletTestBVH> CreateTreeletTestBVH(
     }
 
     int maxPrimsInNode = ps.FindOneInt("maxnodeprims", 4);
-    int maxTreeletBytes = ps.FindOneInt("maxtreeletbytes", 1'000'000'000);
-    //int maxTreeletBytes = ps.FindOneInt("maxtreeletbytes", 10'000);
+    //int maxTreeletBytes = ps.FindOneInt("maxtreeletbytes", 1'000'000'000);
+    int maxTreeletBytes = ps.FindOneInt("maxtreeletbytes", 100'000'000);
     auto res = make_shared<TreeletTestBVH>(move(prims), maxTreeletBytes,
                                                 maxPrimsInNode, splitMethod);
 
@@ -71,7 +93,7 @@ shared_ptr<TreeletTestBVH> CreateTreeletTestBVH(
 }
 
 TreeletTestBVH::TraversalGraph
-TreeletTestBVH::createTraversalGraph(const Vector3f &rayDir) const {
+TreeletTestBVH::createTraversalGraph(const Vector3f &rayDir, const unordered_map<uint64_t, unordered_map<uint64_t, uint64_t>> &prev) const {
     cout << "Starting graph gen\n";
     // unordered_map here is unnecessarily slow, and without instancing
     // each vertex only has 2 outgoing edges
@@ -83,9 +105,9 @@ TreeletTestBVH::createTraversalGraph(const Vector3f &rayDir) const {
 
     bool dirIsNeg[3] = { rayDir.x < 0, rayDir.y < 0, rayDir.z < 0 };
 
-    auto addEdge = [this, &weights, &allEdges, &probabilities]
+    auto addEdge = [this, &weights, &allEdges, &probabilities, &prev]
                        (auto src, auto dst, auto prob, bool hitEdge) {
-        allEdges.emplace_back(src, dst, prob, 0, this->getNodeSize(dst));
+        allEdges.emplace_back(src, dst, (float)(prev.find(src)->second.find(dst)->second) / 647999047.f + 1e-12, 0, this->getNodeSize(dst));
 
         if (hitEdge) {
             weights[src].hitEdge = &allEdges.back();
@@ -411,8 +433,8 @@ TreeletTestBVH::computeTreeletsTopological(const TraversalGraph &graph,
 
 vector<uint32_t> TreeletTestBVH::computeTreelets(const TraversalGraph &graph,
                                                  uint64_t maxTreeletBytes) const {
-    //auto assignment = computeTreeletsTopological(graph, maxTreeletBytes);
-    auto assignment = computeTreeletsAgglomerative(graph, maxTreeletBytes);
+    auto assignment = computeTreeletsTopological(graph, maxTreeletBytes);
+    //auto assignment = computeTreeletsAgglomerative(graph, maxTreeletBytes);
 
     map<uint32_t, vector<uint64_t>> sizes;
     uint64_t totalBytes = 0;

@@ -26,6 +26,8 @@ class TreeletTestBVH : public BVHAccel {
                    int maxPrimsInNode = 1,
                    SplitMethod splitMethod = SplitMethod::SAH);
 
+    ~TreeletTestBVH();
+
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     bool IntersectP(const Ray &ray) const;
 
@@ -55,7 +57,7 @@ class TreeletTestBVH : public BVHAccel {
         std::vector<uint64_t> topologicalVertices;
     };
 
-    TraversalGraph createTraversalGraph(const Vector3f &rayDir) const;
+    TraversalGraph createTraversalGraph(const Vector3f &rayDir, const std::unordered_map<uint64_t, std::unordered_map<uint64_t, uint64_t>> &prev) const;
 
     std::vector<uint32_t>
         computeTreeletsAgglomerative(const TraversalGraph &graph,
