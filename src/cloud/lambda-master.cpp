@@ -412,18 +412,6 @@ LambdaMaster::LambdaMaster(const uint16_t listenPort,
             }
         };
 
-        auto doDynamicAssign = [this](Worker &worker) {
-            if (worker.id == 1) {
-                for (TreeletId i = 0; i < 5; i++) {
-                    assignTreelet(worker, i);
-                }
-            } else if (worker.id == 2) {
-                for (TreeletId i = 5; i < 10; i++) {
-                    assignTreelet(worker, i);
-                }
-            }
-        };
-
         auto doAllAssign = [this](Worker &worker) {
             for (const auto &t : treeletIds) {
                 assignTreelet(worker, t.id);
@@ -448,7 +436,6 @@ LambdaMaster::LambdaMaster(const uint16_t listenPort,
         } else if (assignment & Assignment::Debug) {
             doDebugAssign(workerIt->second);
         } else if (assignment & Assignment::Dynamic) {
-            // doDynamicAssign(workerIt->second);
             /* for dynamic assignments, do nothing at the beginning */
         } else {
             throw runtime_error("unrecognized assignment type");
@@ -521,10 +508,12 @@ ResultType LambdaMaster::handleJobStart() {
 ResultType LambdaMaster::handleRebalance() {
     Optional<Mapping> newMapping = treeletScheduler->distributeTreelets(
         currentMapping, workerStats, workers.size());
+
     if (newMapping.initialized()) {
         executeSchedule(newMapping.get());
         currentMapping = move(*newMapping);
     }
+
     return ResultType::Continue;
 }
 
@@ -917,7 +906,6 @@ void LambdaMaster::printJobSummary() const {
 }
 
 void LambdaMaster::run() {
-    /* request launching the lambdas */
     StatusBar::get();
 
     /* Ask for 10% more lambdas */
@@ -927,12 +915,12 @@ void LambdaMaster::run() {
     cerr << "Launching " << numberOfLambdas << " (+" << EXTRA_LAMBDAS
          << ") lambda(s)... ";
 
-    /*for (size_t i = 0; i < numberOfLambdas + EXTRA_LAMBDAS; i++) {
+    for (size_t i = 0; i < numberOfLambdas + EXTRA_LAMBDAS; i++) {
         loop.make_http_request<SSLConnection>(
             "start-worker", awsAddress, generateRequest(),
             [](const uint64_t, const string &, const HTTPResponse &) {},
             [](const uint64_t, const string &) {});
-    }*/
+    }
 
     cerr << "done." << endl;
 
@@ -1034,14 +1022,17 @@ void LambdaMaster::addTreelets(WorkerId workerId,
     protobuf::AddTreelets proto;
     uint32_t size = 0;
     auto &worker = workers.at(workerId);
+
     for (const auto treeletId : treelets) {
         proto.add_treelet_id(treeletId);
         assignTreelet(worker, treeletId);
         size += 1;
+
         for (const auto &obj : treeletFlattenDependencies[treeletId]) {
             *proto.add_object_ids() = to_protobuf(obj);
             size += 1;
         }
+
         proto.set_size(size);
         worker.connection->enqueue_write(
             Message::str(0, OpCode::AddTreelets, protoutil::to_string(proto)));
@@ -1052,10 +1043,12 @@ void LambdaMaster::dropTreelets(WorkerId workerId,
                                 const std::vector<TreeletId> treelets) {
     protobuf::DropTreelets proto;
     auto &worker = workers.at(workerId);
+
     for (const auto treeletId : treelets) {
         proto.add_treelet_id(treeletId);
         removeTreelet(worker, treeletId);
     }
+
     worker.connection->enqueue_write(
         Message::str(0, OpCode::DropTreelets, protoutil::to_string(proto)));
 }
