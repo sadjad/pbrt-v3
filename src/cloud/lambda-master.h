@@ -14,6 +14,7 @@
 #include "cloud/manager.h"
 #include "cloud/stats.h"
 #include "cloud/scheduler.h"
+#include "cloud/demand_scheduler.h"
 #include "core/camera.h"
 #include "core/geometry.h"
 #include "core/transform.h"
@@ -32,7 +33,6 @@
 #include "util/uuid.h"
 
 namespace pbrt {
-
 struct Assignment {
     // clang-format off
     static constexpr int All        = (1 << 0);
@@ -128,6 +128,7 @@ class LambdaMaster {
     Poller::Action::Result::Type handleStatusMessage();
     Poller::Action::Result::Type handleConnectAll();
     Poller::Action::Result::Type handleJobStart();
+    Poller::Action::Result::Type handleRebalance();
 
     bool processMessage(const WorkerId workerId, const meow::Message &message);
     bool processWorkerRequest(const WorkerRequest &request);
@@ -151,6 +152,9 @@ class LambdaMaster {
     void updateObjectUsage(const Worker &worker);
 
     void aggregateQueueStats();
+    
+    /* Execute the schedule given by the rebalance decision */
+    void executeSchedule(Mapping newMapping);
 
     /* AWS Lambda */
     HTTPRequest generateRequest();
@@ -218,7 +222,6 @@ class LambdaMaster {
     /* Worker stats */
     WorkerStats workerStats;
     size_t initializedWorkers{0};
-    TreeletScheduler treeletScheduler;
 
     /* Static Assignments */
     void loadStaticAssignment(const uint32_t assignmentId,
@@ -228,20 +231,16 @@ class LambdaMaster {
 
     const MasterConfiguration config;
 
-    /* Temp for Dynamic Allocation Testing */
+    /* Temp for Dynamic Mapping Testing */
     uint32_t currentAddedTreelet{0};
     uint32_t counter{0};
     TimerFD dropTreeletTimer{std::chrono::seconds{15}};
-    TimerFD rebalanceTimer{std::chrono::seconds{10}};
+    TimerFD rebalanceTimer{std::chrono::seconds{1}};
 
-    /* TODO: execute the schedule given by the scheduler*/
-    void executeSchedule();
+    /* Scheduler */
+    std::unique_ptr<Scheduler> treeletScheduler{std::make_unique<DemandScheduler>()};
+    Mapping currentMapping{};
 
-};
-
-class Schedule {
-  public:
-  private:
 };
 
 }  // namespace pbrt
