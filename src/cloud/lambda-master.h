@@ -9,12 +9,12 @@
 #include <string>
 #include <vector>
 
+#include "cloud/demand_scheduler.h"
 #include "cloud/estimators.h"
 #include "cloud/lambda.h"
 #include "cloud/manager.h"
-#include "cloud/stats.h"
 #include "cloud/scheduler.h"
-#include "cloud/demand_scheduler.h"
+#include "cloud/stats.h"
 #include "core/camera.h"
 #include "core/geometry.h"
 #include "core/transform.h"
@@ -39,7 +39,7 @@ struct Assignment {
     static constexpr int Static     = (1 << 1);
     static constexpr int Uniform    = (1 << 2);
     static constexpr int Debug      = (1 << 3); /* only assigns T0 to one worker */
-    static constexpr int Dynamic = ( 1 << 4);
+    static constexpr int Dynamic    = (1 << 4);
     // clang-format on
 };
 
@@ -153,7 +153,7 @@ class LambdaMaster {
     void updateObjectUsage(const Worker &worker);
 
     void aggregateQueueStats();
-    
+
     /* Execute the schedule given by the rebalance decision */
     void executeSchedule(Mapping newMapping);
 
@@ -241,18 +241,13 @@ class LambdaMaster {
     Point2i nTiles{};
     bool canSendTiles{false};
 
-    const MasterConfiguration config;
-
-    /* Temp for Dynamic Mapping Testing */
-    uint32_t currentAddedTreelet{0};
-    uint32_t counter{0};
-    TimerFD dropTreeletTimer{std::chrono::seconds{15}};
+    /* Scheduler */
+    std::unique_ptr<Scheduler> treeletScheduler{
+        std::make_unique<DemandScheduler>()};
+    Mapping currentMapping{};
     TimerFD rebalanceTimer{std::chrono::seconds{1}};
 
-    /* Scheduler */
-    std::unique_ptr<Scheduler> treeletScheduler{std::make_unique<DemandScheduler>()};
-    Mapping currentMapping{};
-
+    const MasterConfiguration config;
 };
 
 }  // namespace pbrt
