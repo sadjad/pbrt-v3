@@ -51,7 +51,7 @@ class CloudBVH : public Aggregate {
     }
 
     void loadTreelet(const uint32_t root_id) const;
-    void dropTreelet(const uint32_t treelet_id) const;
+    void dropTreelet(const uint32_t treelet_id) const {}
 
   private:
     enum Child { LEFT = 0, RIGHT = 1 };
