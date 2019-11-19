@@ -292,6 +292,7 @@ message WorkerDelta {
 
 message UpdateMapping {
     repeated WorkerDelta additions = 1;
+    repeated WorkerDelta deletions = 2;
 }
 
 message ConnectResponse {
