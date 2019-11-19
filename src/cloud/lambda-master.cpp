@@ -18,9 +18,11 @@
 #include <vector>
 
 #include "cloud/allocator.h"
+#include "cloud/demand_scheduler.h"
 #include "cloud/estimators.h"
 #include "cloud/manager.h"
 #include "cloud/raystate.h"
+#include "cloud/scheduler.h"
 #include "core/camera.h"
 #include "core/geometry.h"
 #include "core/transform.h"
@@ -329,6 +331,11 @@ LambdaMaster::LambdaMaster(const uint16_t listenPort,
         },
         []() { throw runtime_error("generate rays failed"); }));
 
+    loop.poller().add_action(Poller::Action(
+        rebalanceTimer.fd, Direction::In,
+        bind(&LambdaMaster::handleRebalance, this), [this]() { return true; },
+        []() { throw runtime_error("rebalance timer failed"); }));
+
     if (config.finishedRayAction == FinishedRayAction::SendBack) {
         loop.poller().add_action(Poller::Action(
             writeOutputTimer.fd, Direction::In,
@@ -509,6 +516,16 @@ ResultType LambdaMaster::handleJobStart() {
     }
 
     return ResultType::Cancel;
+}
+
+ResultType LambdaMaster::handleRebalance() {
+    Optional<Mapping> newMapping = treeletScheduler->distributeTreelets(
+        currentMapping, workerStats, workers.size());
+    if (newMapping.initialized()) {
+        executeSchedule(newMapping.get());
+        currentMapping = move(*newMapping);
+    }
+    return ResultType::Continue;
 }
 
 ResultType LambdaMaster::handleConnectAll() {
@@ -1120,6 +1137,13 @@ void LambdaMaster::aggregateQueueStats() {
         workerStats.netStats.rtt += worker.stats.netStats.rtt;
         workerStats.netStats.packetsSent += worker.stats.netStats.packetsSent;
     }
+}
+
+/* Uses the new allocation and the current allocation to perform the schedule
+ * updates. Needs to also decide on lease timings. */
+void LambdaMaster::executeSchedule(Mapping newMapping) {
+    // For now: don't use the lease timings, just send deletes if you need to
+    // move something around
 }
 
 void usage(const char *argv0, int exitCode) {
