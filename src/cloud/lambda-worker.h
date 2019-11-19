@@ -378,6 +378,7 @@ class LambdaWorker {
     std::map<TreeletId,
              std::vector<std::pair<WorkerId, packet_clock::time_point>>>
         treeletToWorker{};
+
     std::set<TreeletId> neededTreelets{};
     std::set<TreeletId> requestedTreelets{};
 
