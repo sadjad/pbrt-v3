@@ -1477,6 +1477,33 @@ void LambdaWorker::updateMapping(const protobuf::UpdateMapping& proto) {
     cout << "Worker " << *workerId << " just purged candidate map\n";
     printCandidateMap();
 
+    /* process the deletions */
+    for (const protobuf::WorkerDelta& workerDelta: proto.deletions()) {
+        if (workerDelta.worker_id() == *workerId) {
+            continue;
+        }
+
+        for (const protobuf::MappingEntry& mappingEntry: workerDelta.treelets()) {
+            if (!(treeletToWorker.count(mappingEntry.treelet_id()))) {
+                continue;
+            }
+            auto& mapping = treeletToWorker[mappingEntry.treelet_id()];
+            auto predicate = [workerDelta](const std::pair<WorkerId, packet_clock::time_point> p) {
+                return p.first == workerDelta.worker_id();
+            };
+            // erase from the mapping entry
+            mapping.erase(std::remove_if(mapping.begin(), mapping.end(), predicate), mapping.end());
+            // check if map is size 0
+            if (mapping.size() == 0) {
+                treeletToWorker.erase(mappingEntry.treelet_id());
+            }
+            // of workerForTreelet's worker is this worker, delete from that as well
+            if (workerForTreelet.count(mappingEntry.treelet_id()) && (workerForTreelet[mappingEntry.treelet_id()].first == workerDelta.worker_id())) {
+                workerForTreelet.erase(mappingEntry.treelet_id());
+            }
+        }
+    }
+
     /* process the additions */
     for (const protobuf::WorkerDelta& workerDelta : proto.additions()) {
         if (workerDelta.worker_id() == *workerId) {
