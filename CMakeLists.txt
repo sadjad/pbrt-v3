@@ -471,15 +471,8 @@ FILE ( GLOB PBRT_SOURCE
   src/textures/*
   src/media/*
   src/cloud/*
-  src/cloud/master/*
-  src/cloud/worker/*
-  src/cloud/schedulers/*
   src/messages/*
   src/util/*
-  src/net/*
-  src/storage/*
-  src/execution/*
-  src/execution/meow/*
  )
 
 INCLUDE_DIRECTORIES ( src )
@@ -530,9 +523,6 @@ ENDIF()
 
 INCLUDE(FindProtobuf)
 FIND_PACKAGE(Protobuf REQUIRED)
-
-INCLUDE(FindOpenSSL)
-FIND_PACKAGE(OpenSSL REQUIRED)
 
 INCLUDE(FindLZ4)
 FIND_PACKAGE(LZ4 REQUIRED)
@@ -594,52 +584,6 @@ SET_TARGET_PROPERTIES ( pbrt_genrays PROPERTIES OUTPUT_NAME "pbrt-genrays" )
 TARGET_COMPILE_FEATURES ( pbrt_genrays PRIVATE ${PBRT_CXX11_FEATURES} )
 TARGET_LINK_LIBRARIES ( pbrt_genrays ${ALL_PBRT_LIBS} )
 
-# pbrt-lambda-master
-ADD_EXECUTABLE ( pbrt_lambda_master src/cloud/lambda-master.cpp )
-ADD_SANITIZERS ( pbrt_lambda_master )
-
-SET_TARGET_PROPERTIES ( pbrt_lambda_master PROPERTIES OUTPUT_NAME "pbrt-lambda-master" )
-TARGET_COMPILE_FEATURES ( pbrt_lambda_master PRIVATE ${PBRT_CXX11_FEATURES} )
-TARGET_LINK_LIBRARIES ( pbrt_lambda_master ${ALL_PBRT_LIBS} -ldl -luuid )
-
-# pbrt-lambda-worker
-ADD_EXECUTABLE ( pbrt_lambda_worker src/cloud/lambda-worker.cpp )
-SET_TARGET_PROPERTIES ( pbrt_lambda_worker PROPERTIES OUTPUT_NAME "pbrt-lambda-worker" )
-TARGET_COMPILE_FEATURES ( pbrt_lambda_worker PRIVATE ${PBRT_CXX11_FEATURES} )
-set(STRIP_SYMBOLS "-export-dynamic")
-IF(CMAKE_BUILD_TYPE MATCHES RELEASE)
-  set(STRIP_SYMBOLS "-s")
-ENDIF()
-
-TARGET_LINK_LIBRARIES ( pbrt_lambda_worker ${ALL_PBRT_LIBS} dl z unwind lzma -static -Wl,-allow-multiple-definition ${STRIP_SYMBOLS} -Wl,--whole-archive -lpthread -Wl,--no-whole-archive)
-
-# benchmark-master
-ADD_EXECUTABLE ( benchmark_master src/cloud/benchmark-master.cpp )
-ADD_SANITIZERS ( benchmark_master )
-
-SET_TARGET_PROPERTIES ( benchmark_master PROPERTIES OUTPUT_NAME "benchmark-master" )
-TARGET_COMPILE_FEATURES ( benchmark_master PRIVATE ${PBRT_CXX11_FEATURES} )
-TARGET_LINK_LIBRARIES ( benchmark_master ${ALL_PBRT_LIBS} -ldl -luuid )
-
-# benchmark-worker
-ADD_EXECUTABLE ( benchmark_worker src/cloud/benchmark-worker.cpp )
-SET_TARGET_PROPERTIES ( benchmark_worker PROPERTIES OUTPUT_NAME "benchmark-worker" )
-TARGET_COMPILE_FEATURES ( benchmark_worker PRIVATE ${PBRT_CXX11_FEATURES} )
-set(STRIP_SYMBOLS "-export-dynamic")
-IF(CMAKE_BUILD_TYPE MATCHES RELEASE)
-  set(STRIP_SYMBOLS "-s")
-ENDIF()
-
-TARGET_LINK_LIBRARIES ( benchmark_worker ${ALL_PBRT_LIBS} dl z unwind lzma -static -Wl,-allow-multiple-definition ${STRIP_SYMBOLS} -Wl,--whole-archive -lpthread -Wl,--no-whole-archive)
-
-# pbrt-lambda-master
-ADD_EXECUTABLE ( pbrt_lambda_server src/cloud/lambda-server.cpp )
-ADD_SANITIZERS ( pbrt_lambda_server )
-
-SET_TARGET_PROPERTIES ( pbrt_lambda_server PROPERTIES OUTPUT_NAME "pbrt-lambda-server" )
-TARGET_COMPILE_FEATURES ( pbrt_lambda_server PRIVATE ${PBRT_CXX11_FEATURES} )
-TARGET_LINK_LIBRARIES ( pbrt_lambda_server ${ALL_PBRT_LIBS} -ldl -luuid )
-
 # pbrt-treelet-info
 ADD_EXECUTABLE ( pbrt_treelet_info src/cloud/treelet-info.cpp )
 ADD_SANITIZERS ( pbrt_treelet_info )
@@ -655,30 +599,6 @@ ADD_SANITIZERS ( pbrt_gen_sphere )
 SET_TARGET_PROPERTIES ( pbrt_gen_sphere PROPERTIES OUTPUT_NAME "pbrt-gen-sphere" )
 TARGET_COMPILE_FEATURES ( pbrt_gen_sphere PRIVATE ${PBRT_CXX11_FEATURES} )
 TARGET_LINK_LIBRARIES ( pbrt_gen_sphere ${ALL_PBRT_LIBS} )
-
-# cloud-simulate
-ADD_EXECUTABLE ( cloud_simulate src/cloud/simulator.cpp )
-ADD_SANITIZERS ( cloud_simulate )
-
-SET_TARGET_PROPERTIES ( cloud_simulate PROPERTIES OUTPUT_NAME "cloud-simulate" )
-TARGET_COMPILE_FEATURES ( cloud_simulate PRIVATE ${PBRT_CXX11_FEATURES} )
-TARGET_LINK_LIBRARIES ( cloud_simulate ${ALL_PBRT_LIBS} )
-
-# static-generator
-ADD_EXECUTABLE ( static_generator src/cloud/static-generator.cpp )
-ADD_SANITIZERS ( static_generator )
-
-SET_TARGET_PROPERTIES ( static_generator PROPERTIES OUTPUT_NAME "static-generator" )
-TARGET_COMPILE_FEATURES ( static_generator PRIVATE ${PBRT_CXX11_FEATURES} )
-TARGET_LINK_LIBRARIES ( static_generator ${ALL_PBRT_LIBS} )
-
-# pbrt-lambda-master
-ADD_EXECUTABLE ( pbrt_lambda_aggregate src/cloud/lambda-aggregate.cpp )
-ADD_SANITIZERS ( pbrt_lambda_aggregate )
-
-SET_TARGET_PROPERTIES ( pbrt_lambda_aggregate PROPERTIES OUTPUT_NAME "pbrt-lambda-aggregate" )
-TARGET_COMPILE_FEATURES ( pbrt_lambda_aggregate PRIVATE ${PBRT_CXX11_FEATURES} )
-TARGET_LINK_LIBRARIES ( pbrt_lambda_aggregate ${ALL_PBRT_LIBS} )
 
 # Unit test
 

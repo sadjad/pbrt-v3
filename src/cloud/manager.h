@@ -11,6 +11,8 @@
 
 namespace pbrt {
 
+using TreeletId = uint32_t;
+
 using ObjectID = size_t;
 
 enum class ObjectType {

@@ -6,7 +6,6 @@
 #include <iterator>
 
 #include "cloud/manager.h"
-#include "cloud/stats.h"
 #include "core/paramset.h"
 
 using namespace std;

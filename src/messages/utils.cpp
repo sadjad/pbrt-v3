@@ -237,25 +237,6 @@ protobuf::ObjectKey to_protobuf(const ObjectKey& ObjectKey) {
     return proto;
 }
 
-protobuf::RayBagInfo to_protobuf(const RayBagInfo& info) {
-    protobuf::RayBagInfo proto;
-    proto.set_tracked(info.tracked);
-    proto.set_worker_id(info.workerId);
-    proto.set_treelet_id(info.treeletId);
-    proto.set_bag_id(info.bagId);
-    proto.set_ray_count(info.rayCount);
-    proto.set_bag_size(info.bagSize);
-    proto.set_sample_bag(info.sampleBag);
-    return proto;
-}
-
-protobuf::WorkerStats to_protobuf(const WorkerStats& stats) {
-    protobuf::WorkerStats proto;
-    proto.set_finished_paths(stats.finishedPaths);
-    proto.set_cpu_usage(stats.cpuUsage);
-    return proto;
-}
-
 template <class ValueType, class ProtoItem>
 unique_ptr<ValueType[]> p2v(const ProtoItem& item) {
     auto values = make_unique<ValueType[]>(item.values_size());
@@ -726,18 +707,6 @@ protobuf::SpectrumTexture spectrum_texture::to_protobuf(
         pbrt::to_protobuf(tex2world.GetMatrix()));
     texture.mutable_texture_params()->CopyFrom(pbrt::to_protobuf(tp));
     return texture;
-}
-
-RayBagInfo from_protobuf(const protobuf::RayBagInfo& proto) {
-    RayBagInfo res{proto.worker_id(), proto.treelet_id(), proto.bag_id(),
-                   proto.ray_count(), proto.bag_size(),   proto.sample_bag()};
-
-    res.tracked = proto.tracked();
-    return res;
-}
-
-WorkerStats from_protobuf(const protobuf::WorkerStats& proto) {
-    return {proto.finished_paths(), proto.cpu_usage()};
 }
 
 }  // namespace pbrt

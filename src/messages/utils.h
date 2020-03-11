@@ -5,14 +5,12 @@
 
 #include "cloud/integrator.h"
 #include "cloud/manager.h"
-#include "cloud/stats.h"
 #include "core/geometry.h"
 #include "core/light.h"
 #include "core/paramset.h"
 #include "core/sampler.h"
 #include "core/spectrum.h"
 #include "core/transform.h"
-
 #include "pbrt.pb.h"
 #include "shapes/triangle.h"
 
@@ -75,8 +73,6 @@ protobuf::ParamSet to_protobuf(const ParamSet& paramset);
 protobuf::Scene to_protobuf(const Scene& scene);
 protobuf::TextureParams to_protobuf(const TextureParams& texture_params);
 protobuf::ObjectKey to_protobuf(const ObjectKey& ObjectKey);
-protobuf::RayBagInfo to_protobuf(const RayBagInfo& RayBagInfo);
-protobuf::WorkerStats to_protobuf(const WorkerStats& stats);
 
 Point2i from_protobuf(const protobuf::Point2i& point);
 Point2f from_protobuf(const protobuf::Point2f& point);
@@ -99,8 +95,6 @@ TextureParams from_protobuf(
     std::map<std::string, std::shared_ptr<Texture<Float>>>& fTex,
     std::map<std::string, std::shared_ptr<Texture<Spectrum>>>& sTex);
 ObjectKey from_protobuf(const protobuf::ObjectKey& objectKey);
-RayBagInfo from_protobuf(const protobuf::RayBagInfo& rayBagInfo);
-WorkerStats from_protobuf(const protobuf::WorkerStats& statsProto);
 
 namespace light {
 
