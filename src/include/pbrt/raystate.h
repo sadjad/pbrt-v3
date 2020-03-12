@@ -1,7 +1,6 @@
 #ifndef PBRT_CLOUD_RAYSTATE_H
 #define PBRT_CLOUD_RAYSTATE_H
 
-#include <lz4.h>
 #include <memory>
 
 #include "core/camera.h"
@@ -9,7 +8,6 @@
 #include "core/interaction.h"
 #include "core/sampler.h"
 #include "core/transform.h"
-#include "util/optional.h"
 
 namespace pbrt {
 

@@ -1,5 +1,5 @@
-#include "cloud/treeletdumpbvh.h"
-#include "cloud/bvh.h"
+#include "treeletdumpbvh.h"
+#include "accelerators/cloud.h"
 #include "paramset.h"
 #include "stats.h"
 #include <algorithm>

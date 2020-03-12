@@ -6,7 +6,7 @@
 #include <stack>
 #include <vector>
 
-#include "cloud/raystate.h"
+#include "pbrt/raystate.h"
 #include "core/pbrt.h"
 #include "core/primitive.h"
 #include "core/transform.h"

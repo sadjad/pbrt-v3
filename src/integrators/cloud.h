@@ -1,16 +1,17 @@
-#ifndef PBRT_CLOUD_INTEGRATOR_H
-#define PBRT_CLOUD_INTEGRATOR_H
+#ifndef PBRT_INTEGRATOR_CLOUD_H
+#define PBRT_INTEGRATOR_CLOUD_H
 
 #include <memory>
 
-#include "cloud/bvh.h"
-#include "cloud/raystate.h"
+#include "pbrt/raystate.h"
 #include "core/camera.h"
 #include "core/integrator.h"
 #include "core/lightdistrib.h"
 #include "core/scene.h"
 
 namespace pbrt {
+
+class CloudBVH;
 
 class CloudIntegrator : public Integrator {
   public:
@@ -56,4 +57,4 @@ CloudIntegrator *CreateCloudIntegrator(const ParamSet &params,
 
 }  // namespace pbrt
 
-#endif /* PBRT_CLOUD_INTEGRATOR_H */
+#endif /* PBRT_INTEGRATOR_CLOUD_H */

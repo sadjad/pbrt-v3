@@ -3,7 +3,7 @@
 
 #include <google/protobuf/util/json_util.h>
 
-#include "cloud/integrator.h"
+#include "integrators/cloud.h"
 #include "cloud/manager.h"
 #include "core/geometry.h"
 #include "core/light.h"

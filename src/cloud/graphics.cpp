@@ -1,13 +1,28 @@
-#include "cloud/r2t2.h"
-
-#include "cloud/raystate.h"
+#include "accelerators/cloud.h"
 #include "core/camera.h"
 #include "core/geometry.h"
 #include "core/sampler.h"
+#include "integrators/cloud.h"
+#include "pbrt/main.h"
+#include "pbrt/raystate.h"
 
 using namespace std;
 
 namespace pbrt::graphics {
+
+RayStatePtr TraceRay(RayStatePtr &&rayState, const CloudBVH &treelet) {
+    return CloudIntegrator::Trace(move(rayState), treelet);
+}
+
+pair<RayStatePtr, RayStatePtr> ShadeRay(RayStatePtr &&rayState,
+                                        const CloudBVH &treelet,
+                                        const vector<shared_ptr<Light>> &lights,
+                                        const Vector2i &sampleExtent,
+                                        shared_ptr<GlobalSampler> &sampler,
+                                        int maxPathDepth, MemoryArena &arena) {
+    return CloudIntegrator::Shade(move(rayState), treelet, lights, sampleExtent,
+                                  sampler, maxPathDepth, arena);
+}
 
 RayStatePtr GenerateCameraRay(const shared_ptr<Camera> &camera,
                               const Point2i &pixel, const uint32_t sample,

@@ -4,7 +4,7 @@
 #include <vector>
 
 #include "cloud/manager.h"
-#include "cloud/r2t2.h"
+#include "pbrt/main.h"
 #include "core/camera.h"
 #include "core/geometry.h"
 #include "core/transform.h"

@@ -1,10 +1,10 @@
-#include "cloud/bvh.h"
+#include "cloud.h"
 
 #include <memory>
 #include <stack>
 #include <thread>
 
-#include "accelerators/bvh.h"
+#include "bvh.h"
 #include "cloud/manager.h"
 #include "core/parallel.h"
 #include "core/paramset.h"

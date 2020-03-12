@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include "cloud/bvh.h"
+#include "accelerators/cloud.h"
 #include "cloud/manager.h"
 #include "core/geometry.h"
 #include "util/exception.h"
@@ -60,7 +60,6 @@ string toString(const Bounds3f &bounds) {
 
 void printTreeletInfo(const map<uint32_t, CloudBVH::TreeletInfo> &treeletInfo,
                       const map<uint32_t, size_t> &treeletSize) {
-
     cout << "TREELETS " << treeletInfo.size() << '\n';
 
     for (const auto &item : treeletInfo) {

@@ -42,6 +42,7 @@
 
 // API Additional Headers
 #include "accelerators/bvh.h"
+#include "accelerators/cloud.h"
 #include "accelerators/kdtreeaccel.h"
 #include "cameras/environment.h"
 #include "cameras/orthographic.h"
@@ -53,6 +54,7 @@
 #include "filters/sinc.h"
 #include "filters/triangle.h"
 #include "integrators/bdpt.h"
+#include "integrators/cloud.h"
 #include "integrators/directlighting.h"
 #include "integrators/mlt.h"
 #include "integrators/ao.h"
@@ -115,8 +117,6 @@
 #include "textures/wrinkled.h"
 #include "media/grid.h"
 #include "media/homogeneous.h"
-#include "cloud/integrator.h"
-#include "cloud/bvh.h"
 #include "cloud/treeletdumpbvh.h"
 #include "cloud/manager.h"
 

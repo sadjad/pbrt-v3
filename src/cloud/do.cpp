@@ -3,10 +3,10 @@
 #include <string>
 #include <vector>
 
-#include "cloud/bvh.h"
+#include "accelerators/cloud.h"
 #include "cloud/manager.h"
-#include "cloud/r2t2.h"
-#include "cloud/raystate.h"
+#include "pbrt/main.h"
+#include "pbrt/raystate.h"
 #include "messages/serialization.h"
 #include "messages/utils.h"
 #include "util/exception.h"

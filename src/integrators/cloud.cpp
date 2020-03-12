@@ -1,10 +1,11 @@
-#include "integrator.h"
+#include "cloud.h"
 
 #include <cmath>
 #include <cstdlib>
 #include <deque>
 #include <iterator>
 
+#include "accelerators/cloud.h"
 #include "cloud/manager.h"
 #include "core/paramset.h"
 
@@ -61,8 +62,8 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
         const shared_ptr<Light> &light = lights[lightNum];
 
         Point2f uLight = sampler->Get2D();
-        Point2f uScattering = sampler->Get2D(); // For consistency with PBRT
-        (void)uScattering; // Only used for delta lights
+        Point2f uScattering = sampler->Get2D();  // For consistency with PBRT
+        (void)uScattering;                       // Only used for delta lights
         Vector3f wi;
         Float lightPdf;
         VisibilityTester visibility;
@@ -108,13 +109,14 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
             newRay.hop = 0;
             newRay.ray = it.SpawnRay(wi);
             newRay.beta *= f * AbsDot(wi, it.shading.n) / pdf;
-            newRay.Ld  = 0;
+            newRay.Ld = 0;
             newRay.remainingBounces -= 1;
             newRay.StartTrace();
 
             ++nIntersectionTests;
 
-            // Russian roulette will need etaScale when transmission is supported
+            // Russian roulette will need etaScale when transmission is
+            // supported
             Float rrThreshold = 1.0;
             Spectrum rrBeta = newRay.beta;
             int bounces = maxPathDepth - newRay.remainingBounces - 2;
@@ -128,7 +130,6 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
             }
         }
     }
-
 
     if (bouncePtr) {
         bouncePtr->sample.dim = sampler->GetCurrentDimension();

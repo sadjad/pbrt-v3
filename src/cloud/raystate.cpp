@@ -1,11 +1,11 @@
-#include "raystate.h"
+#include "pbrt/raystate.h"
 
 #include <lz4.h>
 
 #include <cstring>
 #include <limits>
 
-#include "cloud/bvh.h"
+#include "accelerators/cloud.h"
 
 using namespace std;
 using namespace pbrt;
