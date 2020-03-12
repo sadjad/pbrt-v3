@@ -324,8 +324,8 @@ INCLUDE_DIRECTORIES (
   src/ext/openexr/IlmBase/Half
   src/ext/openexr/IlmBase/Iex
   src/ext/openexr/OpenEXR/IlmImf
-  ${CMAKE_BINARY_DIR}/src/ext/openexr/IlmBase/config
-  ${CMAKE_BINARY_DIR}/src/ext/openexr/OpenEXR/config
+  ${CMAKE_CURRENT_BINARY_DIR}/src/ext/openexr/IlmBase/config
+  ${CMAKE_CURRENT_BINARY_DIR}/src/ext/openexr/OpenEXR/config
 )
 IF(WIN32)
   SET(OPENEXR_LIBS IlmImf Imath Half ${ZLIB_LIBRARY})
@@ -345,7 +345,7 @@ ADD_SUBDIRECTORY(src/ext/glog)
 SET_PROPERTY(TARGET glog logging_unittest demangle_unittest utilities_unittest stl_logging_unittest PROPERTY FOLDER "ext")
 INCLUDE_DIRECTORIES (
   src/ext/glog/src
-  ${CMAKE_BINARY_DIR}/src/ext/glog
+  ${CMAKE_CURRENT_BINARY_DIR}/src/ext/glog
 )
 
 ###########################################################################
@@ -370,7 +370,7 @@ INCLUDE_DIRECTORIES ( src/ext/ptex/src/ptex )
 # Protobuf
 
 ADD_SUBDIRECTORY(src/messages)
-INCLUDE_DIRECTORIES(${CMAKE_BINARY_DIR}/src/messages)
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_BINARY_DIR}/src/messages)
 
 ###########################################################################
 # On to pbrt...
