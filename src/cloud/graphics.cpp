@@ -1,14 +1,67 @@
 #include "accelerators/cloud.h"
+#include "cloud/manager.h"
 #include "core/camera.h"
 #include "core/geometry.h"
 #include "core/sampler.h"
 #include "integrators/cloud.h"
+#include "messages/utils.h"
 #include "pbrt/main.h"
 #include "pbrt/raystate.h"
 
 using namespace std;
 
-namespace pbrt::graphics {
+namespace pbrt {
+
+namespace scene {
+
+Base::Base(const std::string &path, const int samplesPerPixel) {
+    using namespace pbrt::global;
+
+    manager.init(path);
+
+    auto reader = manager.GetReader(ObjectType::Camera);
+    protobuf::Camera proto_camera;
+    reader->read(&proto_camera);
+    camera = camera::from_protobuf(proto_camera, transformCache);
+
+    reader = manager.GetReader(ObjectType::Sampler);
+    protobuf::Sampler proto_sampler;
+    reader->read(&proto_sampler);
+    sampler = sampler::from_protobuf(proto_sampler, samplesPerPixel);
+
+    reader = manager.GetReader(ObjectType::Lights);
+    while (!reader->eof()) {
+        protobuf::Light proto_light;
+        reader->read(&proto_light);
+        lights.push_back(move(light::from_protobuf(proto_light)));
+    }
+
+    reader = manager.GetReader(ObjectType::Scene);
+    protobuf::Scene proto_scene;
+    reader->read(&proto_scene);
+    fakeScene = make_unique<Scene>(from_protobuf(proto_scene));
+
+    for (auto &light : lights) {
+        light->Preprocess(*fakeScene);
+    }
+}
+
+Base LoadBase(const std::string &path, const int samplesPerPixel) {
+    return {path, samplesPerPixel};
+}
+
+shared_ptr<CloudBVH> LoadTreelet(const string &path,
+                                 const TreeletId treeletId) {
+    using namespace pbrt::global;
+    manager.init(path);
+    shared_ptr<CloudBVH> treelet = make_shared<CloudBVH>(treeletId);
+    treelet->LoadTreelet(treeletId);
+    return treelet;
+}
+
+}  // namespace scene
+
+namespace graphics {
 
 RayStatePtr TraceRay(RayStatePtr &&rayState, const CloudBVH &treelet) {
     return CloudIntegrator::Trace(move(rayState), treelet);
@@ -68,4 +121,6 @@ void AccumulateImage(const shared_ptr<Camera> &camera,
     camera->film->MergeFilmTile(move(filmTile));
 }
 
-}  // namespace pbrt::graphics
+}  // namespace graphics
+
+}  // namespace pbrt

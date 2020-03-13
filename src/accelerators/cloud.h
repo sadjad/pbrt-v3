@@ -6,11 +6,11 @@
 #include <stack>
 #include <vector>
 
-#include "pbrt/raystate.h"
 #include "core/pbrt.h"
 #include "core/primitive.h"
 #include "core/transform.h"
 #include "messages/serialization.h"
+#include "pbrt/raystate.h"
 #include "shapes/triangle.h"
 #include "util/optional.h"
 
@@ -39,6 +39,8 @@ class CloudBVH : public Aggregate {
 
     void Trace(RayState &rayState) const;
     bool Intersect(RayState &rayState, SurfaceInteraction *isect) const;
+
+    void LoadTreelet(const uint32_t root_id) const { loadTreelet(root_id); }
 
     const TreeletInfo &GetInfo(const uint32_t treelet_id) {
         loadTreelet(treelet_id);
@@ -83,8 +85,7 @@ class CloudBVH : public Aggregate {
     class IncludedInstance : public Aggregate {
       public:
         IncludedInstance(const Treelet *treelet, int nodeIdx)
-            : treelet_(treelet), nodeIdx_(nodeIdx)
-        {}
+            : treelet_(treelet), nodeIdx_(nodeIdx) {}
 
         Bounds3f WorldBound() const;
         bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;

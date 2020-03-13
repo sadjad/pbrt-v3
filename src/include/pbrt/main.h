@@ -15,6 +15,28 @@ class Sample;
 class RayState;
 using RayStatePtr = std::unique_ptr<RayState>;
 
+namespace scene {
+
+class Base {
+  private:
+    std::shared_ptr<Camera> camera{};
+    std::unique_ptr<FilmTile> filmTile{};
+    std::shared_ptr<GlobalSampler> sampler{};
+    std::vector<std::unique_ptr<Transform>> transformCache{};
+    std::unique_ptr<Scene> fakeScene{};
+    std::vector<std::shared_ptr<Light>> lights{};
+
+  public:
+    Base(const std::string &path, const int samplesPerPixel);
+};
+
+Base LoadBase(const std::string &path, const int samplesPerPixel);
+
+std::shared_ptr<CloudBVH> LoadTreelet(const std::string &path,
+                                      const TreeletId treeletId);
+
+}  // namespace scene
+
 namespace graphics {
 
 RayStatePtr TraceRay(RayStatePtr &&rayState, const CloudBVH &treelet);
