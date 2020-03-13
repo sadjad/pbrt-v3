@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 
+#include "common.h"
 #include "pbrt.h"
 
 namespace pbrt {
@@ -26,8 +27,15 @@ class Base {
     std::unique_ptr<Scene> fakeScene{};
     std::vector<std::shared_ptr<Light>> lights{};
 
+    std::vector<std::set<ObjectKey>> treeletDependencies{};
+
   public:
     Base(const std::string &path, const int samplesPerPixel);
+    Base() {}
+
+    std::set<ObjectKey> &GetTreeletDependencies(const TreeletId treeletId) {
+        return treeletDependencies.at(treeletId);
+    }
 };
 
 Base LoadBase(const std::string &path, const int samplesPerPixel);

@@ -44,6 +44,13 @@ Base::Base(const std::string &path, const int samplesPerPixel) {
     for (auto &light : lights) {
         light->Preprocess(*fakeScene);
     }
+
+    const auto treeletCount = manager.treeletCount();
+    treeletDependencies.resize(treeletCount);
+
+    for (TreeletId i = 0; i < treeletCount; i++) {
+        treeletDependencies[i] = manager.getTreeletDependencies(i);
+    }
 }
 
 Base LoadBase(const std::string &path, const int samplesPerPixel) {

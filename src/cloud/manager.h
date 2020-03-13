@@ -2,49 +2,15 @@
 #define PBRT_CLOUD_MANAGER_H
 
 #include <string>
-
 #include <unordered_map>
+
 #include "messages/serialization.h"
+#include "pbrt/common.h"
 #include "util/optional.h"
 #include "util/path.h"
 #include "util/util.h"
 
 namespace pbrt {
-
-using TreeletId = uint32_t;
-
-using ObjectID = size_t;
-
-enum class ObjectType {
-    Treelet,
-    TriangleMesh,
-    Lights,
-    Sampler,
-    Camera,
-    Scene,
-    Material,
-    FloatTexture,
-    SpectrumTexture,
-    Manifest,
-    Texture,
-    TreeletInfo,
-    StaticAssignment,
-    COUNT
-};
-
-struct ObjectKey {
-    ObjectType type;
-    ObjectID id;
-
-    bool operator<(const ObjectKey& other) const {
-        if (type == other.type) {
-            return id < other.id;
-        }
-        return type < other.type;
-    }
-
-    std::string to_string() const;
-};
 
 class SceneManager {
   public:
@@ -80,8 +46,7 @@ class SceneManager {
 
     std::vector<double> getTreeletProbs() const;
 
-    const std::set<ObjectKey>& getTreeletDependencies(
-        const ObjectID treeletId);
+    const std::set<ObjectKey>& getTreeletDependencies(const ObjectID treeletId);
 
     size_t treeletCount();
 
