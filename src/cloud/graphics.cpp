@@ -14,6 +14,10 @@ namespace pbrt {
 
 namespace scene {
 
+string GetObjectName(const ObjectType type, const uint32_t id) {
+    return SceneManager::getFileName(type, id);
+}
+
 Base::Base(const std::string &path, const int samplesPerPixel) {
     using namespace pbrt::global;
 

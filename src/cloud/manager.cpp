@@ -19,10 +19,6 @@ static_assert(
     "COUNT enum value for SceneManager Type must be the last entry in "
     "the enum declaration.");
 
-string ObjectKey::to_string() const {
-    return SceneManager::getFileName(type, id);
-}
-
 void SceneManager::init(const string& scenePath) {
     this->scenePath = scenePath;
     sceneFD.reset(CheckSystemCall(

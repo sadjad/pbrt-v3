@@ -20,6 +20,9 @@ namespace scene {
 
 class Base {
   private:
+    std::vector<std::set<ObjectKey>> treeletDependencies{};
+
+  public:
     std::shared_ptr<Camera> camera{};
     std::unique_ptr<FilmTile> filmTile{};
     std::shared_ptr<GlobalSampler> sampler{};
@@ -27,9 +30,6 @@ class Base {
     std::unique_ptr<Scene> fakeScene{};
     std::vector<std::shared_ptr<Light>> lights{};
 
-    std::vector<std::set<ObjectKey>> treeletDependencies{};
-
-  public:
     Base(const std::string &path, const int samplesPerPixel);
     Base() {}
 
