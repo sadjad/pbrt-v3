@@ -44,8 +44,6 @@
 #include "geometry.h"
 #include "quaternion.h"
 
-#include "pbrt.pb.h"
-
 namespace pbrt {
 
 // Matrix4x4 Declarations
@@ -429,6 +427,11 @@ class AnimatedTransform {
     Bounds3f MotionBounds(const Bounds3f &b) const;
     Bounds3f BoundPointMotion(const Point3f &p) const;
 
+    const Transform * StartTransform() const { return startTransform; }
+    const Transform * EndTransform() const { return endTransform; }
+    Float StartTime() const { return startTime; }
+    Float EndTime() const { return endTime; }
+
   private:
     // AnimatedTransform Private Data
     const Transform *startTransform, *endTransform;
@@ -448,8 +451,6 @@ class AnimatedTransform {
         }
     };
     DerivativeTerm c1[3], c2[3], c3[3], c4[3], c5[3];
-
-    friend protobuf::AnimatedTransform to_protobuf(const AnimatedTransform &);
 };
 
 }  // namespace pbrt

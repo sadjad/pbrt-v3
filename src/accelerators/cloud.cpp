@@ -41,6 +41,8 @@ CloudBVH::CloudBVH(const uint32_t bvh_root) : bvh_root_(bvh_root) {
     default_material.reset(CreateMatteMaterial(textureParams));
 }
 
+CloudBVH::~CloudBVH() {}
+
 Bounds3f CloudBVH::WorldBound() const {
     // The correctness of this function is only guaranteed for the root treelet
     CHECK_EQ(bvh_root_, 0);
@@ -94,7 +96,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id) const {
         }
 
         bool is_leaf = proto_node.transformed_primitives_size() ||
-            proto_node.triangles_size();
+                       proto_node.triangles_size();
 
         if (proto_node.right_ref()) {
             uint64_t right_ref = proto_node.right_ref();
@@ -122,7 +124,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id) const {
             node.leaf_tag = ~0;
             node.primitive_offset = tree_primitives.size();
             node.primitive_count = proto_node.transformed_primitives_size() +
-                proto_node.triangles_size();
+                                   proto_node.triangles_size();
         }
 
         for (int i = 0; i < proto_node.transformed_primitives_size(); i++) {
@@ -157,10 +159,8 @@ void CloudBVH::loadTreelet(const uint32_t root_id) const {
                 }
             }
 
-            tree_primitives.emplace_back(
-                move(make_unique<TransformedPrimitive>(
-                    bvh_instances_.at(instance_ref),
-                    primitive_to_world)));
+            tree_primitives.emplace_back(move(make_unique<TransformedPrimitive>(
+                bvh_instances_.at(instance_ref), primitive_to_world)));
         }
 
         for (int i = 0; i < proto_node.triangles_size(); i++) {
@@ -182,10 +182,8 @@ void CloudBVH::loadTreelet(const uint32_t root_id) const {
                 &identity_transform_, &identity_transform_, false,
                 triangle_meshes_[tm_id], proto_t.tri_number());
 
-            tree_primitives.emplace_back(
-                move(make_unique<GeometricPrimitive>(
-                    shape, materials_[material_id], nullptr,
-                    MediumInterface{})));
+            tree_primitives.emplace_back(move(make_unique<GeometricPrimitive>(
+                shape, materials_[material_id], nullptr, MediumInterface{})));
         }
 
         nodes.emplace_back(move(node));
@@ -271,7 +269,8 @@ void CloudBVH::Trace(RayState &rayState) const {
                         }
 
                         shared_ptr<CloudBVH::IncludedInstance> included =
-                            dynamic_pointer_cast<CloudBVH::IncludedInstance>(tp->GetPrimitive());
+                            dynamic_pointer_cast<CloudBVH::IncludedInstance>(
+                                tp->GetPrimitive());
                         if (included) {
                             if (tp->Intersect(ray, &isect)) {
                                 rayState.ray.tMax = ray.tMax;
@@ -376,11 +375,14 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
                     auto &prim = primitives[i];
                     if (prim->Intersect(ray, isect)) hit = true;
 
-                    if (primitives[i]->GetType() == PrimitiveType::Transformed) {
+                    if (primitives[i]->GetType() ==
+                        PrimitiveType::Transformed) {
                         auto tp =
                             dynamic_cast<TransformedPrimitive *>(prim.get());
-                        if (dynamic_pointer_cast<CloudBVH>(tp->GetPrimitive()) != nullptr) {
-                            if (i == node.primitive_offset + node.primitive_count - 1) {
+                        if (dynamic_pointer_cast<CloudBVH>(
+                                tp->GetPrimitive()) != nullptr) {
+                            if (i == node.primitive_offset +
+                                         node.primitive_count - 1) {
                                 instanceReturn = true;
                             }
                             totalRayTransfers++;
@@ -453,11 +455,14 @@ bool CloudBVH::IntersectP(const Ray &ray) const {
                     auto &prim = primitives[i];
                     if (prim->IntersectP(ray)) return true;
 
-                    if (primitives[i]->GetType() == PrimitiveType::Transformed) {
+                    if (primitives[i]->GetType() ==
+                        PrimitiveType::Transformed) {
                         auto tp =
                             dynamic_cast<TransformedPrimitive *>(prim.get());
-                        if (dynamic_pointer_cast<CloudBVH>(tp->GetPrimitive()) != nullptr) {
-                            if (i == node.primitive_offset + node.primitive_count - 1) {
+                        if (dynamic_pointer_cast<CloudBVH>(
+                                tp->GetPrimitive()) != nullptr) {
+                            if (i == node.primitive_offset +
+                                         node.primitive_count - 1) {
                                 instanceReturn = true;
                             }
                             totalRayTransfers++;
@@ -564,7 +569,8 @@ Bounds3f CloudBVH::IncludedInstance::WorldBound() const {
     return treelet_->nodes[nodeIdx_].bounds;
 }
 
-bool CloudBVH::IncludedInstance::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
+bool CloudBVH::IncludedInstance::Intersect(const Ray &ray,
+                                           SurfaceInteraction *isect) const {
     const CloudBVH::TreeletNode *nodes = treelet_->nodes.data();
 
     bool hit = false;
@@ -581,8 +587,8 @@ bool CloudBVH::IncludedInstance::Intersect(const Ray &ray, SurfaceInteraction *i
             if (node->is_leaf()) {
                 // Intersect ray with primitives in leaf BVH node
                 for (int i = 0; i < node->primitive_count; ++i)
-                    if (treelet_->primitives[node->primitive_offset + i]->Intersect(
-                            ray, isect))
+                    if (treelet_->primitives[node->primitive_offset + i]
+                            ->Intersect(ray, isect))
                         hit = true;
                 if (toVisitOffset == 0) break;
                 currentNodeIndex = nodesToVisit[--toVisitOffset];
@@ -620,8 +626,8 @@ bool CloudBVH::IncludedInstance::IntersectP(const Ray &ray) const {
             if (node->is_leaf()) {
                 // Intersect ray with primitives in leaf BVH node
                 for (int i = 0; i < node->primitive_count; ++i)
-                    if (treelet_->primitives[node->primitive_offset + i]->IntersectP(
-                            ray)) {
+                    if (treelet_->primitives[node->primitive_offset + i]
+                            ->IntersectP(ray)) {
                         return true;
                     }
                 if (toVisitOffset == 0) break;
@@ -656,9 +662,8 @@ Vector3f ComputeRayDir(unsigned idx) {
 
 unsigned ComputeIdx(const Vector3f &dir) {
     if (PbrtOptions.directionalTreelets) {
-        return (dir.x >= 0 ? 1 : 0) +
-            ((dir.y >= 0 ? 1 : 0) << 1) +
-            ((dir.z >= 0 ? 1 : 0) << 2);
+        return (dir.x >= 0 ? 1 : 0) + ((dir.y >= 0 ? 1 : 0) << 1) +
+               ((dir.z >= 0 ? 1 : 0) << 2);
     } else {
         return 0;
     }

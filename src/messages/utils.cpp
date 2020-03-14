@@ -122,11 +122,11 @@ protobuf::RGBSpectrum to_protobuf(const RGBSpectrum& spectrum) {
 protobuf::AnimatedTransform to_protobuf(const AnimatedTransform& transform) {
     protobuf::AnimatedTransform proto_transform;
     *proto_transform.mutable_start_transform() =
-        to_protobuf(transform.startTransform->GetMatrix());
+        to_protobuf(transform.StartTransform()->GetMatrix());
     *proto_transform.mutable_end_transform() =
-        to_protobuf(transform.endTransform->GetMatrix());
-    proto_transform.set_start_time(transform.startTime);
-    proto_transform.set_end_time(transform.endTime);
+        to_protobuf(transform.EndTransform()->GetMatrix());
+    proto_transform.set_start_time(transform.StartTime());
+    proto_transform.set_end_time(transform.EndTime());
     return proto_transform;
 }
 

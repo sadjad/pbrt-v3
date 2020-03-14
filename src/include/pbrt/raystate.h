@@ -3,11 +3,9 @@
 
 #include <memory>
 
-#include "core/camera.h"
-#include "core/geometry.h"
-#include "core/interaction.h"
-#include "core/sampler.h"
-#include "core/transform.h"
+#include "geometry.h"
+#include "transform.h"
+#include "spectrum.h"
 
 namespace pbrt {
 

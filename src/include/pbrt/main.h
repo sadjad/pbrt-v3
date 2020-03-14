@@ -3,9 +3,11 @@
 
 #include <cstdint>
 #include <memory>
+#include <set>
 #include <vector>
 
 #include "common.h"
+#include "geometry.h"
 #include "pbrt.h"
 
 namespace pbrt {
@@ -24,19 +26,32 @@ class Base {
 
   public:
     std::shared_ptr<Camera> camera{};
-    std::unique_ptr<FilmTile> filmTile{};
     std::shared_ptr<GlobalSampler> sampler{};
     std::vector<std::unique_ptr<Transform>> transformCache{};
     std::unique_ptr<Scene> fakeScene{};
     std::vector<std::shared_ptr<Light>> lights{};
 
+    int samplesPerPixel;
+    pbrt::Bounds2i sampleBounds{};
+    pbrt::Vector2i sampleExtent{};
+    size_t totalPaths{0};
+
+    Base();
+
+    Base(Base &&);
+    Base &operator=(Base &&);
+
     Base(const std::string &path, const int samplesPerPixel);
-    Base() {}
+    ~Base();
 
     std::set<ObjectKey> &GetTreeletDependencies(const TreeletId treeletId) {
         return treeletDependencies.at(treeletId);
     }
+
+    size_t GetTreeletCount() const { return treeletDependencies.size(); }
 };
+
+std::string GetObjectName(const ObjectType type, const uint32_t id);
 
 Base LoadBase(const std::string &path, const int samplesPerPixel);
 
@@ -63,6 +78,8 @@ RayStatePtr GenerateCameraRay(const std::shared_ptr<Camera> &camera,
 
 void AccumulateImage(const std::shared_ptr<Camera> &camera,
                      const std::vector<Sample> &rays);
+
+void WriteImage(const std::shared_ptr<Camera> &camera);
 
 }  // namespace graphics
 

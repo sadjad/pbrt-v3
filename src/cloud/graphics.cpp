@@ -18,6 +18,13 @@ string GetObjectName(const ObjectType type, const uint32_t id) {
     return SceneManager::getFileName(type, id);
 }
 
+Base::Base() {}
+
+Base::~Base() {}
+
+Base::Base(Base &&) = default;
+Base &Base::operator=(Base &&) = default;
+
 Base::Base(const std::string &path, const int samplesPerPixel) {
     using namespace pbrt::global;
 
@@ -55,6 +62,11 @@ Base::Base(const std::string &path, const int samplesPerPixel) {
     for (TreeletId i = 0; i < treeletCount; i++) {
         treeletDependencies[i] = manager.getTreeletDependencies(i);
     }
+
+    this->samplesPerPixel = sampler->samplesPerPixel;
+    sampleBounds = camera->film->GetSampleBounds();
+    sampleExtent = sampleBounds.Diagonal();
+    totalPaths = sampleBounds.Area() * sampler->samplesPerPixel;
 }
 
 Base LoadBase(const std::string &path, const int samplesPerPixel) {
@@ -130,6 +142,10 @@ void AccumulateImage(const shared_ptr<Camera> &camera,
     }
 
     camera->film->MergeFilmTile(move(filmTile));
+}
+
+void WriteImage(const shared_ptr<Camera> &camera) {
+    camera->film->WriteImage();
 }
 
 }  // namespace graphics

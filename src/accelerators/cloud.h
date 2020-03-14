@@ -3,20 +3,19 @@
 
 #include <map>
 #include <memory>
+#include <set>
 #include <stack>
 #include <vector>
 
-#include "core/pbrt.h"
-#include "core/primitive.h"
-#include "core/transform.h"
-#include "messages/serialization.h"
+#include "pbrt.h"
 #include "pbrt/raystate.h"
-#include "shapes/triangle.h"
-#include "util/optional.h"
+#include "primitive.h"
+#include "transform.h"
 
 namespace pbrt {
 
 struct TreeletNode;
+class TriangleMesh;
 
 class CloudBVH : public Aggregate {
   public:
@@ -28,7 +27,7 @@ class CloudBVH : public Aggregate {
     };
 
     CloudBVH(const uint32_t bvh_root = 0);
-    ~CloudBVH() {}
+    ~CloudBVH();
 
     CloudBVH(const CloudBVH &) = delete;
     CloudBVH &operator=(const CloudBVH &) = delete;

@@ -49,6 +49,10 @@
 
 namespace pbrt {
 
+namespace protobuf {
+class ParamSet;
+}
+
 // ParamSet Declarations
 class ParamSet {
   public:

@@ -35,12 +35,6 @@ struct ObjectKey {
     }
 };
 
-namespace scene {
-
-std::string GetObjectName(const ObjectType type, const uint32_t id);
-
-}  // namespace scene
-
 }  // namespace pbrt
 
 #endif /* PBRT_INCLUDE_COMMON_H */
