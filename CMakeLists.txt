@@ -504,6 +504,11 @@ ADD_LIBRARY ( pbrt STATIC
   )
 ADD_SANITIZERS ( pbrt )
 
+TARGET_INCLUDE_DIRECTORIES ( pbrt PUBLIC
+  "${CMAKE_CURRENT_LIST_DIR}/src/include"
+  "${CMAKE_CURRENT_LIST_DIR}/src/code"
+  )
+
 # A non-exhaustive but pretty representative set..
 # Note that we work-around shoddy c++11 support in MSVC2013
 # (constexpr, etc.), so don't test for that stuff here
