@@ -12,8 +12,9 @@
 #include "exception.h"
 
 using namespace std;
+using namespace pbrt;
 
-vector<char> to_mutable( const string & str )
+vector<char> pbrt::to_mutable( const string & str )
 {
   vector< char > ret;
   for ( const auto & ch : str ) {

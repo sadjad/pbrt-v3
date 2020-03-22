@@ -7,6 +7,8 @@
 #include <stdexcept>
 #include <utility>
 
+namespace pbrt {
+
 template <class T>
 class Optional {
   private:
@@ -161,6 +163,8 @@ class Optional {
 template <class T>
 Optional<T> make_optional(bool initialized, const T& val) {
     return Optional<T>(initialized, val);
+}
+
 }
 
 #endif /* PBRT_UTIL_OPTIONAL_H */

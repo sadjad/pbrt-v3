@@ -8,6 +8,8 @@
 #include <stdexcept>
 #include <cstring>
 
+namespace pbrt {
+
 class Chunk
 {
 private:
@@ -127,5 +129,7 @@ public:
     return ( val >> bit_offset ) & bit_mask( bit_length );
   }
 };
+
+}
 
 #endif /* PBRT_UTIL_CHUNK_HH */

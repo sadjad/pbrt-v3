@@ -8,6 +8,8 @@
 #include <chrono>
 #include <string>
 
+namespace pbrt {
+
 std::string safe_getenv(const std::string &key);
 std::string safe_getenv_or(const std::string &key, const std::string &def_val);
 std::string format_bytes(size_t bytes);
@@ -38,6 +40,8 @@ inline void to_timeval(const Duration &d, timeval &tv) {
     tv.tv_sec = sec.count();
     tv.tv_usec =
         std::chrono::duration_cast<std::chrono::microseconds>(d - sec).count();
+}
+
 }
 
 #endif /* PBRT_UTIL_UTIL_HH */

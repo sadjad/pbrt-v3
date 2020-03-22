@@ -24,7 +24,7 @@
 
 using namespace std;
 
-namespace roost {
+namespace pbrt::roost {
   Directory::Directory( const string & path )
     : fd_( CheckSystemCall( "open directory (" + path + ")",
                             open( path.c_str(),

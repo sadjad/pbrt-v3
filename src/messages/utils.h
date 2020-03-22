@@ -14,7 +14,7 @@
 #include "pbrt.pb.h"
 #include "shapes/triangle.h"
 
-namespace protoutil {
+namespace pbrt::protoutil {
 
 template <class ProtobufType>
 std::string to_string(const ProtobufType& proto) {

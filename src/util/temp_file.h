@@ -8,6 +8,8 @@
 
 #include "file_descriptor.h"
 
+namespace pbrt {
+
 std::vector<char> to_mutable( const std::string & str );
 
 class UniqueFile
@@ -56,5 +58,7 @@ public:
 
   ~TempFile();
 };
+
+}
 
 #endif

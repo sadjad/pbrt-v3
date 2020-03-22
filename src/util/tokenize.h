@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+namespace pbrt {
+
 static std::vector< std::string > split( const std::string & str, const std::string & separator )
 {
   std::vector< size_t > indices;
@@ -35,6 +37,8 @@ static std::vector< std::string > split( const std::string & str, const std::str
   ret.push_back( str.substr( indices.back() + separator.size() ) );
 
   return ret;
+}
+
 }
 
 #endif /* PBRT_UTIL_TOKENIZE_HH */

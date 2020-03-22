@@ -10,6 +10,7 @@
 #include "exception.h"
 
 using namespace std;
+using namespace pbrt;
 
 /* construct from fd number */
 FileDescriptor::FileDescriptor( const int fd )

@@ -9,6 +9,7 @@
 #include <stdexcept>
 
 using namespace std;
+using namespace pbrt;
 
 string safe_getenv( const string & key )
 {

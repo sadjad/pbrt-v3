@@ -9,7 +9,7 @@
 
 #include "util/file_descriptor.h"
 
-namespace roost {
+namespace pbrt::roost {
   class Directory
   {
   private:

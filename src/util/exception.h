@@ -6,6 +6,8 @@
 #include <system_error>
 #include <iostream>
 
+namespace pbrt {
+
 class tagged_error : public std::system_error
 {
 private:
@@ -67,6 +69,8 @@ inline int CheckSystemCall( const char * s_attempt, const int return_value )
 inline int CheckSystemCall( const std::string & s_attempt, const int return_value )
 {
   return CheckSystemCall( s_attempt.c_str(), return_value );
+}
+
 }
 
 #endif /* PBRT_UTIL_EXCEPTION_H */

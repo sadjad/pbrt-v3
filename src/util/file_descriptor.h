@@ -6,6 +6,8 @@
 #include <string>
 #include <unistd.h>
 
+namespace pbrt {
+
 /* maximum size of a read */
 static constexpr size_t BUFFER_SIZE = 1024 * 1024;
 
@@ -64,5 +66,7 @@ public:
   void register_write( void ) { write_count_++; }
   void register_service( const bool write ) { write ? write_count_++ : read_count_++; }
 };
+
+}
 
 #endif /* PBRT_UTIL_FILE_DESCRIPTOR_H */
