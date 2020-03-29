@@ -28,6 +28,8 @@ Base &Base::operator=(Base &&) = default;
 Base::Base(const std::string &path, const int samplesPerPixel) {
     using namespace pbrt::global;
 
+    PbrtOptions.nThreads = 1;
+
     manager.init(path);
 
     auto reader = manager.GetReader(ObjectType::Camera);
