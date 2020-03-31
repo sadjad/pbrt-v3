@@ -42,7 +42,6 @@
 #include "interaction.h"
 #include "memory.h"
 #include "pbrt.h"
-#include "pbrt.pb.h"
 
 namespace pbrt {
 
