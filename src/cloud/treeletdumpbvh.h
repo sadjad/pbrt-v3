@@ -131,7 +131,11 @@ class TreeletDumpBVH : public BVHAccel {
                    int maxPrimsInNode = 1,
                    SplitMethod splitMethod = SplitMethod::SAH,
                    bool dumpBVH = false,
-                   const std::string &dumpBVHPath = "");
+                   const std::string &dumpBVHPath = "",
+                   bool dumpJson = false,
+                   int numJsonNodes = 64,
+                   int depth_limit = 12,
+                   const std::string &dumpJsonPath="");
 
     TreeletDumpBVH(std::vector<std::shared_ptr<Primitive>> &&p,
                    LinearBVHNode *deserializedNodes,
@@ -154,7 +158,7 @@ class TreeletDumpBVH : public BVHAccel {
         int dirIdx {-1};
         float totalProb {0};
     };
-
+    void BVHDLT(uint32_t curr_idx,int depth,int depth_limit,std::string &output);
     void SetNodeInfo(int maxTreeletBytes);
 
     uint64_t GetInstancesBytes(const InstanceMask &mask) const;

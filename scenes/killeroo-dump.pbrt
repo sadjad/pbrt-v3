@@ -14,8 +14,10 @@ Sampler "halton" "integer pixelsamples" [1]
 
 Integrator "path" "integer maxdepth" [5]
 
-Accelerator "treeletdumpbvh" "integer maxtreeletbytes" [10000000] "string partition" ["nvidia"] "string traversal" ["sendcheck"] "integer copyablethreshold" [0]
-
+Accelerator "treeletdumpbvh" "integer maxtreeletbytes" [10000000] "string partition" ["nvidia"] "string traversal" ["sendcheck"] "integer copyablethreshold" [0] 
+# to generate json output, uncomment line below and place in accelerator description
+# "string dumpjson" ["./treelet_node.json"] "integer depthlimit" [12] "integer numJsonNodes" [1024]
+ 
 WorldBegin
 
 LightSource "distant" "point from" [ 350 150 100 ] "blackbody L" [5000 2.5]

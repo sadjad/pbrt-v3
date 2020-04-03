@@ -7,7 +7,7 @@
 
 #include "messages/utils.h"
 #include "pbrt.pb.h"
-
+#include <iomanip>
 using namespace std;
 
 namespace pbrt {
@@ -26,6 +26,44 @@ namespace SizeEstimates {
 
 int TreeletDumpBVH::numInstances = 0;
 
+string toString(const Bounds3f &bounds) {
+    ostringstream oss;
+
+     oss << fixed << setprecision(3) << "[[" << bounds.pMin.x << ','
+        << bounds.pMin.y << ',' << bounds.pMin.z << "],[" << bounds.pMax.x
+        << ',' << bounds.pMax.y << ',' << bounds.pMax.z << "]]";
+
+     return oss.str();
+}
+
+void TreeletDumpBVH::BVHDLT(uint32_t curr_idx,int depth,int depth_limit, string &output){
+    if (depth == depth_limit) {
+        return;
+    }
+
+     // save the current node to string output
+    const LinearBVHNode &curr_node = nodes[curr_idx];
+    output += "{\n";
+    output += "\"node_idx\": " + to_string(curr_idx) + ",\n";
+    output += "\"Bounds\":\n " + toString(curr_node.bounds) + ",\n";
+    output += "\"2COffset\": " + to_string(curr_node.secondChildOffset) + ",\n";
+    output += "\"depth\": " + to_string(depth);
+    output += "},\n";
+    // go to left value, if there's one
+    if (curr_idx + 1 < nodeCount) {
+        uint32_t leftID = curr_idx + 1;
+        BVHDLT(leftID, depth + 1, depth_limit, output);
+    }
+
+     // go to right value, if there's one
+    if (curr_node.secondChildOffset != 0) {
+        uint32_t rightID = curr_node.secondChildOffset;
+        BVHDLT(rightID, depth + 1, depth_limit, output);
+
+     }
+
+ }
+
 TreeletDumpBVH::TreeletDumpBVH(vector<shared_ptr<Primitive>> &&p,
                                int maxTreeletBytes,
                                int copyableThreshold,
@@ -35,7 +73,11 @@ TreeletDumpBVH::TreeletDumpBVH(vector<shared_ptr<Primitive>> &&p,
                                int maxPrimsInNode,
                                SplitMethod splitMethod,
                                bool dumpBVH,
-                               const string &dumpBVHPath)
+                               const string &dumpBVHPath,
+                               bool dumpJson,
+                               int numJsonNodes,
+                               int depth_limit,
+                               const string &dumpJsonPath)
         : BVHAccel(p, maxPrimsInNode, splitMethod),
           rootBVH(rootBVH),
           traversalAlgo(travAlgo),
@@ -46,14 +88,66 @@ TreeletDumpBVH::TreeletDumpBVH(vector<shared_ptr<Primitive>> &&p,
         file.write((char *)&nodeCount, sizeof(int));
         file.write((char *)nodes, nodeCount * sizeof(LinearBVHNode));
         file.close();
-    }
-
+    }    
     if (rootBVH) {
         SetNodeInfo(maxTreeletBytes);
         allTreelets = AllocateTreelets(maxTreeletBytes);
         if (PbrtOptions.dumpScene) {
             DumpTreelets(true);
         }
+        if(dumpJson){
+            ofstream file(dumpJsonPath,ofstream::out);
+            file << "[\n";
+            file << "{\n";
+            file << "\"treelet_data\": \n";
+            file << "[\n";
+            int j = 0;
+            for (auto &TreeletInf : allTreelets){
+                 file << "{\n";
+                 file << " \"treelet_idx\": " << j << ",\n";
+                 file << "\"nodes\": [\n";
+                 int i = 0;
+                 auto minNumNodes = min(int(TreeletInf.nodes.size()),numJsonNodes);
+                 for(int &nodeIdx : TreeletInf.nodes){
+                    if (i >= minNumNodes){
+                        break;
+                    }
+                    file << "{\n";
+                    file << "\"node_idx\": " << to_string(nodeIdx) << ",\n";
+                    file << "\"Bounds\": [\n";
+                    file << toString(nodes[nodeIdx].bounds) << "\n";
+                    file << "]\n";
+                    if (i < minNumNodes - 1){
+                        file << "},\n";
+                    }
+                    else{
+                        file << "}\n";
+                    }
+                    i++;
+                 }
+                 file << "]\n";
+                 if (j < allTreelets.size() - 1){
+                    file << "},\n";
+                }
+                else{
+                    file << "}\n";
+                }
+                j++;
+            }
+            file << "],\n";
+            file << "\"base_nodes_data\":\n";
+            file << "[\n";
+            string output = "";
+            BVHDLT(0,0,depth_limit,output);
+            output.pop_back();
+            output.pop_back();
+            output += "\n";
+            file << output;
+            file << "]\n";
+            file << "}\n";
+            file << "]\n";
+            
+        } 
     } else {
         instanceID = numInstances++;
 
@@ -69,6 +163,7 @@ TreeletDumpBVH::TreeletDumpBVH(vector<shared_ptr<Primitive>> &&p,
             allTreelets = AllocateTreelets(maxTreeletBytes);
         }
     }
+
 }
 
 TreeletDumpBVH::TreeletDumpBVH(vector<shared_ptr<Primitive>> &&p,
@@ -157,17 +252,31 @@ shared_ptr<TreeletDumpBVH> CreateTreeletDumpBVH(
         int maxPrimsInNode = ps.FindOneInt("maxnodeprims", 4);
 
         string dumpBVHPath = ps.FindOneString("dumpbvh", "");
+        string dumpJsonPath = ps.FindOneString("dumpjson","");
+        int numJsonNodes = ps.FindOneInt("numJsonNodes",64);
+        int depth_limit = ps.FindOneInt("depthlimit",12);
         if (dumpBVHPath != "") {
             return make_shared<TreeletDumpBVH>(move(prims), maxTreeletBytes,
                                                copyableThreshold, rootBVH,
                                                travAlgo, partAlgo,
                                                maxPrimsInNode, splitMethod,
-                                               true, dumpBVHPath);
-        } else {
+                                               true,dumpBVHPath,true,numJsonNodes,
+                                               depth_limit,
+                                               dumpJsonPath);
+        } else if(dumpJsonPath == "") {
             return make_shared<TreeletDumpBVH>(move(prims), maxTreeletBytes,
                                                copyableThreshold, rootBVH,
                                                travAlgo, partAlgo,
                                                maxPrimsInNode, splitMethod);
+        }
+        else{
+            return make_shared<TreeletDumpBVH>(move(prims), maxTreeletBytes,
+                                               copyableThreshold, rootBVH,
+                                               travAlgo, partAlgo,
+                                               maxPrimsInNode, splitMethod,
+                                               false,"",true,numJsonNodes,
+                                               depth_limit,
+                                               dumpJsonPath);
         }
     }
 }
