@@ -43,7 +43,7 @@ void TreeletDumpBVH::BVHDLT(uint32_t curr_idx,int depth,int depth_limit, string 
 
      // save the current node to string output
     const LinearBVHNode &curr_node = nodes[curr_idx];
-    output += "{\n";
+    output += "var data = {\n";
     output += "\"node_idx\": " + to_string(curr_idx) + ",\n";
     output += "\"Bounds\":\n " + toString(curr_node.bounds) + ",\n";
     output += "\"2COffset\": " + to_string(curr_node.secondChildOffset) + ",\n";
