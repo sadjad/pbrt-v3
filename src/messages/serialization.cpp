@@ -53,6 +53,13 @@ RecordReader::RecordReader(const string& filename)
     : RecordReader(FileDescriptor(
           CheckSystemCall(filename, open(filename.c_str(), O_RDONLY, 0)))) {}
 
+RecordReader::RecordReader(const int fdnum)
+    : fd_(),
+      input_stream_(make_unique<FileInputStream>(fdnum)),
+      coded_input_(input_stream_.get()) {
+    initialize();
+}
+
 RecordReader::RecordReader(FileDescriptor&& fd)
     : fd_(true, move(fd)),
       input_stream_(make_unique<FileInputStream>(fd_->fd_num())),

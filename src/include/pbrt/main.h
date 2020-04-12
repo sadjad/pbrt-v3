@@ -56,7 +56,8 @@ std::string GetObjectName(const ObjectType type, const uint32_t id);
 Base LoadBase(const std::string &path, const int samplesPerPixel);
 
 std::shared_ptr<CloudBVH> LoadTreelet(const std::string &path,
-                                      const TreeletId treeletId);
+                                      const TreeletId treeletId,
+                                      const int fd = -1);
 
 }  // namespace scene
 

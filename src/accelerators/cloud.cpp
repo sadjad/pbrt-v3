@@ -51,7 +51,7 @@ Bounds3f CloudBVH::WorldBound() const {
     return treelets_[bvh_root_].nodes[0].bounds;
 }
 
-void CloudBVH::loadTreelet(const uint32_t root_id) const {
+void CloudBVH::loadTreelet(const uint32_t root_id, const int fd) const {
     if (treelets_.count(root_id)) {
         return; /* this tree is already loaded */
     }
@@ -59,7 +59,13 @@ void CloudBVH::loadTreelet(const uint32_t root_id) const {
     TreeletInfo &info = treelet_info_[root_id];
 
     vector<TreeletNode> nodes;
-    auto reader = global::manager.GetReader(ObjectType::Treelet, root_id);
+    unique_ptr<protobuf::RecordReader> reader;
+
+    if (fd < 0) {
+        reader = global::manager.GetReader(ObjectType::Treelet, root_id);
+    } else {
+        reader = make_unique<protobuf::RecordReader>(fd);
+    }
 
     auto &treelet = treelets_[root_id];
     auto &tree_primitives = treelet.primitives;

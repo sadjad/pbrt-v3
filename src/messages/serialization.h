@@ -47,6 +47,7 @@ public:
     RecordReader(RecordReader &&) = default;
     RecordReader& operator=(RecordReader &&) = default;
 
+    RecordReader(const int fdnum);
     RecordReader(const std::string & filename);
     RecordReader(FileDescriptor && fd);
     RecordReader(std::istringstream && is);
