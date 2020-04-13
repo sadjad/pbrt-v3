@@ -58,7 +58,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
 
     TreeletInfo &info = treelet_info_[root_id];
 
-    vector<TreeletNode> nodes;
+    deque<TreeletNode> nodes;
     unique_ptr<protobuf::RecordReader> reader;
 
     if (stream == nullptr) {
@@ -584,8 +584,6 @@ Bounds3f CloudBVH::IncludedInstance::WorldBound() const {
 
 bool CloudBVH::IncludedInstance::Intersect(const Ray &ray,
                                            SurfaceInteraction *isect) const {
-    const CloudBVH::TreeletNode *nodes = treelet_->nodes.data();
-
     bool hit = false;
     Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
     int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
@@ -594,7 +592,7 @@ bool CloudBVH::IncludedInstance::Intersect(const Ray &ray,
     int toVisitOffset = 0, currentNodeIndex = nodeIdx_;
     int nodesToVisit[64];
     while (true) {
-        const CloudBVH::TreeletNode *node = &nodes[currentNodeIndex];
+        const CloudBVH::TreeletNode *node = &treelet_->nodes[currentNodeIndex];
         // Check ray against BVH node
         if (node->bounds.IntersectP(ray, invDir, dirIsNeg)) {
             if (node->is_leaf()) {
@@ -625,15 +623,13 @@ bool CloudBVH::IncludedInstance::Intersect(const Ray &ray,
 }
 
 bool CloudBVH::IncludedInstance::IntersectP(const Ray &ray) const {
-    const CloudBVH::TreeletNode *nodes = treelet_->nodes.data();
-
     Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
     int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
     int toVisitOffset = 0, currentNodeIndex = nodeIdx_;
     int nodesToVisit[64];
 
     while (true) {
-        const CloudBVH::TreeletNode *node = &nodes[currentNodeIndex];
+        const CloudBVH::TreeletNode *node = &treelet_->nodes[currentNodeIndex];
         // Check ray against BVH node
         if (node->bounds.IntersectP(ray, invDir, dirIsNeg)) {
             if (node->is_leaf()) {

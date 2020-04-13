@@ -1,7 +1,9 @@
 #ifndef PBRT_ACCELERATORS_CLOUD_BVH_H
 #define PBRT_ACCELERATORS_CLOUD_BVH_H
 
+#include <deque>
 #include <istream>
+#include <list>
 #include <map>
 #include <memory>
 #include <set>
@@ -80,8 +82,8 @@ class CloudBVH : public Aggregate {
     enum Child { LEFT = 0, RIGHT = 1 };
 
     struct Treelet {
-        std::vector<TreeletNode> nodes{};
-        std::vector<std::unique_ptr<Primitive>> primitives{};
+        std::deque<TreeletNode> nodes{};
+        std::deque<std::unique_ptr<Primitive>> primitives{};
     };
 
     class IncludedInstance : public Aggregate {
@@ -103,7 +105,7 @@ class CloudBVH : public Aggregate {
 
     mutable std::map<uint32_t, Treelet> treelets_;
     mutable std::map<uint64_t, std::shared_ptr<Primitive>> bvh_instances_;
-    mutable std::vector<std::unique_ptr<Transform>> transforms_;
+    mutable std::list<std::unique_ptr<Transform>> transforms_;
     mutable std::map<uint32_t, std::shared_ptr<TriangleMesh>> triangle_meshes_;
     mutable std::map<uint32_t, uint32_t> triangle_mesh_material_ids_;
     mutable std::map<uint32_t, std::shared_ptr<Material>> materials_;
