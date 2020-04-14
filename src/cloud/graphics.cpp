@@ -76,11 +76,11 @@ Base LoadBase(const std::string &path, const int samplesPerPixel) {
 }
 
 shared_ptr<CloudBVH> LoadTreelet(const string &path, const TreeletId treeletId,
-                                 const int fd) {
+                                 istream *stream) {
     using namespace pbrt::global;
     manager.init(path);
     shared_ptr<CloudBVH> treelet = make_shared<CloudBVH>(treeletId);
-    treelet->LoadTreelet(treeletId, fd);
+    treelet->LoadTreelet(treeletId, stream);
     return treelet;
 }
 

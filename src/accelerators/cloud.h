@@ -1,6 +1,7 @@
 #ifndef PBRT_ACCELERATORS_CLOUD_BVH_H
 #define PBRT_ACCELERATORS_CLOUD_BVH_H
 
+#include <istream>
 #include <map>
 #include <memory>
 #include <set>
@@ -39,8 +40,8 @@ class CloudBVH : public Aggregate {
     void Trace(RayState &rayState) const;
     bool Intersect(RayState &rayState, SurfaceInteraction *isect) const;
 
-    void LoadTreelet(const uint32_t root_id, const int fd) const {
-        loadTreelet(root_id, fd);
+    void LoadTreelet(const uint32_t root_id, std::istream *stream) const {
+        loadTreelet(root_id, stream);
     }
 
     const TreeletInfo &GetInfo(const uint32_t treelet_id) {
@@ -111,7 +112,8 @@ class CloudBVH : public Aggregate {
 
     mutable std::map<uint32_t, TreeletInfo> treelet_info_;
 
-    void loadTreelet(const uint32_t root_id, const int fd = -1) const;
+    void loadTreelet(const uint32_t root_id,
+                     std::istream *stream = nullptr) const;
     void clear() const;
 
     // returns array of Bounds3f with structure of Treelet's internal BVH nodes

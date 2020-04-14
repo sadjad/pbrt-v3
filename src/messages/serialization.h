@@ -3,6 +3,7 @@
 
 #include <string>
 #include <iostream>
+#include <istream>
 #include <sstream>
 #include <stdexcept>
 #include <google/protobuf/io/coded_stream.h>
@@ -47,10 +48,9 @@ public:
     RecordReader(RecordReader &&) = default;
     RecordReader& operator=(RecordReader &&) = default;
 
-    RecordReader(const int fdnum);
     RecordReader(const std::string & filename);
     RecordReader(FileDescriptor && fd);
-    RecordReader(std::istringstream && is);
+    RecordReader(std::istream * is);
 
     template<class ProtobufType>
     bool read(ProtobufType * record);
@@ -67,7 +67,6 @@ private:
     void initialize();
 
     Optional<FileDescriptor> fd_;
-    Optional<std::istringstream> istream_;
 
     std::unique_ptr<google::protobuf::io::ZeroCopyInputStream> input_stream_;
     google::protobuf::io::CodedInputStream coded_input_;

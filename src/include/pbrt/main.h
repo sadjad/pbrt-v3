@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <memory>
 #include <set>
+#include <istream>
 #include <vector>
 
 #include "common.h"
@@ -57,7 +58,7 @@ Base LoadBase(const std::string &path, const int samplesPerPixel);
 
 std::shared_ptr<CloudBVH> LoadTreelet(const std::string &path,
                                       const TreeletId treeletId,
-                                      const int fd = -1);
+                                      std::istream *stream = nullptr);
 
 }  // namespace scene
 
