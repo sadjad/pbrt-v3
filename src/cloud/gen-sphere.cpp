@@ -1,3 +1,4 @@
+#if 0
 #include "accelerators/bvh.h"
 #include "core/api.h"
 #include "shapes/triangle.h"
@@ -393,3 +394,4 @@ int main(int argc, char *argv[]) {
     auto manifestWriter = global::manager.GetWriter(ObjectType::Manifest);
     manifestWriter->write(global::manager.makeManifest());
 }
+#endif

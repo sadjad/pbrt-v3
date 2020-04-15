@@ -598,14 +598,6 @@ SET_TARGET_PROPERTIES ( pbrt_treelet_info PROPERTIES OUTPUT_NAME "pbrt-treelet-i
 TARGET_COMPILE_FEATURES ( pbrt_treelet_info PRIVATE ${PBRT_CXX11_FEATURES} )
 TARGET_LINK_LIBRARIES ( pbrt_treelet_info ${ALL_PBRT_LIBS} )
 
-# pbrt-treelet-info
-ADD_EXECUTABLE ( pbrt_gen_sphere src/cloud/gen-sphere.cpp )
-ADD_SANITIZERS ( pbrt_gen_sphere )
-
-SET_TARGET_PROPERTIES ( pbrt_gen_sphere PROPERTIES OUTPUT_NAME "pbrt-gen-sphere" )
-TARGET_COMPILE_FEATURES ( pbrt_gen_sphere PRIVATE ${PBRT_CXX11_FEATURES} )
-TARGET_LINK_LIBRARIES ( pbrt_gen_sphere ${ALL_PBRT_LIBS} )
-
 # Unit test
 
 FILE ( GLOB PBRT_TEST_SOURCE

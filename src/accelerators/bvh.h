@@ -60,28 +60,29 @@ struct BVHPrimitiveInfo {
 
 struct BVHBuildNode {
     // BVHBuildNode Public Methods
-    void InitLeaf(int first, int n, const Bounds3f &b);
+    void InitLeaf(uint64_t first, uint64_t n, const Bounds3f &b);
     void InitInterior(int axis, BVHBuildNode *c0, BVHBuildNode *c1);
     Bounds3f bounds;
     BVHBuildNode *children[2];
-    int splitAxis, firstPrimOffset, nPrimitives;
+    int splitAxis;
+    uint64_t firstPrimOffset, nPrimitives;
 };
 
 struct MortonPrimitive {
-    int primitiveIndex;
+    uint64_t primitiveIndex;
     uint32_t mortonCode;
 };
 
 struct LBVHTreelet {
-    int startIndex, nPrimitives;
+    uint64_t startIndex, nPrimitives;
     BVHBuildNode *buildNodes;
 };
 
 struct LinearBVHNode {
     Bounds3f bounds;
     union {
-        int primitivesOffset;   // leaf
-        int secondChildOffset;  // interior
+        uint64_t primitivesOffset;   // leaf
+        uint64_t secondChildOffset;  // interior
     };
     uint16_t nPrimitives;  // 0 -> interior node
     uint8_t axis;          // interior node: xyz
@@ -98,9 +99,6 @@ class BVHAccel : public Aggregate {
     BVHAccel(std::vector<std::shared_ptr<Primitive>> p,
              int maxPrimsInNode = 1,
              SplitMethod splitMethod = SplitMethod::SAH);
-    BVHAccel(std::vector<std::shared_ptr<Primitive>> &&p,
-             LinearBVHNode *n,
-             int nCount);
     Bounds3f WorldBound() const;
     ~BVHAccel();
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
@@ -109,33 +107,31 @@ class BVHAccel : public Aggregate {
     uint32_t Dump(const size_t max_treelet_nodes) const;
     
   protected:
-    void assignTreelets(uint32_t * labels, const uint32_t max_nodes) const;
-    uint32_t dumpTreelets(uint32_t *labels, const size_t max_treelet_nodes) const;
-    int flattenBVHTree(BVHBuildNode *node, int *offset);
+    uint64_t flattenBVHTree(BVHBuildNode *node, uint64_t *offset);
 
     LinearBVHNode *nodes = nullptr;
     std::vector<std::shared_ptr<Primitive>> primitives;
-    int nodeCount;
+    uint64_t nodeCount;
   
   private:
     // BVHAccel Private Methods
     BVHBuildNode *recursiveBuild(
         MemoryArena &arena, std::vector<BVHPrimitiveInfo> &primitiveInfo,
-        int start, int end, int *totalNodes,
+        uint64_t start, uint64_t end, uint64_t *totalNodes,
         std::vector<std::shared_ptr<Primitive>> &orderedPrims);
     BVHBuildNode *HLBVHBuild(
         MemoryArena &arena, const std::vector<BVHPrimitiveInfo> &primitiveInfo,
-        int *totalNodes,
+        uint64_t *totalNodes,
         std::vector<std::shared_ptr<Primitive>> &orderedPrims) const;
     BVHBuildNode *emitLBVH(
         BVHBuildNode *&buildNodes,
         const std::vector<BVHPrimitiveInfo> &primitiveInfo,
-        MortonPrimitive *mortonPrims, int nPrimitives, int *totalNodes,
+        MortonPrimitive *mortonPrims, uint64_t nPrimitives, uint64_t *totalNodes,
         std::vector<std::shared_ptr<Primitive>> &orderedPrims,
-        std::atomic<int> *orderedPrimsOffset, int bitIndex) const;
+        std::atomic<uint64_t> *orderedPrimsOffset, int bitIndex) const;
     BVHBuildNode *buildUpperSAH(MemoryArena &arena,
                                 std::vector<BVHBuildNode *> &treeletRoots,
-                                int start, int end, int *totalNodes) const;
+                                uint64_t start, uint64_t end, uint64_t *totalNodes) const;
 
     // BVHAccel Private Data
     const int maxPrimsInNode;
