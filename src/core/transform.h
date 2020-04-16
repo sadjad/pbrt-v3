@@ -110,6 +110,8 @@ struct Matrix4x4 {
     Float m[4][4];
 };
 
+struct AnimatedTransformExtra;
+
 // Transform Declarations
 class Transform {
   public:
@@ -202,6 +204,7 @@ class Transform {
     // Transform Private Data
     Matrix4x4 m, mInv;
     friend class AnimatedTransform;
+    friend struct AnimatedTransformExtra;
     friend struct Quaternion;
 };
 
@@ -408,12 +411,57 @@ inline Ray Transform::operator()(const Ray &r, const Vector3f &oErrorIn,
     return Ray(o, d, tMax, r.time, r.medium);
 }
 
+struct DerivativeTerm {
+    DerivativeTerm() {}
+    DerivativeTerm(Float c, Float x, Float y, Float z)
+        : kc(c), kx(x), ky(y), kz(z) {}
+    Float kc, kx, ky, kz;
+    Float Eval(const Point3f &p) const {
+        return kc + kx * p.x + ky * p.y + kz * p.z;
+    }
+};
+
+struct AnimatedTransformExtra {
+    const Transform *endTransform;
+    const Float startTime, endTime;
+    Vector3f T[2];
+    Quaternion R[2];
+    Matrix4x4 S[2];
+    bool hasRotation;
+    DerivativeTerm c1[3], c2[3], c3[3], c4[3], c5[3];
+
+    AnimatedTransformExtra(const Transform *startTransform,
+                           Float startTime,
+                           const Transform *endTransform,
+                           Float endTime);
+
+    void Interpolate(const Transform *startTransform,
+                     Float time, Transform *t) const;
+
+    Bounds3f MotionBounds(const Transform *startTransform,
+                          const Bounds3f &b) const;
+    Bounds3f BoundPointMotion(const Transform *startTransform,
+                              const Point3f &p) const;
+
+    Point3f operator()(const Transform *startTransform, Float time, const Point3f &p) const;
+};
+
 // AnimatedTransform Declarations
 class AnimatedTransform {
   public:
     // AnimatedTransform Public Methods
     AnimatedTransform(const Transform *startTransform, Float startTime,
                       const Transform *endTransform, Float endTime);
+    AnimatedTransform(const AnimatedTransform &o)
+        : startTransform(o.startTransform),
+          extra(!o.extra ? nullptr : std::make_unique<AnimatedTransformExtra>(*o.extra))
+    {}
+
+    AnimatedTransform(AnimatedTransform &&o)
+        : startTransform(o.startTransform),
+          extra(std::move(o.extra))
+    {}
+
     static void Decompose(const Matrix4x4 &m, Vector3f *T, Quaternion *R,
                           Matrix4x4 *S);
     void Interpolate(Float time, Transform *t) const;
@@ -422,35 +470,21 @@ class AnimatedTransform {
     Point3f operator()(Float time, const Point3f &p) const;
     Vector3f operator()(Float time, const Vector3f &v) const;
     bool HasScale() const {
-        return startTransform->HasScale() || endTransform->HasScale();
+        if (!extra) return startTransform->HasScale();
+
+        return startTransform->HasScale() || extra->endTransform->HasScale();
     }
     Bounds3f MotionBounds(const Bounds3f &b) const;
-    Bounds3f BoundPointMotion(const Point3f &p) const;
 
     const Transform * StartTransform() const { return startTransform; }
-    const Transform * EndTransform() const { return endTransform; }
-    Float StartTime() const { return startTime; }
-    Float EndTime() const { return endTime; }
+    const Transform * EndTransform() const { return extra ? extra->endTransform : startTransform; }
+    Float StartTime() const { return extra ? extra->startTime : 0; }
+    Float EndTime() const { return extra ? extra->endTime : 0; }
 
   private:
     // AnimatedTransform Private Data
-    const Transform *startTransform, *endTransform;
-    const Float startTime, endTime;
-    const bool actuallyAnimated;
-    Vector3f T[2];
-    Quaternion R[2];
-    Matrix4x4 S[2];
-    bool hasRotation;
-    struct DerivativeTerm {
-        DerivativeTerm() {}
-        DerivativeTerm(Float c, Float x, Float y, Float z)
-            : kc(c), kx(x), ky(y), kz(z) {}
-        Float kc, kx, ky, kz;
-        Float Eval(const Point3f &p) const {
-            return kc + kx * p.x + ky * p.y + kz * p.z;
-        }
-    };
-    DerivativeTerm c1[3], c2[3], c3[3], c4[3], c5[3];
+    const Transform *startTransform;
+    std::unique_ptr<AnimatedTransformExtra> extra;
 };
 
 }  // namespace pbrt

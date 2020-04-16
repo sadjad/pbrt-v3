@@ -140,9 +140,16 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
                 from_protobuf(proto_tp.transform().start_transform()))));
             const Transform *start = transforms_.back().get();
 
-            transforms_.push_back(move(make_unique<Transform>(
-                from_protobuf(proto_tp.transform().end_transform()))));
-            const Transform *end = transforms_.back().get();
+            Matrix4x4 end_mat =
+                from_protobuf(proto_tp.transform().end_transform());
+
+            const Transform *end;
+            if (start->GetMatrix() != end_mat) {
+                transforms_.push_back(move(make_unique<Transform>(end_mat)));
+                end = transforms_.back().get();
+            } else {
+                end = start;
+            }
 
             const AnimatedTransform primitive_to_world{
                 start, proto_tp.transform().start_time(), end,

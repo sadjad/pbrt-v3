@@ -392,20 +392,16 @@ void IntervalFindZeros(Float c1, Float c2, Float c3, Float c4, Float c5,
     }
 }
 
-// AnimatedTransform Method Definitions
-AnimatedTransform::AnimatedTransform(const Transform *startTransform,
-                                     Float startTime,
-                                     const Transform *endTransform,
-                                     Float endTime)
-    : startTransform(startTransform),
-      endTransform(endTransform),
-      startTime(startTime),
-      endTime(endTime),
-      actuallyAnimated(*startTransform != *endTransform) {
-    if (!actuallyAnimated)
-        return;
-    Decompose(startTransform->m, &T[0], &R[0], &S[0]);
-    Decompose(endTransform->m, &T[1], &R[1], &S[1]);
+AnimatedTransformExtra::AnimatedTransformExtra(const Transform *startTransform,
+                                               Float startTime_,
+                                               const Transform *endTransform_,
+                                               Float endTime_)
+    : endTransform(endTransform_),
+      startTime(startTime_),
+      endTime(endTime_)
+{
+    AnimatedTransform::Decompose(startTransform->m, &T[0], &R[0], &S[0]);
+    AnimatedTransform::Decompose(endTransform->m, &T[1], &R[1], &S[1]);
     // Flip _R[1]_ if needed to select shortest path
     if (Dot(R[0], R[1]) < 0) R[1] = -R[1];
     hasRotation = Dot(R[0], R[1]) < 0.9995f;
@@ -1100,6 +1096,34 @@ AnimatedTransform::AnimatedTransform(const Transform *startTransform,
     }
 }
 
+static bool transformIsAnimated(const Transform *startTransform,
+                                Float startTime,
+                                const Transform *endTransform,
+                                Float endTime) {
+    if (startTransform == endTransform) return false;
+
+    if (*startTransform == *endTransform) return false;
+
+    if (startTime == 0 && endTime == 0) return false;
+
+    return true;
+}
+
+// AnimatedTransform Method Definitions
+AnimatedTransform::AnimatedTransform(const Transform *startTransform,
+                                     Float startTime,
+                                     const Transform *endTransform,
+                                     Float endTime)
+    : startTransform(startTransform),
+      extra(transformIsAnimated(startTransform, startTime,
+                                endTransform, endTime) ?
+              std::make_unique<AnimatedTransformExtra>(startTransform,
+                                                       startTime,
+                                                       endTransform,
+                                                       endTime) :
+              nullptr)
+{}
+
 void AnimatedTransform::Decompose(const Matrix4x4 &m, Vector3f *T,
                                   Quaternion *Rquat, Matrix4x4 *S) {
     // Extract translation _T_ from transformation matrix
@@ -1141,9 +1165,9 @@ void AnimatedTransform::Decompose(const Matrix4x4 &m, Vector3f *T,
     *S = Matrix4x4::Mul(Inverse(R), M);
 }
 
-void AnimatedTransform::Interpolate(Float time, Transform *t) const {
-    // Handle boundary conditions for matrix interpolation
-    if (!actuallyAnimated || time <= startTime) {
+void AnimatedTransformExtra::Interpolate(const Transform *startTransform,
+                                         Float time, Transform *t) const {
+    if (time <= startTime) {
         *t = *startTransform;
         return;
     }
@@ -1168,11 +1192,21 @@ void AnimatedTransform::Interpolate(Float time, Transform *t) const {
     *t = Translate(trans) * rotate.ToTransform() * Transform(scale);
 }
 
+void AnimatedTransform::Interpolate(Float time, Transform *t) const {
+    // Handle boundary conditions for matrix interpolation
+    if (!extra) {
+        *t = *startTransform;
+        return;
+    }
+
+    extra->Interpolate(startTransform, time, t);
+}
+
 Ray AnimatedTransform::operator()(const Ray &r) const {
-    if (!actuallyAnimated || r.time <= startTime)
+    if (!extra || r.time <= extra->startTime)
         return (*startTransform)(r);
-    else if (r.time >= endTime)
-        return (*endTransform)(r);
+    else if (r.time >= extra->endTime)
+        return (*(extra->endTransform))(r);
     else {
         Transform t;
         Interpolate(r.time, &t);
@@ -1181,10 +1215,10 @@ Ray AnimatedTransform::operator()(const Ray &r) const {
 }
 
 RayDifferential AnimatedTransform::operator()(const RayDifferential &r) const {
-    if (!actuallyAnimated || r.time <= startTime)
+    if (!extra || r.time <= extra->startTime)
         return (*startTransform)(r);
-    else if (r.time >= endTime)
-        return (*endTransform)(r);
+    else if (r.time >= extra->endTime)
+        return (*(extra->endTransform))(r);
     else {
         Transform t;
         Interpolate(r.time, &t);
@@ -1193,38 +1227,51 @@ RayDifferential AnimatedTransform::operator()(const RayDifferential &r) const {
 }
 
 Point3f AnimatedTransform::operator()(Float time, const Point3f &p) const {
-    if (!actuallyAnimated || time <= startTime)
-        return (*startTransform)(p);
-    else if (time >= endTime)
-        return (*endTransform)(p);
-    Transform t;
-    Interpolate(time, &t);
-    return t(p);
+    if (!extra) return (*startTransform)(p);
+
+    return (*extra)(startTransform, time, p);
 }
 
 Vector3f AnimatedTransform::operator()(Float time, const Vector3f &v) const {
-    if (!actuallyAnimated || time <= startTime)
+    if (!extra || time <= extra->startTime)
         return (*startTransform)(v);
-    else if (time >= endTime)
-        return (*endTransform)(v);
+    else if (time >= extra->endTime)
+        return (*(extra->endTransform))(v);
     Transform t;
     Interpolate(time, &t);
     return t(v);
 }
 
-Bounds3f AnimatedTransform::MotionBounds(const Bounds3f &b) const {
-    if (!actuallyAnimated) return (*startTransform)(b);
+Point3f AnimatedTransformExtra::operator()(const Transform *startTransform,
+                                           Float time, const Point3f &p) const {
+    if (time <= startTime)
+        return (*startTransform)(p);
+    else if (time >= endTime)
+        return (*endTransform)(p);
+    Transform t;
+    Interpolate(startTransform, time, &t);
+    return t(p);
+}
+
+Bounds3f AnimatedTransformExtra::MotionBounds(const Transform *startTransform,
+                                              const Bounds3f &b) const {
     if (hasRotation == false)
         return Union((*startTransform)(b), (*endTransform)(b));
     // Return motion bounds accounting for animated rotation
     Bounds3f bounds;
     for (int corner = 0; corner < 8; ++corner)
-        bounds = Union(bounds, BoundPointMotion(b.Corner(corner)));
+        bounds = Union(bounds, BoundPointMotion(startTransform,
+                                                b.Corner(corner)));
     return bounds;
 }
 
-Bounds3f AnimatedTransform::BoundPointMotion(const Point3f &p) const {
-    if (!actuallyAnimated) return Bounds3f((*startTransform)(p));
+Bounds3f AnimatedTransform::MotionBounds(const Bounds3f &b) const {
+    if (!extra) return (*startTransform)(b);
+    return extra->MotionBounds(startTransform, b);
+}
+
+Bounds3f AnimatedTransformExtra::BoundPointMotion(const Transform *startTransform,
+                                                  const Point3f &p) const {
     Bounds3f bounds((*startTransform)(p), (*endTransform)(p));
     Float cosTheta = Dot(R[0], R[1]);
     Float theta = std::acos(Clamp(cosTheta, -1, 1));
@@ -1239,7 +1286,7 @@ Bounds3f AnimatedTransform::BoundPointMotion(const Point3f &p) const {
 
         // Expand bounding box for any motion derivative zeros found
         for (int i = 0; i < nZeros; ++i) {
-            Point3f pz = (*this)(Lerp(zeros[i], startTime, endTime), p);
+            Point3f pz = (*this)(startTransform, Lerp(zeros[i], startTime, endTime), p);
             bounds = Union(bounds, pz);
         }
     }
