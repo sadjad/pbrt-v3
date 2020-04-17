@@ -292,7 +292,7 @@ void TreeletDumpBVH::SetNodeInfo(int maxTreeletBytes) {
         }
     }
 
-    for (uint64_t nodeIdx = nodeCount - 1; nodeIdx >= 0; nodeIdx--) {
+    for (uint64_t nodeIdx = nodeCount; nodeIdx-- > 0;) {
         const LinearBVHNode &node = nodes[nodeIdx];
         subtreeSizes[nodeIdx] = nodeSizes[nodeIdx];
         subtreeInstanceMasks[nodeIdx] = nodeInstanceMasks[nodeIdx];
@@ -832,7 +832,7 @@ TreeletDumpBVH::CreateTraversalGraphCheckSend(const Vector3f &rayDir, int depthR
         }
 
         float runningProb = 1.0;
-        for (uint64_t i = traversalStack.size() - 1; i >= 0; i--) {
+        for (uint64_t i = traversalStack.size(); i-- > 0; i--) {
             uint64_t nextNode = traversalStack[i];
             LinearBVHNode *nextHitNode = &nodes[nextNode];
             LinearBVHNode *parentHitNode = &nodes[nodeParents[nextNode]];
@@ -1435,7 +1435,7 @@ vector<uint32_t> TreeletDumpBVH::OrigAssignTreelets(const uint64_t maxTreeletByt
     float max_nodes = (float)maxTreeletBytes / sizeof(CloudBVH::TreeletNode);
     const float AREA_EPSILON = nodes[0].bounds.SurfaceArea() * max_nodes / (nodeCount * 10);
 
-    for (uint64_t root_index = nodeCount - 1; root_index >= 0; root_index--) {
+    for (uint64_t root_index = nodeCount; root_index-- > 0;) {
         const LinearBVHNode & root_node = nodes[root_index];
 
         std::list<uint64_t> cut;
