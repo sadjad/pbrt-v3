@@ -1114,4 +1114,251 @@ void pbrtParseString(std::string str) {
     parse(std::move(t));
 }
 
+static void parseCamera(std::unique_ptr<Tokenizer> t) {
+    std::vector<std::unique_ptr<Tokenizer>> fileStack;
+    fileStack.push_back(std::move(t));
+    parserLoc = &fileStack.back()->loc;
+
+    bool ungetTokenSet = false;
+    std::string ungetTokenValue;
+
+    // nextToken is a little helper function that handles the file stack,
+    // returning the next token from the current file until reaching EOF,
+    // at which point it switches to the next file (if any).
+    std::function<string_view(int)> nextToken;
+    nextToken = [&](int flags) -> string_view {
+        if (ungetTokenSet) {
+            ungetTokenSet = false;
+            return string_view(ungetTokenValue.data(), ungetTokenValue.size());
+        }
+
+        if (fileStack.empty()) {
+            if (flags & TokenRequired) {
+                Error("premature EOF");
+                exit(1);
+            }
+            parserLoc = nullptr;
+            return {};
+        }
+
+        string_view tok = fileStack.back()->Next();
+
+        if (tok.empty()) {
+            // We've reached EOF in the current file. Anything more to parse?
+            fileStack.pop_back();
+            if (!fileStack.empty()) parserLoc = &fileStack.back()->loc;
+            return nextToken(flags);
+        } else if (tok[0] == '#') {
+            // Swallow comments, unless --cat or --toply was given, in
+            // which case they're printed to stdout.
+            if (PbrtOptions.cat || PbrtOptions.toPly)
+                printf("%*s%s\n", catIndentCount, "", toString(tok).c_str());
+            return nextToken(flags);
+        } else
+            // Regular token; success.
+            return tok;
+    };
+
+    auto ungetToken = [&](string_view s) {
+        CHECK(!ungetTokenSet);
+        ungetTokenValue = std::string(s.data(), s.size());
+        ungetTokenSet = true;
+    };
+
+    MemoryArena arena;
+
+    // Helper function for pbrt API entrypoints that take a single string
+    // parameter and a ParamSet (e.g. pbrtShape()).
+    auto basicParamListEntrypoint = [&](
+        SpectrumType spectrumType,
+        std::function<void(const std::string &n, ParamSet p)> apiFunc) {
+        string_view token = nextToken(TokenRequired);
+        string_view dequoted = dequoteString(token);
+        std::string n = toString(dequoted);
+        ParamSet params =
+            parseParams(nextToken, ungetToken, arena, spectrumType);
+        apiFunc(n, std::move(params));
+    };
+
+    auto syntaxError = [&](string_view tok) {
+        Error("Unexpected token: %s", toString(tok).c_str());
+        exit(1);
+    };
+
+    while (true) {
+        string_view tok = nextToken(TokenOptional);
+        if (tok.empty()) break;
+
+        switch (tok[0]) {
+        case 'A':
+            if (tok == "ActiveTransform") {
+                string_view a = nextToken(TokenRequired);
+                if (a == "All")
+                    pbrtActiveTransformAll();
+                else if (a == "EndTime")
+                    pbrtActiveTransformEndTime();
+                else if (a == "StartTime")
+                    pbrtActiveTransformStartTime();
+                else
+                    syntaxError(tok);
+            }
+            else
+                syntaxError(tok);
+            break;
+
+        case 'C':
+            if (tok == "ConcatTransform") {
+                if (nextToken(TokenRequired) != "[") syntaxError(tok);
+                Float m[16];
+                for (int i = 0; i < 16; ++i)
+                    m[i] = parseNumber(nextToken(TokenRequired));
+                if (nextToken(TokenRequired) != "]") syntaxError(tok);
+                pbrtConcatTransform(m);
+            } else if (tok == "CoordinateSystem") {
+                string_view n = dequoteString(nextToken(TokenRequired));
+                pbrtCoordinateSystem(toString(n));
+            } else if (tok == "CoordSysTransform") {
+                string_view n = dequoteString(nextToken(TokenRequired));
+                pbrtCoordSysTransform(toString(n));
+            } else if (tok == "Camera")
+                basicParamListEntrypoint(SpectrumType::Reflectance, pbrtCamera);
+            else
+                syntaxError(tok);
+            break;
+
+        case 'F':
+            if (tok == "Film")
+                basicParamListEntrypoint(SpectrumType::Reflectance, pbrtFilm);
+            else
+                syntaxError(tok);
+            break;
+
+        case 'I':
+            if (tok == "Include") {
+                // Switch to the given file.
+                std::string filename =
+                    toString(dequoteString(nextToken(TokenRequired)));
+                if (PbrtOptions.cat || PbrtOptions.toPly)
+                    printf("%*sInclude \"%s\"\n", catIndentCount, "", filename.c_str());
+                else {
+                    filename = AbsolutePath(ResolveFilename(filename));
+                    auto tokError = [](const char *msg) { Error("%s", msg); };
+                    std::unique_ptr<Tokenizer> tinc =
+                        Tokenizer::CreateFromFile(filename, tokError);
+                    if (tinc) {
+                        fileStack.push_back(std::move(tinc));
+                        parserLoc = &fileStack.back()->loc;
+                    }
+                }
+            } else if (tok == "Identity")
+                pbrtIdentity();
+            else
+                syntaxError(tok);
+            break;
+
+        case 'L':
+            if (tok == "LookAt") {
+                Float v[9];
+                for (int i = 0; i < 9; ++i)
+                    v[i] = parseNumber(nextToken(TokenRequired));
+                pbrtLookAt(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7],
+                           v[8]);
+            } else
+                syntaxError(tok);
+            break;
+
+        case 'M':
+            if (tok == "MediumInterface") {
+                string_view n = dequoteString(nextToken(TokenRequired));
+                std::string names[2];
+                names[0] = toString(n);
+
+                // Check for optional second parameter
+                string_view second = nextToken(TokenOptional);
+                if (!second.empty()) {
+                    if (isQuotedString(second))
+                        names[1] = toString(dequoteString(second));
+                    else {
+                        ungetToken(second);
+                        names[1] = names[0];
+                    }
+                } else
+                    names[1] = names[0];
+
+                pbrtMediumInterface(names[0], names[1]);
+            } else
+                syntaxError(tok);
+            break;
+
+        case 'P':
+            if (tok == "PixelFilter")
+                basicParamListEntrypoint(SpectrumType::Reflectance,
+                                         pbrtPixelFilter);
+            else
+                syntaxError(tok);
+            break;
+
+        case 'R':
+            if (tok == "ReverseOrientation")
+                pbrtReverseOrientation();
+            else if (tok == "Rotate") {
+                Float v[4];
+                for (int i = 0; i < 4; ++i)
+                    v[i] = parseNumber(nextToken(TokenRequired));
+                pbrtRotate(v[0], v[1], v[2], v[3]);
+            } else
+                syntaxError(tok);
+            break;
+
+        case 'S':
+            if (tok == "Scale") {
+                Float v[3];
+                for (int i = 0; i < 3; ++i)
+                    v[i] = parseNumber(nextToken(TokenRequired));
+                pbrtScale(v[0], v[1], v[2]);
+            } else
+                syntaxError(tok);
+            break;
+
+        case 'T':
+            if (tok == "TransformBegin")
+                pbrtTransformBegin();
+            else if (tok == "TransformEnd")
+                pbrtTransformEnd();
+            else if (tok == "Transform") {
+                if (nextToken(TokenRequired) != "[") syntaxError(tok);
+                Float m[16];
+                for (int i = 0; i < 16; ++i)
+                    m[i] = parseNumber(nextToken(TokenRequired));
+                if (nextToken(TokenRequired) != "]") syntaxError(tok);
+                pbrtTransform(m);
+            } else if (tok == "Translate") {
+                Float v[3];
+                for (int i = 0; i < 3; ++i)
+                    v[i] = parseNumber(nextToken(TokenRequired));
+                pbrtTranslate(v[0], v[1], v[2]);
+            } else if (tok == "TransformTimes") {
+                Float v[2];
+                for (int i = 0; i < 2; ++i)
+                    v[i] = parseNumber(nextToken(TokenRequired));
+                pbrtTransformTimes(v[0], v[1]);
+            } else
+                syntaxError(tok);
+            break;
+
+        default:
+            syntaxError(tok);
+        }
+    }
+}
+
+void pbrtParseCameraString(std::string str) {
+    auto tokError = [](const char *msg) { Error("%s", msg); exit(1); };
+    std::unique_ptr<Tokenizer> t =
+        Tokenizer::CreateFromString(std::move(str), tokError);
+    if (!t) return;
+    parseCamera(std::move(t));
+}
+
+
 }  // namespace pbrt

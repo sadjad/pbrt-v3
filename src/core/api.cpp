@@ -1906,4 +1906,31 @@ Camera *RenderOptions::MakeCamera() const {
     return camera;
 }
 
+namespace scene {
+
+void DumpCamera(const std::string &description, const std::string outputPath) {
+    Options opts;
+    opts.nThreads = 1;
+    opts.quiet = true;
+
+    pbrtInit(opts);
+    pbrtParseCameraString(description);
+
+    renderOptions->MakeCamera();
+
+    AnimatedTransform ac2w{
+        &renderOptions->CameraToWorld[0], renderOptions->transformStartTime,
+        &renderOptions->CameraToWorld[1], renderOptions->transformEndTime};
+
+    protobuf::RecordWriter writer{outputPath};
+    writer.write(camera::to_protobuf(
+        renderOptions->CameraName, renderOptions->CameraParams, ac2w,
+        renderOptions->FilmName, renderOptions->FilmParams,
+        renderOptions->FilterName, renderOptions->FilterParams));
+
+    pbrtCleanup();
+}
+
+}  // namespace scene
+
 }  // namespace pbrt

@@ -2,9 +2,9 @@
 #define PBRT_INCLUDE_MAIN_H
 
 #include <cstdint>
+#include <istream>
 #include <memory>
 #include <set>
-#include <istream>
 #include <vector>
 
 #include "common.h"
@@ -59,6 +59,8 @@ Base LoadBase(const std::string &path, const int samplesPerPixel);
 std::shared_ptr<CloudBVH> LoadTreelet(const std::string &path,
                                       const TreeletId treeletId,
                                       std::istream *stream = nullptr);
+
+void DumpCamera(const std::string &description, const std::string outputPath);
 
 }  // namespace scene
 
