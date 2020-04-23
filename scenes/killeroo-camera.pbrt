@@ -1,0 +1,6 @@
+LookAt 400 -100 -100   0 0 -80   0 0 1
+Rotate -5 0 0 1
+Camera "perspective" "float fov" [39]
+Film "image"
+"integer xresolution" [1024] "integer yresolution" [600]
+    "string filename" "killeroo-close.png"
