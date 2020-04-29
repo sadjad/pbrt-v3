@@ -136,11 +136,8 @@ void AccumulateImage(const shared_ptr<Camera> &camera,
     const Bounds2i sampleBounds = camera->film->GetSampleBounds();
     unique_ptr<FilmTile> filmTile = camera->film->GetFilmTile(sampleBounds);
 
-    unordered_set<uint64_t> sampleSet;
-
     for (const auto &ray : rays) {
-        auto p = sampleSet.insert(ray.sampleId);
-        filmTile->AddSample(ray.pFilm, ray.L, ray.weight, p.second);
+        filmTile->AddSample(ray.pFilm, ray.L, ray.weight, true);
     }
 
     camera->film->MergeFilmTile(move(filmTile));
