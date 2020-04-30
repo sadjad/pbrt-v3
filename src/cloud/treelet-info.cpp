@@ -28,7 +28,7 @@ void generateReport(const roost::path &scenePath,
         const auto &info = item.second;
 
         for (const auto t : info.instances) {
-            totalSize[id] += treeletSize.at(t);
+            totalSize[id] += treeletSize.at(t.first);
         }
     }
 
@@ -60,6 +60,7 @@ string toString(const Bounds3f &bounds) {
 
 void printTreeletInfo(const map<uint32_t, CloudBVH::TreeletInfo> &treeletInfo,
                       const map<uint32_t, size_t> &treeletSize) {
+#if 0
     cout << "TREELETS " << treeletInfo.size() << '\n';
 
     for (const auto &item : treeletInfo) {
@@ -67,8 +68,6 @@ void printTreeletInfo(const map<uint32_t, CloudBVH::TreeletInfo> &treeletInfo,
         const auto &info = item.second;
 
         cout << "TREELET " << id << " " << treeletSize.at(id) << '\n';
-
-        cout << "BOUNDS " << toString(info.bounds) << '\n';
 
         cout << "BVH_NODES [";
         for (int i = 1; i < info.treeletNodeBounds.size(); i++) {
@@ -92,10 +91,11 @@ void printTreeletInfo(const map<uint32_t, CloudBVH::TreeletInfo> &treeletInfo,
 
         cout << "INSTANCE";
         for (const auto t : info.instances) {
-            cout << " " << t;
+            cout << " " << t.first;
         }
         cout << '\n';
     }
+#endif
 }
 
 void generateGraph(const map<uint32_t, CloudBVH::TreeletInfo> &treeletInfo) {
@@ -112,7 +112,7 @@ void generateGraph(const map<uint32_t, CloudBVH::TreeletInfo> &treeletInfo) {
 
         for (const auto t : info.instances) {
             cout << "  "
-                 << "T" << id << " -> T" << t << " [style=dotted]" << endl;
+                 << "T" << id << " -> T" << t.first << " [style=dotted]" << endl;
         }
     }
 

@@ -24,9 +24,7 @@ class CloudBVH : public Aggregate {
   public:
     struct TreeletInfo {
         std::set<uint32_t> children{};
-        std::set<uint32_t> instances{};
-        std::vector<Bounds3f> treeletNodeBounds;
-        Bounds3f bounds{};
+        std::map<uint32_t, uint64_t> instances {};
     };
 
     CloudBVH(const uint32_t bvh_root = 0);
@@ -36,6 +34,8 @@ class CloudBVH : public Aggregate {
     CloudBVH &operator=(const CloudBVH &) = delete;
 
     Bounds3f WorldBound() const;
+    Float RootSurfaceAreas(Transform txfm = Transform()) const;
+
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     bool IntersectP(const Ray &ray) const;
 
@@ -48,11 +48,6 @@ class CloudBVH : public Aggregate {
 
     const TreeletInfo &GetInfo(const uint32_t treelet_id) {
         loadTreelet(treelet_id);
-        treelet_info_.at(treelet_id).bounds = WorldBound();
-        treelet_info_.at(treelet_id).treeletNodeBounds =
-            getTreeletNodeBounds(treelet_id, 4);
-        // treelet_info_.at(treelet_id).worldNode =
-        // treelets_.at(treelet_id).nodes[0];
         return treelet_info_.at(treelet_id);
     }
 

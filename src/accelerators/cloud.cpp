@@ -51,6 +51,36 @@ Bounds3f CloudBVH::WorldBound() const {
     return treelets_[bvh_root_].nodes[0].bounds;
 }
 
+// Sums the full surface area for each root. Does not account for overlap between roots
+Float CloudBVH::RootSurfaceAreas(Transform txfm) const {
+    loadTreelet(bvh_root_);
+    CHECK_EQ(treelets_.size(), 1);
+
+    Float area = 0;
+
+    std::vector<Bounds3f> roots;
+
+    for (const TreeletNode &node : treelets_[bvh_root_].nodes) {
+        auto cur = txfm(node.bounds);
+
+        bool newRoot = true;
+        for (const Bounds3f &root : roots) {
+            auto u = Union(root, cur);
+            if (u == root) {
+                newRoot = false;
+                break;
+            }
+        }
+
+        if (newRoot) {
+            roots.push_back(cur);
+            area += cur.SurfaceArea();
+        }
+    }
+
+    return area;
+}
+
 void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
     if (treelets_.count(root_id)) {
         return; /* this tree is already loaded */
@@ -157,19 +187,23 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
 
             uint64_t instance_ref = proto_tp.root_ref();
 
-            if (not bvh_instances_.count(instance_ref)) {
-                uint16_t instance_group = (uint16_t)(instance_ref >> 32);
-                uint32_t instance_node = (uint32_t)instance_ref;
+            uint16_t instance_group = (uint16_t)(instance_ref >> 32);
+            uint32_t instance_node = (uint32_t)instance_ref;
 
+            if (not bvh_instances_.count(instance_ref)) {
                 if (instance_group == root_id) {
                     bvh_instances_[instance_ref] =
                         make_shared<IncludedInstance>(&treelet, instance_node);
                 } else {
                     bvh_instances_[instance_ref] =
                         make_shared<CloudBVH>(instance_group);
-
-                    info.instances.insert(instance_group);
                 }
+            }
+
+            CloudBVH *instance =
+                dynamic_cast<CloudBVH *>(bvh_instances_[instance_ref].get());
+            if (instance) {
+                info.instances[instance_group] += node.bounds.SurfaceArea();
             }
 
             tree_primitives.emplace_back(move(make_unique<TransformedPrimitive>(

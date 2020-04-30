@@ -598,6 +598,14 @@ SET_TARGET_PROPERTIES ( pbrt_treelet_info PROPERTIES OUTPUT_NAME "pbrt-treelet-i
 TARGET_COMPILE_FEATURES ( pbrt_treelet_info PRIVATE ${PBRT_CXX11_FEATURES} )
 TARGET_LINK_LIBRARIES ( pbrt_treelet_info ${ALL_PBRT_LIBS} )
 
+# gen-static0
+ADD_EXECUTABLE ( gen_static0 src/cloud/gen-static0.cpp )
+ADD_SANITIZERS ( gen_static0 )
+
+SET_TARGET_PROPERTIES ( gen_static0 PROPERTIES OUTPUT_NAME "gen-static0" )
+TARGET_COMPILE_FEATURES ( gen_static0 PRIVATE ${PBRT_CXX11_FEATURES} )
+TARGET_LINK_LIBRARIES ( gen_static0 ${ALL_PBRT_LIBS} )
+
 # Unit test
 
 FILE ( GLOB PBRT_TEST_SOURCE
