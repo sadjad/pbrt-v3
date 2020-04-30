@@ -60,7 +60,8 @@ std::shared_ptr<CloudBVH> LoadTreelet(const std::string &path,
                                       const TreeletId treeletId,
                                       std::istream *stream = nullptr);
 
-void DumpCamera(const std::string &description, const std::string outputPath);
+void DumpSceneObjects(const std::string &description,
+                      const std::string outputPath);
 
 }  // namespace scene
 

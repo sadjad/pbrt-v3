@@ -1806,7 +1806,6 @@ Scene *RenderOptions::MakeScene() {
         for (const auto &light : renderOptions->protoLights) {
             writer->write(light);
         }
-        renderOptions->protoLights.clear();
     }
 
     std::shared_ptr<Primitive> accelerator =
@@ -1908,25 +1907,44 @@ Camera *RenderOptions::MakeCamera() const {
 
 namespace scene {
 
-void DumpCamera(const std::string &description, const std::string outputPath) {
+void DumpSceneObjects(const std::string &description,
+                      const std::string outputPath) {
     Options opts;
     opts.nThreads = 1;
     opts.quiet = true;
 
     pbrtInit(opts);
-    pbrtParseCameraString(description);
 
-    renderOptions->MakeCamera();
+    renderOptions->CameraName = "";
 
-    AnimatedTransform ac2w{
-        &renderOptions->CameraToWorld[0], renderOptions->transformStartTime,
-        &renderOptions->CameraToWorld[1], renderOptions->transformEndTime};
+    pbrtParseSceneString(description);
 
-    protobuf::RecordWriter writer{outputPath};
-    writer.write(camera::to_protobuf(
-        renderOptions->CameraName, renderOptions->CameraParams, ac2w,
-        renderOptions->FilmName, renderOptions->FilmParams,
-        renderOptions->FilterName, renderOptions->FilterParams));
+    /* Dumping the camera */
+    if (!renderOptions->CameraName.empty()) {
+        AnimatedTransform ac2w{
+            &renderOptions->CameraToWorld[0], renderOptions->transformStartTime,
+            &renderOptions->CameraToWorld[1], renderOptions->transformEndTime};
+
+        protobuf::RecordWriter writer{
+            outputPath + "/" +
+            global::manager.getFileName(ObjectType::Camera, 0)};
+
+        writer.write(camera::to_protobuf(
+            renderOptions->CameraName, renderOptions->CameraParams, ac2w,
+            renderOptions->FilmName, renderOptions->FilmParams,
+            renderOptions->FilterName, renderOptions->FilterParams));
+    }
+
+    /* Dumping the lights */
+    if (!renderOptions->protoLights.empty()) {
+        protobuf::RecordWriter writer{
+            outputPath + "/" +
+            global::manager.getFileName(ObjectType::Lights, 0)};
+
+        for (const auto &light : renderOptions->protoLights) {
+            writer.write(light);
+        }
+    }
 
     pbrtCleanup();
 }

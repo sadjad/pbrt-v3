@@ -90,7 +90,7 @@ void pbrtWorldEnd();
 
 void pbrtParseFile(std::string filename);
 void pbrtParseString(std::string str);
-void pbrtParseCameraString(std::string str);
+void pbrtParseSceneString(std::string str);
 
 }  // namespace pbrt
 

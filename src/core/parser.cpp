@@ -1114,7 +1114,7 @@ void pbrtParseString(std::string str) {
     parse(std::move(t));
 }
 
-static void parseCamera(std::unique_ptr<Tokenizer> t) {
+static void parseScene(std::unique_ptr<Tokenizer> t) {
     std::vector<std::unique_ptr<Tokenizer>> fileStack;
     fileStack.push_back(std::move(t));
     parserLoc = &fileStack.back()->loc;
@@ -1191,7 +1191,11 @@ static void parseCamera(std::unique_ptr<Tokenizer> t) {
 
         switch (tok[0]) {
         case 'A':
-            if (tok == "ActiveTransform") {
+            if (tok == "AttributeBegin")
+                pbrtAttributeBegin();
+            else if (tok == "AttributeEnd")
+                pbrtAttributeEnd();
+            else if (tok == "ActiveTransform") {
                 string_view a = nextToken(TokenRequired);
                 if (a == "All")
                     pbrtActiveTransformAll();
@@ -1201,7 +1205,12 @@ static void parseCamera(std::unique_ptr<Tokenizer> t) {
                     pbrtActiveTransformStartTime();
                 else
                     syntaxError(tok);
-            }
+            } /* else if (tok == "AreaLightSource")
+                basicParamListEntrypoint(SpectrumType::Illuminant,
+                                         pbrtAreaLightSource);
+            else if (tok == "Accelerator")
+                basicParamListEntrypoint(SpectrumType::Reflectance,
+                                         pbrtAccelerator); */
             else
                 syntaxError(tok);
             break;
@@ -1234,6 +1243,10 @@ static void parseCamera(std::unique_ptr<Tokenizer> t) {
             break;
 
         case 'I':
+            /* if (tok == "Integrator")
+                basicParamListEntrypoint(SpectrumType::Reflectance,
+                                         pbrtIntegrator);
+            else */
             if (tok == "Include") {
                 // Switch to the given file.
                 std::string filename =
@@ -1257,7 +1270,10 @@ static void parseCamera(std::unique_ptr<Tokenizer> t) {
             break;
 
         case 'L':
-            if (tok == "LookAt") {
+            if (tok == "LightSource")
+                basicParamListEntrypoint(SpectrumType::Illuminant,
+                                         pbrtLightSource);
+            else if (tok == "LookAt") {
                 Float v[9];
                 for (int i = 0; i < 9; ++i)
                     v[i] = parseNumber(nextToken(TokenRequired));
@@ -1268,6 +1284,16 @@ static void parseCamera(std::unique_ptr<Tokenizer> t) {
             break;
 
         case 'M':
+            /* if (tok == "MakeNamedMaterial")
+                basicParamListEntrypoint(SpectrumType::Reflectance,
+                                         pbrtMakeNamedMaterial);
+            else if (tok == "MakeNamedMedium")
+                basicParamListEntrypoint(SpectrumType::Reflectance,
+                                         pbrtMakeNamedMedium);
+            else if (tok == "Material")
+                basicParamListEntrypoint(SpectrumType::Reflectance,
+                                         pbrtMaterial);
+            else */
             if (tok == "MediumInterface") {
                 string_view n = dequoteString(nextToken(TokenRequired));
                 std::string names[2];
@@ -1290,6 +1316,27 @@ static void parseCamera(std::unique_ptr<Tokenizer> t) {
                 syntaxError(tok);
             break;
 
+        /* case 'N':
+            if (tok == "NamedMaterial") {
+                string_view n = dequoteString(nextToken(TokenRequired));
+                pbrtNamedMaterial(toString(n));
+            } else
+                syntaxError(tok);
+            break;
+
+        case 'O':
+            if (tok == "ObjectBegin") {
+                string_view n = dequoteString(nextToken(TokenRequired));
+                pbrtObjectBegin(toString(n));
+            } else if (tok == "ObjectEnd")
+                pbrtObjectEnd();
+            else if (tok == "ObjectInstance") {
+                string_view n = dequoteString(nextToken(TokenRequired));
+                pbrtObjectInstance(toString(n));
+            } else
+                syntaxError(tok);
+            break; */
+
         case 'P':
             if (tok == "PixelFilter")
                 basicParamListEntrypoint(SpectrumType::Reflectance,
@@ -1311,7 +1358,13 @@ static void parseCamera(std::unique_ptr<Tokenizer> t) {
             break;
 
         case 'S':
-            if (tok == "Scale") {
+            /* if (tok == "Shape")
+                basicParamListEntrypoint(SpectrumType::Reflectance, pbrtShape);
+            else */
+            if (tok == "Sampler")
+                basicParamListEntrypoint(SpectrumType::Reflectance,
+                                         pbrtSampler);
+            else if (tok == "Scale") {
                 Float v[3];
                 for (int i = 0; i < 3; ++i)
                     v[i] = parseNumber(nextToken(TokenRequired));
@@ -1352,12 +1405,12 @@ static void parseCamera(std::unique_ptr<Tokenizer> t) {
     }
 }
 
-void pbrtParseCameraString(std::string str) {
+void pbrtParseSceneString(std::string str) {
     auto tokError = [](const char *msg) { Error("%s", msg); exit(1); };
     std::unique_ptr<Tokenizer> t =
         Tokenizer::CreateFromString(std::move(str), tokError);
     if (!t) return;
-    parseCamera(std::move(t));
+    parseScene(std::move(t));
 }
 
 
