@@ -35,6 +35,7 @@ class CloudBVH : public Aggregate {
 
     Bounds3f WorldBound() const;
     Float RootSurfaceAreas(Transform txfm = Transform()) const;
+    Float SurfaceAreaUnion() const;
 
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     bool IntersectP(const Ray &ray) const;

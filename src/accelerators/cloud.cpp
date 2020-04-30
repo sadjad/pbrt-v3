@@ -81,6 +81,18 @@ Float CloudBVH::RootSurfaceAreas(Transform txfm) const {
     return area;
 }
 
+Float CloudBVH::SurfaceAreaUnion() const {
+    loadTreelet(bvh_root_);
+    CHECK_EQ(treelets_.size(), 1);
+
+    Bounds3f boundUnion;
+    for (const TreeletNode &node : treelets_[bvh_root_].nodes) {
+        boundUnion = Union(boundUnion, node.bounds);
+    }
+
+    return boundUnion.SurfaceArea();
+}
+
 void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
     if (treelets_.count(root_id)) {
         return; /* this tree is already loaded */

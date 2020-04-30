@@ -29,6 +29,7 @@ int main(int argc, char* argv[])
   static0 << numTreelets << endl;
 
   vector<uint64_t> treeletAreas;
+  vector<uint64_t> unionAreas;
   vector<set<uint32_t>> treeletChildren;
   vector<uint64_t> instanceAreas(numTreelets);
   vector<uint64_t> finalAreas(numTreelets);
@@ -36,7 +37,9 @@ int main(int argc, char* argv[])
   for (uint32_t treeletIdx = 0; treeletIdx < numTreelets; treeletIdx++) {
       auto treelet = pbrt::scene::LoadTreelet(path, treeletIdx);
       uint64_t area = (uint64_t)treelet->RootSurfaceAreas();
+      uint64_t unionArea = (uint64_t)treelet->SurfaceAreaUnion();
       treeletAreas.push_back(area);
+      unionAreas.push_back(unionArea);
 
       auto info = treelet->GetInfo(treeletIdx);
 
@@ -72,9 +75,13 @@ int main(int argc, char* argv[])
   }
 
   for (uint32_t treeletIdx = 0; treeletIdx < numTreelets; treeletIdx++) {
-      uint64_t area = (uint64_t)ceil(finalAreas[treeletIdx]);
-      cout << treeletAreas[treeletIdx] << " " << finalAreas[treeletIdx] << endl;
-      static0 << area << " " << 1 << " " << treeletIdx << endl;
+      uint64_t areaHeuristic = (uint64_t)ceil(finalAreas[treeletIdx]);
+
+      cout << treeletIdx << " " << treeletAreas[treeletIdx] << " " <<
+              unionAreas[treeletIdx] << " " <<
+              areaHeuristic << endl;
+
+      static0 << areaHeuristic << " " << 1 << " " << treeletIdx << endl;
   }
 
   return EXIT_SUCCESS;
