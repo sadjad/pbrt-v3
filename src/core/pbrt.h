@@ -181,6 +181,7 @@ struct Options {
     bool cat = false, toPly = false;
     bool dumpScene = false;
     bool loadScene = false;
+    bool noRender = false;
     bool directionalTreelets = false;
     bool dumpMaterials = true;
     bool compressRays = false;

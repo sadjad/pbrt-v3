@@ -1441,7 +1441,7 @@ void pbrtLightSource(const std::string &name, const ParamSet &params) {
         printf("\n");
     }
 
-    if (PbrtOptions.dumpScene) {
+    if (PbrtOptions.dumpScene || PbrtOptions.noRender) {
         renderOptions->protoLights.push_back(
             light::to_protobuf(name, params, curTransform[0]));
     }
@@ -1735,7 +1735,7 @@ void pbrtWorldEnd() {
     // Create scene and render
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("%*sWorldEnd\n", catIndentCount, "");
-    } else {
+    } else if (!PbrtOptions.noRender) {
         std::unique_ptr<Integrator> integrator(renderOptions->MakeIntegrator());
         std::unique_ptr<Scene> scene(renderOptions->MakeScene());
 
@@ -1773,7 +1773,7 @@ void pbrtWorldEnd() {
     ImageTexture<RGBSpectrum, Spectrum>::ClearCache();
     renderOptions.reset(new RenderOptions);
 
-    if (!PbrtOptions.cat && !PbrtOptions.toPly) {
+    if (!PbrtOptions.cat && !PbrtOptions.toPly && !PbrtOptions.noRender) {
         MergeWorkerThreadStats();
         ReportThreadStats();
         if (!PbrtOptions.quiet) {
@@ -1912,6 +1912,7 @@ void DumpSceneObjects(const std::string &description,
     Options opts;
     opts.nThreads = 1;
     opts.quiet = true;
+    opts.noRender = true;
 
     pbrtInit(opts);
 
@@ -1946,6 +1947,7 @@ void DumpSceneObjects(const std::string &description,
         }
     }
 
+    pbrtWorldEnd();
     pbrtCleanup();
 }
 

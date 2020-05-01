@@ -1399,6 +1399,15 @@ static void parseScene(std::unique_ptr<Tokenizer> t) {
                 syntaxError(tok);
             break;
 
+        case 'W':
+            if (tok == "WorldBegin")
+                pbrtWorldBegin();
+            else if (tok == "WorldEnd")
+                break;
+            else
+                syntaxError(tok);
+            break;
+
         default:
             syntaxError(tok);
         }
