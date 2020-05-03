@@ -606,6 +606,14 @@ SET_TARGET_PROPERTIES ( gen_static0 PROPERTIES OUTPUT_NAME "gen-static0" )
 TARGET_COMPILE_FEATURES ( gen_static0 PRIVATE ${PBRT_CXX11_FEATURES} )
 TARGET_LINK_LIBRARIES ( gen_static0 ${ALL_PBRT_LIBS} )
 
+# extract-instances
+ADD_EXECUTABLE ( extract_instances src/cloud/extract-instances.cpp )
+ADD_SANITIZERS ( extract_instances )
+
+SET_TARGET_PROPERTIES ( extract_instances PROPERTIES OUTPUT_NAME "extract-instances" )
+TARGET_COMPILE_FEATURES ( extract_instances PRIVATE ${PBRT_CXX11_FEATURES} )
+TARGET_LINK_LIBRARIES ( extract_instances ${ALL_PBRT_LIBS} )
+
 # Unit test
 
 FILE ( GLOB PBRT_TEST_SOURCE

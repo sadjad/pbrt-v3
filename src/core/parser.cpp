@@ -62,10 +62,6 @@ namespace pbrt {
 
 Loc *parserLoc;
 
-static std::string toString(string_view s) {
-    return std::string(s.data(), s.size());
-}
-
 STAT_MEMORY_COUNTER("Memory/Tokenizer buffers", tokenizerMemory);
 
 static char decodeEscaped(int ch) {
@@ -320,7 +316,7 @@ string_view Tokenizer::Next() {
     }
 }
 
-static double parseNumber(string_view str) {
+double parseNumber(string_view str) {
     // Fast path for a single digit
     if (str.size() == 1) {
         if (!(str[0] >= '0' && str[0] <= '9')) {
@@ -368,11 +364,7 @@ static double parseNumber(string_view str) {
     return val;
 }
 
-inline bool isQuotedString(string_view str) {
-    return str.size() >= 2 && str[0] == '"' && str.back() == '"';
-}
-
-static string_view dequoteString(string_view str) {
+string_view dequoteString(string_view str) {
     if (!isQuotedString(str)) {
         Error("\"%s\": expected quoted string", toString(str).c_str());
         exit(1);

@@ -170,6 +170,18 @@ class Tokenizer {
     std::string sEscaped;
 };
 
+double parseNumber(string_view str);
+
+string_view dequoteString(string_view str);
+
+inline std::string toString(string_view s) {
+    return std::string(s.data(), s.size());
+}
+
+inline bool isQuotedString(string_view str) {
+    return str.size() >= 2 && str[0] == '"' && str.back() == '"';
+}
+
 }  // namespace pbrt
 
 #endif  // PBRT_CORE_PARSER_H
