@@ -1,9 +1,12 @@
 #include <cstdlib>
 #include <memory>
+#include <iomanip>
 #include <iostream>
 #include <fstream>
+#include <sstream>
 
 #include "pbrt.h"
+#include "transform.h"
 #include "memory.h"
 #include "fileutil.h"
 #include "parser.h"
@@ -27,29 +30,21 @@ static void customParse(unique_ptr<Tokenizer> t,
     bool ungetTokenSet = false;
     string ungetTokenValue;
 
+    stringstream accelerator;
     ofstream instanceFile;
-    ofstream *curFile = &outFile;
+    ostream *curFile = &outFile;
 
     auto writeToken = [&curFile](const string_view &text) {
         curFile->write(text.data(), text.size());
         (*curFile) << " ";
     };
 
+    auto writeString = [&curFile](const string &text) {
+        (*curFile) << text << " ";
+    };
+
     auto writeLine = [&curFile]() {
         (*curFile) << "\n";
-    };
-
-    auto writeWorldBegin = [&curFile]() {
-        (*curFile) << "WorldBegin\n";
-    };
-
-    auto writeWorldEnd = [&curFile]() {
-        (*curFile) << "WorldEnd\n";
-    };
-
-    auto writeProxy = [&curFile](string_view &name) {
-        (*curFile) << "ProxyBVH ";
-        curFile->write(name.data(), name.size());
     };
 
     // nextToken is a little helper function that handles the file stack,
@@ -167,8 +162,13 @@ static void customParse(unique_ptr<Tokenizer> t,
                 writeToken(tok);
                 basicParamListEntrypoint();
             } else if (tok == "Accelerator") {
+                auto tmp = curFile;
+                curFile = &accelerator;
                 writeToken(tok);
                 basicParamListEntrypoint();
+
+                curFile = tmp;
+                writeString(accelerator.str());
             } else {
                 syntaxError(tok);
             }
@@ -312,8 +312,31 @@ static void customParse(unique_ptr<Tokenizer> t,
                 instanceFile.open(dirName + "/" + toString(n) + ".pbrt");
                 curFile = &instanceFile;
 
+                writeString(accelerator.str());
+
+                writeString("WorldBegin");
+                writeLine();
+
                 // FIXME write out current transforms and graphics state
-                writeWorldBegin();
+                bool reversed = pbrtIsReverseOrientation();
+                if (reversed) {
+                    writeString("ReverseOrientation");
+                    writeLine();
+                }
+
+                Matrix4x4 transform = pbrtGetTransform();
+                stringstream strm;
+                strm << "Transform [ ";
+                strm << setprecision(10);
+                for (int i = 0; i < 4; i++) {
+                    for (int j = 0; j < 4; j++) {
+                        strm << transform.m[i][j] << " ";
+                    }
+                }
+                strm << "]";
+                writeString(strm.str());
+                writeLine();
+
                 writeToken(tok);
                 writeToken(quoteName);
                 writeLine();
@@ -322,14 +345,17 @@ static void customParse(unique_ptr<Tokenizer> t,
             } else if (tok == "ObjectEnd") {
                 writeToken(tok);
                 writeLine();
-                writeWorldEnd();
-                curFile->close();
+                writeString("WorldEndBuildInstances");
+                writeLine();
+
+                instanceFile.close();
                 curFile = &outFile;
 
                 pbrtAttributeEnd();
             } else if (tok == "ObjectInstance") {
                 string_view n = nextToken(TokenRequired);
-                writeProxy(n);
+                writeString("Proxy");
+                writeToken(n);
                 writeLine();
             } else {
                 syntaxError(tok);

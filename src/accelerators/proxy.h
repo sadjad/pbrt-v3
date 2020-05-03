@@ -5,6 +5,8 @@
 
 #include "primitive.h"
 
+namespace pbrt {
+
 class ProxyBVH : public Aggregate {
 public:
     ProxyBVH(const Bounds3f &bounds)
@@ -22,5 +24,7 @@ public:
 private:
     Bounds3f bounds_;
 };
+
+}
 
 #endif

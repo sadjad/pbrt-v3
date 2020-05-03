@@ -88,9 +88,16 @@ void pbrtObjectEnd();
 void pbrtObjectInstance(const std::string &name);
 void pbrtWorldEnd();
 
+void pbrtProxy(const std::string &name);
+void pbrtWorldEndBuildInstances();
+
 void pbrtParseFile(std::string filename);
 void pbrtParseString(std::string str);
 void pbrtParseSceneString(std::string str);
+
+// Some state accessors for extract-instances
+bool pbrtIsReverseOrientation();
+Matrix4x4 pbrtGetTransform();
 
 }  // namespace pbrt
 

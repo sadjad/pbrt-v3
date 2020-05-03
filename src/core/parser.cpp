@@ -1002,11 +1002,15 @@ static void parse(std::unique_ptr<Tokenizer> t) {
             break;
 
         case 'P':
-            if (tok == "PixelFilter")
+            if (tok == "PixelFilter") {
                 basicParamListEntrypoint(SpectrumType::Reflectance,
                                          pbrtPixelFilter);
-            else
+            } else if (tok == "Proxy") {
+                string_view n = dequoteString(nextToken(TokenRequired));
+                pbrtProxy(toString(n));
+            } else {
                 syntaxError(tok);
+            }
             break;
 
         case 'R':
@@ -1078,6 +1082,8 @@ static void parse(std::unique_ptr<Tokenizer> t) {
                 pbrtWorldBegin();
             else if (tok == "WorldEnd")
                 pbrtWorldEnd();
+            else if (tok == "WorldEndBuildInstances")
+                pbrtWorldEndBuildInstances();
             else
                 syntaxError(tok);
             break;

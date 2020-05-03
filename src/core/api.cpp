@@ -44,6 +44,7 @@
 #include "accelerators/bvh.h"
 #include "accelerators/cloud.h"
 #include "accelerators/kdtreeaccel.h"
+#include "accelerators/proxy.h"
 #include "cameras/environment.h"
 #include "cameras/orthographic.h"
 #include "cameras/perspective.h"
@@ -1673,6 +1674,29 @@ void pbrtObjectEnd() {
         printf("%*sObjectEnd\n", catIndentCount, "");
 }
 
+static std::shared_ptr<Primitive> buildAccelStructure(const std::string &name) {
+    std::vector<std::shared_ptr<Primitive>> &instance_prims =
+        renderOptions->instances[name];
+
+    if (instance_prims.empty()) return nullptr;
+
+    std::shared_ptr<Primitive> &prim = instance_prims[0];
+    if (std::dynamic_pointer_cast<Aggregate>(prim)) {
+        return prim;
+    }
+
+    std::shared_ptr<Primitive> accel(
+        MakeAccelerator(renderOptions->AcceleratorName,
+                        std::move(instance_prims),
+                        renderOptions->AcceleratorParams));
+
+    if (!accel) accel = std::make_shared<BVHAccel>(std::move(instance_prims));
+    instance_prims.clear();
+    instance_prims.emplace_back(std::move(accel));
+
+    return instance_prims[0];
+}
+
 STAT_COUNTER("Scene/Object instances used", nObjectInstancesUsed);
 
 void pbrtObjectInstance(const std::string &name) {
@@ -1691,19 +1715,10 @@ void pbrtObjectInstance(const std::string &name) {
         Error("Unable to find instance named \"%s\"", name.c_str());
         return;
     }
-    std::vector<std::shared_ptr<Primitive>> &in =
-        renderOptions->instances[name];
-    if (in.empty()) return;
+    auto instAccel = buildAccelStructure(name);
+    if (!instAccel) return;
     ++nObjectInstancesUsed;
-    if (in.size() > 1) {
-        // Create aggregate for instance _Primitive_s
-        std::shared_ptr<Primitive> accel(
-            MakeAccelerator(renderOptions->AcceleratorName, std::move(in),
-                            renderOptions->AcceleratorParams));
-        if (!accel) accel = std::make_shared<BVHAccel>(in);
-        in.clear();
-        in.push_back(accel);
-    }
+
     static_assert(MaxTransforms == 2,
                   "TransformCache assumes only two transforms");
     // Create _animatedInstanceToWorld_ transform for instance
@@ -1715,8 +1730,11 @@ void pbrtObjectInstance(const std::string &name) {
         InstanceToWorld[0], renderOptions->transformStartTime,
         InstanceToWorld[1], renderOptions->transformEndTime);
     std::shared_ptr<Primitive> prim(
-        std::make_shared<TransformedPrimitive>(in[0], animatedInstanceToWorld));
+        std::make_shared<TransformedPrimitive>(instAccel, animatedInstanceToWorld));
     renderOptions->primitives.push_back(prim);
+}
+
+void pbrtProxy(const std::string &name) {
 }
 
 void pbrtWorldEnd() {
@@ -1788,6 +1806,39 @@ void pbrtWorldEnd() {
     activeTransformBits = AllTransformsBits;
     namedCoordinateSystems.erase(namedCoordinateSystems.begin(),
                                  namedCoordinateSystems.end());
+}
+
+void pbrtWorldEndBuildInstances() {
+    // Set sceneaccelerator to true for all instances that are getting dumped
+    std::unique_ptr<bool[]> scene_accelerator_val(new bool[1]);
+    scene_accelerator_val[0] = true;
+    renderOptions->AcceleratorParams.AddBool("sceneaccelerator",
+                                             std::move(scene_accelerator_val),
+                                             1);
+
+    for (auto &kv : renderOptions->instances) {
+        buildAccelStructure(kv.first);
+    }
+    // Shouldn't be anything instantiated here, otherwise we should
+    // be calling MakeScene or something
+    CHECK_EQ(renderOptions->primitives.size(), 0);
+
+    graphicsState = GraphicsState();
+    currentApiState = APIState::OptionsBlock;
+    renderOptions.reset(new RenderOptions);
+    for (int i = 0; i < MaxTransforms; ++i) curTransform[i] = Transform();
+    activeTransformBits = AllTransformsBits;
+    namedCoordinateSystems.erase(namedCoordinateSystems.begin(),
+                                 namedCoordinateSystems.end());
+}
+
+bool pbrtIsReverseOrientation() {
+    return graphicsState.reverseOrientation;
+}
+
+Matrix4x4 pbrtGetTransform() {
+    CHECK_EQ(curTransform.IsAnimated(), false);
+    return curTransform[0].GetMatrix();
 }
 
 Scene *RenderOptions::MakeScene() {
