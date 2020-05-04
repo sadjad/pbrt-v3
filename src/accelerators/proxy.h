@@ -9,11 +9,12 @@ namespace pbrt {
 
 class ProxyBVH : public Aggregate {
 public:
-    ProxyBVH(const Bounds3f &bounds)
-        : bounds_(bounds)
+    ProxyBVH(const Bounds3f &bounds, uint64_t size)
+        : bounds_(bounds), size_(size)
     {}
 
     Bounds3f WorldBound() const { return bounds_; }
+    uint64_t Size() const { return size_; }
 
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const {
         throw std::runtime_error("Intersect called on proxy");
@@ -23,6 +24,7 @@ public:
     }
 private:
     Bounds3f bounds_;
+    uint64_t size_;
 };
 
 }

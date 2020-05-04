@@ -126,16 +126,11 @@ class TreeletDumpBVH : public BVHAccel {
                    int maxTreeletBytes,
                    int copyableThreshold,
                    bool rootBVH,
+                   bool writeHeader,
                    TraversalAlgorithm traversal,
                    PartitionAlgorithm partition,
                    int maxPrimsInNode = 1,
-                   SplitMethod splitMethod = SplitMethod::SAH,
-                   bool dumpBVH = false,
-                   const std::string &dumpBVHPath = "",
-                   bool dumpJson = false,
-                   int numJsonNodes = 64,
-                   int depth_limit = 12,
-                   const std::string &dumpJsonPath="");
+                   SplitMethod splitMethod = SplitMethod::SAH);
 
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     bool IntersectP(const Ray &ray) const;
@@ -150,7 +145,7 @@ class TreeletDumpBVH : public BVHAccel {
         int dirIdx {-1};
         float totalProb {0};
     };
-    void BVHDLT(uint32_t curr_idx,int depth,int depth_limit,std::string &output);
+
     void SetNodeInfo(int maxTreeletBytes);
 
     uint64_t GetInstancesBytes(const InstanceMask &mask) const;
@@ -186,6 +181,8 @@ class TreeletDumpBVH : public BVHAccel {
 
     std::vector<uint32_t> ComputeTreelets(const TraversalGraph &graph,
                                           uint64_t maxTreeletBytes) const;
+
+    void DumpHeader() const;
 
     void DumpSanityCheck(const std::vector<std::unordered_map<uint64_t, uint32_t>> &treeletNodeLocations) const;
     std::vector<uint32_t> DumpTreelets(bool root) const;

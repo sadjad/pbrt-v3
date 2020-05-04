@@ -73,7 +73,8 @@ Reformatting options:
 Cloud:
   --dumpscene <dir>    Dump scene data to <dir>
   --loadscene <dir>    Load scene data from <dir>
-  --nomaterial          Don't dump the texture information
+  --nomaterial         Don't dump the texture information
+  --proxydir           Where to find proxies 
 
 )");
     exit(msg ? 1 : 0);
@@ -158,12 +159,21 @@ int main(int argc, char *argv[]) {
             options.dumpMaterials = false;
         } else if (!strcmp(argv[i], "--directional")) {
             options.directionalTreelets = true;
+        } else if (!strcmp(argv[i], "--proxydir") ||
+                   !strcmp(argv[i], "-proxydir")) {
+            if (i + 1 == argc) {
+                usage("missing value after --proxydir argument");
+            }
+            options.proxyDir = std::string(argv[++i]);
+        } else if (!strncmp(argv[i], "--proxydir=", 11)) {
+            options.proxyDir = std::string(argv[i] + 11);
         } else if (!strcmp(argv[i], "--help") || !strcmp(argv[i], "-help") ||
                    !strcmp(argv[i], "-h")) {
             usage();
             return 0;
-        } else
+        } else {
             filenames.push_back(argv[i]);
+        }
     }
 
     // Print welcome banner

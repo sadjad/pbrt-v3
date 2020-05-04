@@ -123,6 +123,7 @@
 
 #include <map>
 #include <stdio.h>
+#include <fstream>
 
 namespace pbrt {
 
@@ -186,6 +187,7 @@ struct RenderOptions {
     std::vector<std::shared_ptr<Light>> lights;
     std::vector<std::shared_ptr<Primitive>> primitives;
     std::map<std::string, std::vector<std::shared_ptr<Primitive>>> instances;
+    std::map<std::string, std::shared_ptr<ProxyBVH>> proxies;
     std::vector<std::shared_ptr<Primitive>> *currentInstance = nullptr;
     bool haveScatteringMedia = false;
 
@@ -1734,7 +1736,49 @@ void pbrtObjectInstance(const std::string &name) {
     renderOptions->primitives.push_back(prim);
 }
 
+static std::shared_ptr<ProxyBVH> CreateProxy(const std::string &name) {
+    auto existingProxy = renderOptions->proxies.find(name);
+    if (existingProxy != renderOptions->proxies.end()) {
+        return existingProxy->second;
+    }
+
+    std::ifstream proxyHdr(PbrtOptions.proxyDir + "/" + name + "/HEADER",
+                           std::ios::binary);
+    Bounds3f root;
+    proxyHdr.read(reinterpret_cast<char *>(&root), sizeof(Bounds3f));
+    uint64_t treeletSize;
+    proxyHdr.read(reinterpret_cast<char *>(&treeletSize), sizeof(uint64_t));
+
+    auto iter = renderOptions->proxies.emplace(name, 
+            std::make_shared<ProxyBVH>(root, treeletSize));
+    return iter.first->second;
+}
+
 void pbrtProxy(const std::string &name) {
+    if (PbrtOptions.proxyDir == "") {
+        Error("Missing --proxydir argument");
+        return;
+    }
+
+    if (renderOptions->currentInstance) {
+        Error("Instances cannot include ProxyBVH");
+        return;
+    }
+
+    std::shared_ptr<Primitive> proxy = CreateProxy(name);
+
+    Transform *InstanceToWorld[2] = {
+        transformCache.Lookup(curTransform[0]),
+        transformCache.Lookup(curTransform[1])
+    };
+
+    AnimatedTransform animatedInstanceToWorld(
+        InstanceToWorld[0], renderOptions->transformStartTime,
+        InstanceToWorld[1], renderOptions->transformEndTime);
+
+    std::shared_ptr<Primitive> prim(
+        std::make_shared<TransformedPrimitive>(proxy, animatedInstanceToWorld));
+    renderOptions->primitives.push_back(prim);
 }
 
 void pbrtWorldEnd() {
@@ -1808,7 +1852,7 @@ void pbrtWorldEnd() {
                                  namedCoordinateSystems.end());
 }
 
-void pbrtWorldEndBuildInstances() {
+void pbrtWorldEndBuildInstance() {
     // Set sceneaccelerator to true for all instances that are getting dumped
     std::unique_ptr<bool[]> scene_accelerator_val(new bool[1]);
     scene_accelerator_val[0] = true;
@@ -1816,9 +1860,15 @@ void pbrtWorldEndBuildInstances() {
                                              std::move(scene_accelerator_val),
                                              1);
 
-    for (auto &kv : renderOptions->instances) {
-        buildAccelStructure(kv.first);
-    }
+    std::unique_ptr<bool[]> write_header_val(new bool[1]);
+    write_header_val[0] = true;
+    renderOptions->AcceleratorParams.AddBool("writeheader",
+                                             std::move(write_header_val),
+                                             1);
+
+    CHECK_EQ(renderOptions->instances.size(), 1);
+
+    buildAccelStructure(renderOptions->instances.begin()->first);
     // Shouldn't be anything instantiated here, otherwise we should
     // be calling MakeScene or something
     CHECK_EQ(renderOptions->primitives.size(), 0);

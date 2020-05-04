@@ -345,7 +345,7 @@ static void customParse(unique_ptr<Tokenizer> t,
             } else if (tok == "ObjectEnd") {
                 writeToken(tok);
                 writeLine();
-                writeString("WorldEndBuildInstances");
+                writeString("WorldEndBuildInstance");
                 writeLine();
 
                 instanceFile.close();
