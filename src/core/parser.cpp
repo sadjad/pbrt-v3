@@ -1082,6 +1082,8 @@ static void parse(std::unique_ptr<Tokenizer> t) {
                 pbrtWorldBegin();
             else if (tok == "WorldEnd")
                 pbrtWorldEnd();
+            else if (tok == "WorldEndBuildChunk")
+                pbrtWorldEndBuildChunk();
             else if (tok == "WorldEndBuildInstance")
                 pbrtWorldEndBuildInstance();
             else

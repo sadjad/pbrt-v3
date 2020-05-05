@@ -4,6 +4,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <string>
 
 #include "pbrt.h"
 #include "transform.h"
@@ -21,8 +22,9 @@ PBRT_CONSTEXPR int TokenOptional = 0;
 PBRT_CONSTEXPR int TokenRequired = 1;
 
 static void customParse(unique_ptr<Tokenizer> t,
-                        ofstream &outFile,
-                        const string &dirName) {
+                        ofstream &masterFile,
+                        const string &instancesDir,
+                        const string &chunksDir) {
     vector<unique_ptr<Tokenizer>> fileStack;
     fileStack.push_back(move(t));
     parserLoc = &fileStack.back()->loc;
@@ -32,7 +34,9 @@ static void customParse(unique_ptr<Tokenizer> t,
 
     stringstream accelerator;
     ofstream instanceFile;
-    ostream *curFile = &outFile;
+    ofstream chunkFile;
+    int curChunk = 0;
+    ostream *curFile = &masterFile;
 
     auto writeToken = [&curFile](const string_view &text) {
         curFile->write(text.data(), text.size());
@@ -40,12 +44,14 @@ static void customParse(unique_ptr<Tokenizer> t,
     };
 
     auto writeString = [&curFile](const string &text) {
-        (*curFile) << text << " ";
+        (*curFile) << text;
     };
 
     auto writeLine = [&curFile]() {
         (*curFile) << "\n";
     };
+
+    int includeLevel = 0;
 
     // nextToken is a little helper function that handles the file stack,
     // returning the next token from the current file until reaching EOF,
@@ -70,6 +76,17 @@ static void customParse(unique_ptr<Tokenizer> t,
         if (tok.empty()) {
             // We've reached EOF in the current file. Anything more to parse?
             fileStack.pop_back();
+            includeLevel--;
+
+            // End of chunk
+            if (includeLevel == 0) {
+                writeString("WorldEndBuildChunk");
+                writeLine();
+                chunkFile.close();
+                curFile = &masterFile;
+                curChunk++;
+            }
+
             if (!fileStack.empty()) parserLoc = &fileStack.back()->loc;
             return nextToken(flags);
         } else if (tok[0] == '#') {
@@ -244,6 +261,18 @@ static void customParse(unique_ptr<Tokenizer> t,
                 if (tinc) {
                     fileStack.push_back(move(tinc));
                     parserLoc = &fileStack.back()->loc;
+
+                    includeLevel++;
+                    if (includeLevel == 1) {
+                        string chunkName("chunk_" + to_string(curChunk));
+                        writeString("Proxy \"" + chunkName + "\"");
+                        writeLine();
+                        chunkFile.open(chunksDir + "/" + chunkName  + ".pbrt");
+                        curFile = &chunkFile;
+                        writeString(accelerator.str());
+                        writeString("WorldBegin");
+                        writeLine();
+                    }
                 }
             } else if (tok == "Identity") {
                 writeToken(tok);
@@ -309,7 +338,7 @@ static void customParse(unique_ptr<Tokenizer> t,
             if (tok == "ObjectBegin") {
                 auto quoteName = nextToken(TokenRequired);
                 string_view n = dequoteString(quoteName);
-                instanceFile.open(dirName + "/" + toString(n) + ".pbrt");
+                instanceFile.open(instancesDir + "/" + toString(n) + ".pbrt");
                 curFile = &instanceFile;
 
                 writeString(accelerator.str());
@@ -349,12 +378,16 @@ static void customParse(unique_ptr<Tokenizer> t,
                 writeLine();
 
                 instanceFile.close();
-                curFile = &outFile;
+                if (chunkFile.is_open()) {
+                    curFile = &chunkFile;
+                } else {
+                    curFile = &masterFile;
+                }
 
                 pbrtAttributeEnd();
             } else if (tok == "ObjectInstance") {
                 string_view n = nextToken(TokenRequired);
-                writeString("Proxy");
+                writeString("Proxy ");
                 writeToken(n);
                 writeLine();
             } else {
@@ -504,28 +537,34 @@ static void customParse(unique_ptr<Tokenizer> t,
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 4) {
-        cerr << argv[0] << " IN_SCENE OUT_SCENE INSTANCES_DIR" << endl;
+    if (argc != 3) {
+        cerr << argv[0] << " IN_SCENE OUT_DIR" << endl;
         exit(EXIT_FAILURE);
     }
-    const string inName(argv[1]);
-    const string outName(argv[2]);
-    const string instancesDir(argv[3]);
+    const string inScene(argv[1]);
+    const string outDir(argv[2]);
 
+    const string masterFilename = outDir + "/master.pbrt";
+
+    const string instancesDir = outDir + "/instances";
+    const string chunksDir = outDir + "/chunks";
+
+    mkdir(outDir.c_str(), 0700);
     mkdir(instancesDir.c_str(), 0700);
+    mkdir(chunksDir.c_str(), 0700);
 
-    ofstream outFile(outName);
+    ofstream masterFile(masterFilename);
 
     Options options;
     options.nThreads = 1;
     pbrtInit(options);
 
-    SetSearchDirectory(DirectoryContaining(inName));
+    SetSearchDirectory(DirectoryContaining(inScene));
     auto tokError = [](const char *msg) { Error("%s", msg); exit(EXIT_FAILURE); };
-    auto t = Tokenizer::CreateFromFile(inName, tokError);
+    auto t = Tokenizer::CreateFromFile(inScene, tokError);
     if (!t) {
         cerr << "Tokenizer failed" << endl;
     }
 
-    customParse(move(t), outFile, instancesDir);
+    customParse(move(t), masterFile, instancesDir, chunksDir);
 }

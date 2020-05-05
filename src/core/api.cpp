@@ -1852,6 +1852,26 @@ void pbrtWorldEnd() {
                                  namedCoordinateSystems.end());
 }
 
+void pbrtWorldEndBuildChunk() {
+    CHECK_EQ(renderOptions->instances.size(), 0);
+
+    std::unique_ptr<bool[]> write_header_val(new bool[1]);
+    write_header_val[0] = true;
+    renderOptions->AcceleratorParams.AddBool("writeheader",
+                                             std::move(write_header_val),
+                                             1);
+
+    renderOptions->MakeScene();
+
+    graphicsState = GraphicsState();
+    currentApiState = APIState::OptionsBlock;
+    renderOptions.reset(new RenderOptions);
+    for (int i = 0; i < MaxTransforms; ++i) curTransform[i] = Transform();
+    activeTransformBits = AllTransformsBits;
+    namedCoordinateSystems.erase(namedCoordinateSystems.begin(),
+                                 namedCoordinateSystems.end());
+}
+
 void pbrtWorldEndBuildInstance() {
     // Set sceneaccelerator to true for all instances that are getting dumped
     std::unique_ptr<bool[]> scene_accelerator_val(new bool[1]);

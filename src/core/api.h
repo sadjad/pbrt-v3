@@ -89,6 +89,7 @@ void pbrtObjectInstance(const std::string &name);
 void pbrtWorldEnd();
 
 void pbrtProxy(const std::string &name);
+void pbrtWorldEndBuildChunk();
 void pbrtWorldEndBuildInstance();
 
 void pbrtParseFile(std::string filename);
