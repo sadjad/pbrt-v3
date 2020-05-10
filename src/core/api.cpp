@@ -119,6 +119,7 @@
 #include "media/grid.h"
 #include "media/homogeneous.h"
 #include "cloud/treeletdumpbvh.h"
+#include "accelerators/proxydumpbvh.h"
 #include "cloud/manager.h"
 
 #include <map>
@@ -905,6 +906,8 @@ std::shared_ptr<Primitive> MakeAccelerator(
         accel = CreateCloudBVH(paramSet);
     else if (name == "treeletdumpbvh")
         accel = CreateTreeletDumpBVH(std::move(prims), paramSet);
+    else if (name == "proxydumpbvh")
+        accel = CreateProxyDumpBVH(std::move(prims), paramSet);
     else
         Warning("Accelerator \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();
@@ -1739,18 +1742,42 @@ void pbrtObjectInstance(const std::string &name) {
 static std::shared_ptr<ProxyBVH> CreateProxy(const std::string &name) {
     auto existingProxy = renderOptions->proxies.find(name);
     if (existingProxy != renderOptions->proxies.end()) {
+        existingProxy->second->IncrUsage();
         return existingProxy->second;
     }
 
     std::ifstream proxyHdr(PbrtOptions.proxyDir + "/" + name + "/HEADER",
                            std::ios::binary);
+    if (!proxyHdr.is_open()) {
+        Error("Missing proxy");
+        exit(1);
+    }
+
     Bounds3f root;
     proxyHdr.read(reinterpret_cast<char *>(&root), sizeof(Bounds3f));
     uint64_t treeletSize;
     proxyHdr.read(reinterpret_cast<char *>(&treeletSize), sizeof(uint64_t));
 
+    uint64_t nodeCount;
+    proxyHdr.read(reinterpret_cast<char *>(&nodeCount), sizeof(uint64_t));
+
+    uint64_t numDependencies;
+    proxyHdr.read(reinterpret_cast<char *>(&numDependencies), sizeof(uint64_t));
+    std::vector<const ProxyBVH *> deps;
+    deps.reserve(numDependencies);
+    for (int i = 0; i < numDependencies; i++) {
+        uint64_t numChars;
+        proxyHdr.read(reinterpret_cast<char *>(&numChars), sizeof(uint64_t));
+        std::vector<char> depBuf(numChars + 1, '\0');
+        proxyHdr.read(depBuf.data(), numChars);
+
+        std::string depName(depBuf.data());
+        deps.push_back(CreateProxy(depName).get());
+    }
+
     auto iter = renderOptions->proxies.emplace(name, 
-            std::make_shared<ProxyBVH>(root, treeletSize));
+            std::make_shared<ProxyBVH>(root, treeletSize, name,
+                                       nodeCount, move(deps)));
     return iter.first->second;
 }
 
@@ -1859,6 +1886,12 @@ void pbrtWorldEndBuildChunk() {
     write_header_val[0] = true;
     renderOptions->AcceleratorParams.AddBool("writeheader",
                                              std::move(write_header_val),
+                                             1);
+
+    std::unique_ptr<bool[]> inline_proxies_val(new bool[1]);
+    inline_proxies_val[0] = false;
+    renderOptions->AcceleratorParams.AddBool("inlineproxies",
+                                             std::move(inline_proxies_val),
                                              1);
 
     renderOptions->MakeScene();

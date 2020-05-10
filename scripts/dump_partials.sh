@@ -11,11 +11,11 @@ PBRT_BIN="`realpath \"$1\"`"
 PBRT_DIR="`realpath \"$2\"`"
 OUT_DIR="`realpath \"$3\"`"
 
-rm -r "$OUT_DIR"
 cd "$PBRT_DIR"
 
 for pbrt in `find . -name '*.pbrt'`; do
     name=`basename $pbrt .pbrt`
+    rm -rf "$OUT_DIR/$name"
     mkdir -p "$OUT_DIR/$name"
-    "$PBRT_BIN" --nomaterial --dumpscene "$OUT_DIR/$name" "$pbrt"
+    "$PBRT_BIN" --nthreads=1 --proxydir "$OUT_DIR" --nomaterial --dumpscene "$OUT_DIR/$name" "$pbrt"
 done

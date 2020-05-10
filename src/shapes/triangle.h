@@ -70,6 +70,7 @@ struct TriangleMesh {
 };
 
 class TreeletDumpBVH;
+class ProxyDumpBVH;
 
 class Triangle : public Shape {
   public:
@@ -119,6 +120,7 @@ class Triangle : public Shape {
 
     friend BVHAccel;
     friend TreeletDumpBVH;
+    friend ProxyDumpBVH;
 };
 
 std::vector<std::shared_ptr<Shape>> CreateTriangleMesh(
