@@ -79,7 +79,7 @@ static void customParse(unique_ptr<Tokenizer> t,
             includeLevel--;
 
             // End of chunk
-            if (includeLevel == 0) {
+            if (includeLevel == 0 && !instanceFile.is_open()) {
                 writeString("WorldEndBuildChunk");
                 writeLine();
                 chunkFile.close();
@@ -263,7 +263,7 @@ static void customParse(unique_ptr<Tokenizer> t,
                     parserLoc = &fileStack.back()->loc;
 
                     includeLevel++;
-                    if (includeLevel == 1) {
+                    if (includeLevel == 1 && !instanceFile.is_open()) {
                         string chunkName("chunk_" + to_string(curChunk));
                         writeString("Proxy \"" + chunkName + "\"");
                         writeLine();

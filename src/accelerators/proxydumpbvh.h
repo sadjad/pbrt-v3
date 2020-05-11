@@ -128,7 +128,6 @@ class ProxyDumpBVH : public BVHAccel {
 
     TreeletMap treeletAllocations{};
 
-    bool rootBVH;
     TraversalAlgorithm traversalAlgo;
     PartitionAlgorithm partitionAlgo;
     std::vector<uint64_t> nodeParents;

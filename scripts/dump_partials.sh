@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -x
 
 if [ "$#" -ne 3 ]; then
     echo "$0 PBRT_BIN PBRT_DIR OUT_DIR"

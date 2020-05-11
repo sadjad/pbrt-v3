@@ -1896,6 +1896,10 @@ void pbrtWorldEndBuildChunk() {
 
     renderOptions->MakeScene();
 
+    auto manifestWriter =
+        global::manager.GetWriter(ObjectType::Manifest);
+    manifestWriter->write(global::manager.makeManifest());
+
     graphicsState = GraphicsState();
     currentApiState = APIState::OptionsBlock;
     renderOptions.reset(new RenderOptions);
@@ -1925,6 +1929,10 @@ void pbrtWorldEndBuildInstance() {
     // Shouldn't be anything instantiated here, otherwise we should
     // be calling MakeScene or something
     CHECK_EQ(renderOptions->primitives.size(), 0);
+
+    auto manifestWriter =
+        global::manager.GetWriter(ObjectType::Manifest);
+    manifestWriter->write(global::manager.makeManifest());
 
     graphicsState = GraphicsState();
     currentApiState = APIState::OptionsBlock;
