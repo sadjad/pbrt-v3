@@ -120,9 +120,8 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
         protobuf::TriangleMesh tm;
         reader->read(&tm);
         int64_t tm_id = tm.id();
-        assert(triangle_meshes_.count(tm_id) == 0);
-        triangle_meshes_[tm_id] =
-            make_shared<TriangleMesh>(move(from_protobuf(tm)));
+        auto p = triangle_meshes_.emplace(tm_id, make_shared<TriangleMesh>(move(from_protobuf(tm))));
+        CHECK_EQ(p.second, true);
         triangle_mesh_material_ids_[tm_id] = tm.material_id();
     }
 
@@ -239,7 +238,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
 
             auto shape = make_shared<Triangle>(
                 &identity_transform_, &identity_transform_, false,
-                triangle_meshes_[tm_id], proto_t.tri_number());
+                triangle_meshes_.at(tm_id), proto_t.tri_number());
 
             tree_primitives.emplace_back(move(make_unique<GeometricPrimitive>(
                 shape, materials_[material_id], nullptr, MediumInterface{})));
