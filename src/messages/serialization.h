@@ -52,6 +52,8 @@ public:
     RecordReader(FileDescriptor && fd);
     RecordReader(std::istream * is);
 
+    size_t skip(const size_t n_records = 1);
+
     template<class ProtobufType>
     bool read(ProtobufType * record);
 
