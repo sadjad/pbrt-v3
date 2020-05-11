@@ -9,6 +9,7 @@
 #include "messages/utils.h"
 #include "pbrt.pb.h"
 #include <iomanip>
+#include <chrono>
 using namespace std;
 
 namespace pbrt {
@@ -113,9 +114,16 @@ void ProxyDumpBVH::SetNodeInfo(int maxTreeletBytes, int copyableThreshold) {
     nodeParents.resize(nodeCount);
     nodeProxies.resize(nodeCount);
     subtreeProxies.resize(nodeCount);
+    nodeBounds.resize(nodeCount);
+
+    // Specific to NVIDIA algorithm
+    float max_nodes = (float)maxTreeletBytes / sizeof(CloudBVH::TreeletNode);
+    const float AREA_EPSILON = nodes[0].bounds.SurfaceArea() * max_nodes / (nodeCount * 10);
 
     for (uint64_t nodeIdx = 0; nodeIdx < nodeCount; nodeIdx++) {
         const LinearBVHNode &node = nodes[nodeIdx];
+
+        nodeBounds[nodeIdx] = nodes[nodeIdx].bounds.SurfaceArea() + AREA_EPSILON;
 
         uint64_t totalSize = SizeEstimates::nodeSize;
 
@@ -994,20 +1002,17 @@ vector<uint32_t> ProxyDumpBVH::ComputeTreeletsNvidia(const uint64_t maxTreeletBy
     vector<uint32_t> labels(nodeCount);
 
     /* pass one */
-    std::unique_ptr<float []> best_costs(new float[nodeCount]);
-
-    float max_nodes = (float)maxTreeletBytes / sizeof(CloudBVH::TreeletNode);
-    const float AREA_EPSILON = nodes[0].bounds.SurfaceArea() * max_nodes / (nodeCount * 10);
+    vector<float> best_costs(nodeCount, 0);
 
     for (uint64_t root_index = nodeCount; root_index-- > 0;) {
         const LinearBVHNode & root_node = nodes[root_index];
 
-        std::list<NvidiaCut> cut;
+        list<NvidiaCut> cut;
         cut.emplace_back(root_index,
                          *(nodeProxies[root_index]),
                          *(subtreeProxies[root_index]),
                          nodeSizes[root_index] + GetProxyBytes(nodeProxies[root_index]),
-                         nodeSizes[root_index] + GetProxyBytes(subtreeProxies[root_index]));
+                         subtreeSizes[root_index] + GetProxyBytes(subtreeProxies[root_index]));
         best_costs[root_index] = std::numeric_limits<float>::max();
 
         unordered_set<const ProxyBVH *> included_proxies;
@@ -1021,7 +1026,7 @@ vector<uint32_t> ProxyDumpBVH::ComputeTreeletsNvidia(const uint64_t maxTreeletBy
                 auto n = iter->nodeIdx;
                 if (iter->additionalNodeSize > remaining_size) continue;
 
-                float gain = nodes[n].bounds.SurfaceArea() + AREA_EPSILON;
+                float gain = nodeBounds[n];
 
                 uint64_t price = min(iter->additionalSubtreeSize, remaining_size);
                 float score = gain / price;
@@ -1060,12 +1065,12 @@ vector<uint32_t> ProxyDumpBVH::ComputeTreeletsNvidia(const uint64_t maxTreeletBy
                 unordered_set<const ProxyBVH *> leftNodeProxies = *(nodeProxies[best_node_index + 1]);
                 uint64_t leftNodeAdditionalSize = nodeSizes[best_node_index + 1] + GetProxyBytes(nodeProxies[best_node_index + 1]);
                 unordered_set<const ProxyBVH *> leftSubtreeProxies = *(subtreeProxies[best_node_index + 1]);
-                uint64_t leftSubtreeAdditionalSize = nodeSizes[best_node_index + 1] + GetProxyBytes(subtreeProxies[best_node_index + 1]);
+                uint64_t leftSubtreeAdditionalSize = subtreeSizes[best_node_index + 1] + GetProxyBytes(subtreeProxies[best_node_index + 1]);
 
                 unordered_set<const ProxyBVH *> rightNodeProxies = *(nodeProxies[best_node.secondChildOffset]);
                 uint64_t rightNodeAdditionalSize = nodeSizes[best_node.secondChildOffset] + GetProxyBytes(nodeProxies[best_node.secondChildOffset]);
                 unordered_set<const ProxyBVH *> rightSubtreeProxies = *(subtreeProxies[best_node.secondChildOffset]);
-                uint64_t rightSubtreeAdditionalSize = nodeSizes[best_node.secondChildOffset] + GetProxyBytes(subtreeProxies[best_node.secondChildOffset]);
+                uint64_t rightSubtreeAdditionalSize = subtreeSizes[best_node.secondChildOffset] + GetProxyBytes(subtreeProxies[best_node.secondChildOffset]);
 
                 for (const ProxyBVH *proxy : included_proxies) {
                     if (leftNodeProxies.erase(proxy)) {
@@ -1091,7 +1096,7 @@ vector<uint32_t> ProxyDumpBVH::ComputeTreeletsNvidia(const uint64_t maxTreeletBy
                                  rightNodeAdditionalSize, rightSubtreeAdditionalSize);
             }
 
-            float this_cost = root_node.bounds.SurfaceArea() + AREA_EPSILON;
+            float this_cost = nodeBounds[root_index];
             for (const auto &cut_elem : cut) {
                 this_cost += best_costs[cut_elem.nodeIdx];
             }
@@ -1124,7 +1129,7 @@ vector<uint32_t> ProxyDumpBVH::ComputeTreeletsNvidia(const uint64_t maxTreeletBy
                          *(nodeProxies[root_index]),
                          *(subtreeProxies[root_index]),
                          nodeSizes[root_index] + GetProxyBytes(nodeProxies[root_index]),
-                         nodeSizes[root_index] + GetProxyBytes(subtreeProxies[root_index]));
+                         subtreeSizes[root_index] + GetProxyBytes(subtreeProxies[root_index]));
 
         uint64_t remaining_size = maxTreeletBytes;
         const float best_cost = best_costs[root_index];
@@ -1139,7 +1144,7 @@ vector<uint32_t> ProxyDumpBVH::ComputeTreeletsNvidia(const uint64_t maxTreeletBy
                 auto n = iter->nodeIdx;
                 if (iter->additionalNodeSize > remaining_size) continue;
 
-                float gain = nodes[n].bounds.SurfaceArea() + AREA_EPSILON;
+                float gain = nodeBounds[n];
 
                 uint64_t price = min(iter->additionalSubtreeSize, remaining_size);
                 float score = gain / price;
@@ -1178,12 +1183,12 @@ vector<uint32_t> ProxyDumpBVH::ComputeTreeletsNvidia(const uint64_t maxTreeletBy
                 unordered_set<const ProxyBVH *> leftNodeProxies = *(nodeProxies[best_node_index + 1]);
                 uint64_t leftNodeAdditionalSize = nodeSizes[best_node_index + 1] + GetProxyBytes(nodeProxies[best_node_index + 1]);
                 unordered_set<const ProxyBVH *> leftSubtreeProxies = *(subtreeProxies[best_node_index + 1]);
-                uint64_t leftSubtreeAdditionalSize = nodeSizes[best_node_index + 1] + GetProxyBytes(subtreeProxies[best_node_index + 1]);
+                uint64_t leftSubtreeAdditionalSize = subtreeSizes[best_node_index + 1] + GetProxyBytes(subtreeProxies[best_node_index + 1]);
 
                 unordered_set<const ProxyBVH *> rightNodeProxies = *(nodeProxies[best_node.secondChildOffset]);
                 uint64_t rightNodeAdditionalSize = nodeSizes[best_node.secondChildOffset] + GetProxyBytes(nodeProxies[best_node.secondChildOffset]);
                 unordered_set<const ProxyBVH *> rightSubtreeProxies = *(subtreeProxies[best_node.secondChildOffset]);
-                uint64_t rightSubtreeAdditionalSize = nodeSizes[best_node.secondChildOffset] + GetProxyBytes(subtreeProxies[best_node.secondChildOffset]);
+                uint64_t rightSubtreeAdditionalSize = subtreeSizes[best_node.secondChildOffset] + GetProxyBytes(subtreeProxies[best_node.secondChildOffset]);
 
                 for (const ProxyBVH *proxy : included_proxies) {
                     if (leftNodeProxies.erase(proxy)) {
@@ -1211,7 +1216,7 @@ vector<uint32_t> ProxyDumpBVH::ComputeTreeletsNvidia(const uint64_t maxTreeletBy
 
             labels[best_node_index] = current_treelet;
 
-            float this_cost = root_node.bounds.SurfaceArea() + AREA_EPSILON;
+            float this_cost = nodeBounds[root_index];
             for (const auto &cut_elem : cut) {
                 this_cost += best_costs[cut_elem.nodeIdx];
             }
