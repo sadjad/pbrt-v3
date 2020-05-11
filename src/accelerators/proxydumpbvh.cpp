@@ -1532,7 +1532,6 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
 
         // Write out the full triangle meshes for all the included proxies referenced by this treelet
         unordered_map<const ProxyBVH *, unordered_map<uint32_t, uint32_t>> proxyMeshIndices;
-        unordered_map<const ProxyBVH *, unique_ptr<protobuf::RecordReader>> proxyReaders;
         if (inlineProxies) {
             for (const ProxyBVH *proxy : *(treelet.proxies)) {
                 auto readers = proxy->GetReaders();
@@ -1551,8 +1550,6 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
                     writer->write(tm);
                     proxyMeshIndices[proxy].emplace(oldId, sMeshId);
                 }
-
-                proxyReaders.emplace(proxy, move(readers[0]));
             }
         }
 
@@ -1642,7 +1639,19 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
         // Write out nodes for instances
         if (inlineProxies) {
             for (const ProxyBVH *proxy : *(treelet.proxies)) {
-                auto &reader = proxyReaders.find(proxy)->second;
+                auto readers = proxy->GetReaders();
+                auto &reader = readers[0];
+
+                // Skip over all meshes
+                uint32_t numMeshes;
+                reader->read(&numMeshes);
+
+                for (int i = 0; i < numMeshes; i++) {
+                    protobuf::TriangleMesh tm;
+                    reader->read(&tm);
+                }
+
+                // Read nodes
                 while (!reader->eof()) {
                     protobuf::BVHNode nodeProto;
                     bool success = reader->read(&nodeProto);
