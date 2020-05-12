@@ -574,6 +574,17 @@ ADD_SANITIZERS ( obj2pbrt )
 ADD_EXECUTABLE ( cyhair2pbrt src/tools/cyhair2pbrt.cpp )
 ADD_SANITIZERS ( cyhair2pbrt )
 
+# Static version of pbrt
+ADD_EXECUTABLE ( pbrt_static_exe src/main/pbrt.cpp )
+ADD_SANITIZERS ( pbrt_static_exe )
+
+SET_TARGET_PROPERTIES ( pbrt_static_exe PROPERTIES OUTPUT_NAME pbrt-static )
+TARGET_COMPILE_FEATURES ( pbrt_static_exe PRIVATE ${PBRT_CXX11_FEATURES} )
+TARGET_LINK_LIBRARIES ( pbrt_static_exe ${ALL_PBRT_LIBS} dl z unwind lzma
+                                        -static -Wl,-allow-multiple-definition
+                                        -Wl,--whole-archive -lpthread
+                                        -Wl,--no-whole-archive -s )
+
 ## Cloud rendering
 # pbrt-do
 ADD_EXECUTABLE ( pbrt_do src/cloud/do.cpp )
