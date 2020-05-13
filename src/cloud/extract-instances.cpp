@@ -24,7 +24,10 @@ PBRT_CONSTEXPR int TokenRequired = 1;
 static void customParse(unique_ptr<Tokenizer> t,
                         ofstream &masterFile,
                         const string &instancesDir,
-                        const string &chunksDir) {
+                        const string &chunksDir,
+                        bool extractInstances,
+                        bool levelChunk,
+                        bool binChunk) {
     vector<unique_ptr<Tokenizer>> fileStack;
     fileStack.push_back(move(t));
     parserLoc = &fileStack.back()->loc;
@@ -79,7 +82,7 @@ static void customParse(unique_ptr<Tokenizer> t,
             includeLevel--;
 
             // End of chunk
-            if (includeLevel == 0 && !instanceFile.is_open()) {
+            if (levelChunk && includeLevel == 0 && !instanceFile.is_open()) {
                 writeString("WorldEndBuildChunk");
                 writeLine();
                 chunkFile.close();
@@ -263,7 +266,7 @@ static void customParse(unique_ptr<Tokenizer> t,
                     parserLoc = &fileStack.back()->loc;
 
                     includeLevel++;
-                    if (includeLevel == 1 && !instanceFile.is_open()) {
+                    if (levelChunk && includeLevel == 1 && !instanceFile.is_open()) {
                         string chunkName("chunk_" + to_string(curChunk));
                         writeString("Proxy \"" + chunkName + "\"");
                         writeLine();
@@ -537,12 +540,13 @@ static void customParse(unique_ptr<Tokenizer> t,
 }
 
 int main(int argc, char *argv[]) {
-    if (argc != 3) {
-        cerr << argv[0] << " IN_SCENE OUT_DIR" << endl;
+    if (argc != 4) {
+        cerr << argv[0] << "CMD IN_SCENE OUT_DIR" << endl;
         exit(EXIT_FAILURE);
     }
-    const string inScene(argv[1]);
-    const string outDir(argv[2]);
+    const string cmd(argv[1]);
+    const string inScene(argv[2]);
+    const string outDir(argv[3]);
 
     const string masterFilename = outDir + "/master.pbrt";
 
@@ -566,5 +570,22 @@ int main(int argc, char *argv[]) {
         cerr << "Tokenizer failed" << endl;
     }
 
-    customParse(move(t), masterFile, instancesDir, chunksDir);
+    bool instances = false;
+    bool levelChunk = false;
+    bool binChunk = false;
+
+    if (cmd == "auto") {
+        instances = true;
+        levelChunk = true;
+    }
+
+    if (cmd == "instances") {
+        instances = true;
+    }
+
+    if (cmd == "chunks") {
+        binChunk = true;
+    }
+
+    customParse(move(t), masterFile, instancesDir, chunksDir, instances, levelChunk, binChunk);
 }
