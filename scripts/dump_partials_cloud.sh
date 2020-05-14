@@ -4,18 +4,18 @@ set -e
 trap "exit" INT TERM ERR
 trap "kill 0" EXIT
 
-if [ "$#" -ne 5 ]; then
-    echo "Usage: $0 ACTION PBRT_BIN INSTANCE_DIR CHUNK_DIR OUT_DIR"
+if [ "$#" -lt 5 ]; then
+    echo "Usage: $0 ACTION PBRT_BIN INSTANCE_DIR CHUNK_DIR OUT_DIR [EXTRA-FILE]..."
     echo "  Valid actions: prepare-instances"
     echo "                 prepare-chunks"
     exit 1
 fi
 
-ACTION="$1"
-PBRT_BIN=`readlink -f $2`
-INSTANCE_DIR=`readlink -f $3`
-CHUNK_DIR=`readlink -f $4`
-OUT_DIR=`readlink -f $5`
+ACTION="$1"; shift
+PBRT_BIN=`readlink -f $1`; shift
+INSTANCE_DIR=`readlink -f $1`; shift
+CHUNK_DIR=`readlink -f $1`; shift
+OUT_DIR=`readlink -f $1`; shift
 
 INSTANCE_TARGETS="${OUT_DIR}/instance-targets.gg"
 CHUNK_TARGETS="${OUT_DIR}/chunk-targets.gg"
@@ -33,6 +33,15 @@ function prepare_instances {
   gg repl <"${gg_pipe}" &
 
   exec 3>"${gg_pipe}"
+
+  while (( "$#" ))
+  do
+    cat >&3 <<EOT
+push data $1
+push link $(basename $1) $1
+EOT
+    shift
+  done
 
   cat >&3 <<EOT
 push executable ${PBRT_BIN}
@@ -57,26 +66,26 @@ EOT
     output_dir="${OUT_DIR}/${name}"
     mkdir -p "${output_dir}"
 
-    {
-      echo "push data ${INSTANCE_DIR}/${pbrt_file}"
-      echo "push link input.pbrt ${INSTANCE_DIR}/${pbrt_file}"
-      echo "create thunk"
-      echo "create placeholder T0 ${output_dir}/T0"
-      echo "create placeholder HEADER ${output_dir}/HEADER"
-      echo "create placeholder MANIFEST ${output_dir}/MANIFEST"
-      echo "create placeholder MAT0 ${output_dir}/MAT0"
-      echo "create placeholder MAT1 ${output_dir}/MAT1"
-      echo "pop data"
-      echo "pop link"
-    } >&3
+    cat >&3 <<EOT
+push data ${INSTANCE_DIR}/${pbrt_file}
+push link input.pbrt ${INSTANCE_DIR}/${pbrt_file}
+create thunk
+create placeholder T0 ${output_dir}/T0
+create placeholder HEADER ${output_dir}/HEADER
+create placeholder MANIFEST ${output_dir}/MANIFEST
+create placeholder MAT0 ${output_dir}/MAT0
+create placeholder MAT1 ${output_dir}/MAT1
+pop data
+pop link
+EOT
 
-    {
-      echo "${output_dir}/T0"
-      echo "${output_dir}/HEADER"
-      echo "${output_dir}/MANIFEST"
-      echo "${output_dir}/MAT0"
-      echo "${output_dir}/MAT1"
-    } >>"${INSTANCE_TARGETS}"
+    cat >>"${INSTANCE_TARGETS}" <<EOT
+${output_dir}/T0
+${output_dir}/HEADER
+${output_dir}/MANIFEST
+${output_dir}/MAT0
+${output_dir}/MAT1
+EOT
   done
 
   echo "exit" >>"${gg_pipe}"
@@ -104,6 +113,15 @@ EOT
 
   exec 3>"${gg_pipe}"
 
+  while (( "$#" ))
+  do
+    cat >&3 <<EOT
+push data $1
+push link $(basename $1) $1
+EOT
+    shift
+  done
+
   # add the basic entities
   cat >&3 <<EOT
 push executable ${entry_program}
@@ -128,28 +146,28 @@ EOT
     output_dir="${OUT_DIR}/${name}"
     mkdir -p "${output_dir}"
 
-    {
-      echo "push data ${CHUNK_DIR}/${pbrt_file}"
-      echo "push link input.pbrt ${CHUNK_DIR}/${pbrt_file}"
-      echo "create thunk"
-      echo "create placeholder T0 ${output_dir}/T0"
-      echo "create placeholder HEADER ${output_dir}/HEADER"
-      echo "create placeholder MANIFEST ${output_dir}/MANIFEST"
-      echo "create placeholder LIGHTS ${output_dir}/LIGHTS"
-      echo "create placeholder MAT0 ${output_dir}/MAT0"
-      echo "create placeholder MAT1 ${output_dir}/MAT1"
-      echo "pop data"
-      echo "pop link"
-    } >&3
+    cat >&3 <<EOT
+push data ${CHUNK_DIR}/${pbrt_file}
+push link input.pbrt ${CHUNK_DIR}/${pbrt_file}
+create thunk
+create placeholder T0 ${output_dir}/T0
+create placeholder HEADER ${output_dir}/HEADER
+create placeholder MANIFEST ${output_dir}/MANIFEST
+create placeholder LIGHTS ${output_dir}/LIGHTS
+create placeholder MAT0 ${output_dir}/MAT0
+create placeholder MAT1 ${output_dir}/MAT1
+pop data
+pop link
+EOT
 
-    {
-      echo "${output_dir}/T0"
-      echo "${output_dir}/HEADER"
-      echo "${output_dir}/MANIFEST"
-      echo "${output_dir}/LIGHTS"
-      echo "${output_dir}/MAT0"
-      echo "${output_dir}/MAT1"
-    } >>${CHUNK_TARGETS}
+    cat >>${CHUNK_TARGETS} <<EOT
+${output_dir}/T0
+${output_dir}/HEADER
+${output_dir}/MANIFEST
+${output_dir}/LIGHTS
+${output_dir}/MAT0
+${output_dir}/MAT1
+EOT
   done
 
   echo "exit" >>"${gg_pipe}"
@@ -160,11 +178,11 @@ EOT
 case $ACTION in
 
   prepare-instances)
-    prepare_instances
+    prepare_instances "$@"
     ;;
 
   prepare-chunks)
-    prepare_chunks
+    prepare_chunks "$@"
     ;;
 
   *)
