@@ -1633,7 +1633,13 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
                 // Skip over all meshes
                 uint32_t numMeshes;
                 reader->read(&numMeshes);
-                reader->skip(numMeshes);
+
+                for (int i = 0; i < numMeshes; i++) {
+                    protobuf::TriangleMesh tm;
+                    reader->read(&tm);
+                }
+                //reader->skip(numMeshes);
+
 
                 // Read nodes
                 while (!reader->eof()) {
