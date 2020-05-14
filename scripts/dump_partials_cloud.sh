@@ -60,7 +60,7 @@ EOT
 
   : >"${INSTANCE_TARGETS}"
 
-  for pbrt_file in $(ls "${INSTANCE_DIR}")
+  for pbrt_file in $(ls "${INSTANCE_DIR}/*.pbrt")
   do
     name="`basename ${pbrt_file} .pbrt`"
     output_dir="${OUT_DIR}/${name}"
@@ -140,7 +140,7 @@ EOT
 
   : >"${CHUNK_TARGETS}"
 
-  for pbrt_file in $(ls "${CHUNK_DIR}")
+  for pbrt_file in $(ls "${CHUNK_DIR}/*.pbrt")
   do
     name="`basename ${pbrt_file} .pbrt`"
     output_dir="${OUT_DIR}/${name}"
