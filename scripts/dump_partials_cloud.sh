@@ -17,6 +17,13 @@ INSTANCE_DIR=`readlink -f $1`; shift
 CHUNK_DIR=`readlink -f $1`; shift
 OUT_DIR=`readlink -f $1`; shift
 
+EXTRA_FILES=()
+while (( "$#" ))
+do
+  EXTRA_FILES+=( `readlink -f $1` )
+  shift
+done
+
 INSTANCE_TARGETS="${OUT_DIR}/instance-targets.gg"
 CHUNK_TARGETS="${OUT_DIR}/chunk-targets.gg"
 
@@ -60,15 +67,15 @@ EOT
 
   : >"${INSTANCE_TARGETS}"
 
-  for pbrt_file in $(ls "${INSTANCE_DIR}/*.pbrt")
+  for pbrt_file in $(find "${INSTANCE_DIR}" -name '*.pbrt')
   do
     name="`basename ${pbrt_file} .pbrt`"
     output_dir="${OUT_DIR}/${name}"
     mkdir -p "${output_dir}"
 
     cat >&3 <<EOT
-push data ${INSTANCE_DIR}/${pbrt_file}
-push link input.pbrt ${INSTANCE_DIR}/${pbrt_file}
+push data ${pbrt_file}
+push link input.pbrt ${pbrt_file}
 create thunk
 create placeholder T0 ${output_dir}/T0
 create placeholder HEADER ${output_dir}/HEADER
@@ -140,15 +147,15 @@ EOT
 
   : >"${CHUNK_TARGETS}"
 
-  for pbrt_file in $(ls "${CHUNK_DIR}/*.pbrt")
+  for pbrt_file in $(find "${CHUNK_DIR}" -name '*.pbrt')
   do
     name="`basename ${pbrt_file} .pbrt`"
     output_dir="${OUT_DIR}/${name}"
     mkdir -p "${output_dir}"
 
     cat >&3 <<EOT
-push data ${CHUNK_DIR}/${pbrt_file}
-push link input.pbrt ${CHUNK_DIR}/${pbrt_file}
+push data ${pbrt_file}
+push link input.pbrt ${pbrt_file}
 create thunk
 create placeholder T0 ${output_dir}/T0
 create placeholder HEADER ${output_dir}/HEADER
@@ -178,11 +185,11 @@ EOT
 case $ACTION in
 
   prepare-instances)
-    prepare_instances "$@"
+    prepare_instances "${EXTRA_FILES[@]}"
     ;;
 
   prepare-chunks)
-    prepare_chunks "$@"
+    prepare_chunks "${EXTRA_FILES[@]}"
     ;;
 
   *)
