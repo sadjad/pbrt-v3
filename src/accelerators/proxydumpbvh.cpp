@@ -114,6 +114,8 @@ void ProxyDumpBVH::SetNodeInfo(int maxTreeletBytes, int copyableThreshold) {
     nodeParents.resize(nodeCount);
     nodeProxies.resize(nodeCount);
     subtreeProxies.resize(nodeCount);
+    nodeProxySizes.resize(nodeCount);
+    subtreeProxySizes.resize(nodeCount);
     nodeBounds.resize(nodeCount);
 
     // Specific to NVIDIA algorithm
@@ -196,6 +198,11 @@ void ProxyDumpBVH::SetNodeInfo(int maxTreeletBytes, int copyableThreshold) {
             subtreeSizes[nodeIdx] += subtreeSizes[nodeIdx + 1] +
                                      subtreeSizes[node.secondChildOffset];
         }
+    }
+
+    for (uint64_t nodeIdx = 0; nodeIdx < nodeCount; nodeIdx++) {
+        nodeProxySizes[nodeIdx] = GetProxyBytes(nodeProxies[nodeIdx]);
+        subtreeProxySizes[nodeIdx] = GetProxyBytes(subtreeProxies[nodeIdx]);
     }
 
     printf("Done building general BVH node information\n");
@@ -987,14 +994,11 @@ ProxyDumpBVH::ComputeTreelets(const TraversalGraph &graph,
 
 struct NvidiaCut {
     uint64_t nodeIdx;
-    unordered_set<const ProxyBVH *> nodeProxies;
-    unordered_set<const ProxyBVH *> subtreeProxies;
     uint64_t additionalNodeSize;
     uint64_t additionalSubtreeSize;
-    NvidiaCut(uint64_t n, const unordered_set<const ProxyBVH *> &np, const unordered_set<const ProxyBVH *> &sp,
-              uint64_t nodeBytes, uint64_t subtreeBytes)
-        : nodeIdx(n), nodeProxies(np), subtreeProxies(sp),
-          additionalNodeSize(nodeBytes), additionalSubtreeSize(subtreeBytes)
+    NvidiaCut(uint64_t n, uint64_t nodeBytes, uint64_t subtreeBytes)
+        : nodeIdx(n), additionalNodeSize(nodeBytes),
+          additionalSubtreeSize(subtreeBytes)
     {}
 };
 
@@ -1007,12 +1011,10 @@ vector<uint32_t> ProxyDumpBVH::ComputeTreeletsNvidia(const uint64_t maxTreeletBy
     for (uint64_t root_index = nodeCount; root_index-- > 0;) {
         const LinearBVHNode & root_node = nodes[root_index];
 
-        list<NvidiaCut> cut;
+        vector<NvidiaCut> cut;
         cut.emplace_back(root_index,
-                         *(nodeProxies[root_index]),
-                         *(subtreeProxies[root_index]),
-                         nodeSizes[root_index] + GetProxyBytes(nodeProxies[root_index]),
-                         subtreeSizes[root_index] + GetProxyBytes(subtreeProxies[root_index]));
+                         nodeSizes[root_index] + nodeProxySizes[root_index],
+                         subtreeSizes[root_index] + subtreeProxySizes[root_index]);
         best_costs[root_index] = std::numeric_limits<float>::max();
 
         unordered_set<const ProxyBVH *> included_proxies;
@@ -1037,63 +1039,57 @@ vector<uint32_t> ProxyDumpBVH::ComputeTreeletsNvidia(const uint64_t maxTreeletBy
             }
 
             if (best_node_iter == cut.end()) break;
+            uint64_t best_node_index = best_node_iter->nodeIdx;
+            remaining_size -= best_node_iter->additionalNodeSize;
 
-            for (const ProxyBVH *proxy : best_node_iter->nodeProxies) {
-                included_proxies.emplace(proxy);
+            cut.erase(best_node_iter);
 
-                for (auto iter = cut.begin(); iter != cut.end(); iter++) {
-                    if (iter == best_node_iter) continue;
+            auto &best_node_proxies = *(nodeProxies[best_node_index]);
 
-                    if (iter->nodeProxies.erase(proxy)) {
-                        iter->additionalNodeSize -= proxy->Size();
+            for (const ProxyBVH *proxy : best_node_proxies) {
+                auto p = included_proxies.emplace(proxy);
+                if (!p.second) continue;
+
+                for (auto &cut_elem : cut) {
+                    if (nodeProxies[cut_elem.nodeIdx]->count(proxy)) {
+                        cut_elem.additionalNodeSize -= proxy->Size();
                     }
 
-                    if (iter->subtreeProxies.erase(proxy)) {
-                        iter->additionalSubtreeSize -= proxy->Size();
+                    if (subtreeProxies[cut_elem.nodeIdx]->count(proxy)) {
+                        cut_elem.additionalSubtreeSize -= proxy->Size();
                     }
                 }
             }
 
-            remaining_size -= best_node_iter->additionalNodeSize;
-            uint64_t best_node_index = best_node_iter->nodeIdx;
-
-            cut.erase(best_node_iter);
-
             const LinearBVHNode & best_node = nodes[best_node_index];
 
             if (best_node.nPrimitives == 0) {
-                unordered_set<const ProxyBVH *> leftNodeProxies = *(nodeProxies[best_node_index + 1]);
-                uint64_t leftNodeAdditionalSize = nodeSizes[best_node_index + 1] + GetProxyBytes(nodeProxies[best_node_index + 1]);
-                unordered_set<const ProxyBVH *> leftSubtreeProxies = *(subtreeProxies[best_node_index + 1]);
-                uint64_t leftSubtreeAdditionalSize = subtreeSizes[best_node_index + 1] + GetProxyBytes(subtreeProxies[best_node_index + 1]);
+                uint64_t leftNodeAdditionalSize = nodeSizes[best_node_index + 1] + nodeProxySizes[best_node_index + 1];
+                uint64_t leftSubtreeAdditionalSize = subtreeSizes[best_node_index + 1] + subtreeProxySizes[best_node_index + 1];
 
-                unordered_set<const ProxyBVH *> rightNodeProxies = *(nodeProxies[best_node.secondChildOffset]);
-                uint64_t rightNodeAdditionalSize = nodeSizes[best_node.secondChildOffset] + GetProxyBytes(nodeProxies[best_node.secondChildOffset]);
-                unordered_set<const ProxyBVH *> rightSubtreeProxies = *(subtreeProxies[best_node.secondChildOffset]);
-                uint64_t rightSubtreeAdditionalSize = subtreeSizes[best_node.secondChildOffset] + GetProxyBytes(subtreeProxies[best_node.secondChildOffset]);
+                uint64_t rightNodeAdditionalSize = nodeSizes[best_node.secondChildOffset] + nodeProxySizes[best_node.secondChildOffset];
+                uint64_t rightSubtreeAdditionalSize = subtreeSizes[best_node.secondChildOffset] + subtreeProxySizes[best_node.secondChildOffset];
 
                 for (const ProxyBVH *proxy : included_proxies) {
-                    if (leftNodeProxies.erase(proxy)) {
+                    if (nodeProxies[best_node_index + 1]->count(proxy)) {
                         leftNodeAdditionalSize -= proxy->Size();
                     }
 
-                    if (leftSubtreeProxies.erase(proxy)) {
+                    if (subtreeProxies[best_node_index + 1]->count(proxy)) {
                         leftSubtreeAdditionalSize -= proxy->Size();
                     }
 
-                    if (rightNodeProxies.erase(proxy)) {
+                    if (nodeProxies[best_node.secondChildOffset]->count(proxy)) {
                         rightNodeAdditionalSize -= proxy->Size();
                     }
 
-                    if (rightSubtreeProxies.erase(proxy)) {
+                    if (subtreeProxies[best_node.secondChildOffset]->count(proxy)) {
                         rightSubtreeAdditionalSize -= proxy->Size();
                     }
                 }
 
-                cut.emplace_back(best_node_index + 1, move(leftNodeProxies), move(leftSubtreeProxies),
-                                 leftNodeAdditionalSize, leftSubtreeAdditionalSize);
-                cut.emplace_back(best_node.secondChildOffset, move(rightNodeProxies), move(rightSubtreeProxies),
-                                 rightNodeAdditionalSize, rightSubtreeAdditionalSize);
+                cut.emplace_back(best_node_index + 1, leftNodeAdditionalSize, leftSubtreeAdditionalSize);
+                cut.emplace_back(best_node.secondChildOffset, rightNodeAdditionalSize, rightSubtreeAdditionalSize);
             }
 
             float this_cost = nodeBounds[root_index];
@@ -1124,12 +1120,10 @@ vector<uint32_t> ProxyDumpBVH::ComputeTreeletsNvidia(const uint64_t maxTreeletBy
         current_treelet++;
 
         const LinearBVHNode & root_node = nodes[root_index];
-        list<NvidiaCut> cut;
+        vector<NvidiaCut> cut;
         cut.emplace_back(root_index,
-                         *(nodeProxies[root_index]),
-                         *(subtreeProxies[root_index]),
-                         nodeSizes[root_index] + GetProxyBytes(nodeProxies[root_index]),
-                         subtreeSizes[root_index] + GetProxyBytes(subtreeProxies[root_index]));
+                         nodeSizes[root_index] + nodeProxySizes[root_index],
+                         subtreeSizes[root_index] + subtreeProxySizes[root_index]);
 
         uint64_t remaining_size = maxTreeletBytes;
         const float best_cost = best_costs[root_index];
@@ -1156,62 +1150,56 @@ vector<uint32_t> ProxyDumpBVH::ComputeTreeletsNvidia(const uint64_t maxTreeletBy
 
             if (best_node_iter == cut.end()) break;
 
-            for (const ProxyBVH *proxy : best_node_iter->nodeProxies) {
-                included_proxies.emplace(proxy);
-
-                for (auto iter = cut.begin(); iter != cut.end(); iter++) {
-                    if (iter == best_node_iter) continue;
-
-                    if (iter->nodeProxies.erase(proxy)) {
-                        iter->additionalNodeSize -= proxy->Size();
-                    }
-
-                    if (iter->subtreeProxies.erase(proxy)) {
-                        iter->additionalSubtreeSize -= proxy->Size();
-                    }
-                }
-            }
-
             remaining_size -= best_node_iter->additionalNodeSize;
             uint64_t best_node_index = best_node_iter->nodeIdx;
 
             cut.erase(best_node_iter);
 
+            auto &best_node_proxies = *(nodeProxies[best_node_index]);
+            for (const ProxyBVH *proxy : best_node_proxies) {
+                auto p = included_proxies.emplace(proxy);
+                if (!p.second) continue;
+
+                for (auto &cut_elem : cut) {
+                    if (nodeProxies[cut_elem.nodeIdx]->count(proxy)) {
+                        cut_elem.additionalNodeSize -= proxy->Size();
+                    }
+
+                    if (subtreeProxies[cut_elem.nodeIdx]->count(proxy)) {
+                        cut_elem.additionalSubtreeSize -= proxy->Size();
+                    }
+                }
+            }
+
             const LinearBVHNode & best_node = nodes[best_node_index];
 
             if (best_node.nPrimitives == 0) {
-                unordered_set<const ProxyBVH *> leftNodeProxies = *(nodeProxies[best_node_index + 1]);
-                uint64_t leftNodeAdditionalSize = nodeSizes[best_node_index + 1] + GetProxyBytes(nodeProxies[best_node_index + 1]);
-                unordered_set<const ProxyBVH *> leftSubtreeProxies = *(subtreeProxies[best_node_index + 1]);
-                uint64_t leftSubtreeAdditionalSize = subtreeSizes[best_node_index + 1] + GetProxyBytes(subtreeProxies[best_node_index + 1]);
+                uint64_t leftNodeAdditionalSize = nodeSizes[best_node_index + 1] + nodeProxySizes[best_node_index + 1];
+                uint64_t leftSubtreeAdditionalSize = subtreeSizes[best_node_index + 1] + subtreeProxySizes[best_node_index + 1];
 
-                unordered_set<const ProxyBVH *> rightNodeProxies = *(nodeProxies[best_node.secondChildOffset]);
-                uint64_t rightNodeAdditionalSize = nodeSizes[best_node.secondChildOffset] + GetProxyBytes(nodeProxies[best_node.secondChildOffset]);
-                unordered_set<const ProxyBVH *> rightSubtreeProxies = *(subtreeProxies[best_node.secondChildOffset]);
-                uint64_t rightSubtreeAdditionalSize = subtreeSizes[best_node.secondChildOffset] + GetProxyBytes(subtreeProxies[best_node.secondChildOffset]);
+                uint64_t rightNodeAdditionalSize = nodeSizes[best_node.secondChildOffset] + nodeProxySizes[best_node.secondChildOffset];
+                uint64_t rightSubtreeAdditionalSize = subtreeSizes[best_node.secondChildOffset] + subtreeProxySizes[best_node.secondChildOffset];
 
                 for (const ProxyBVH *proxy : included_proxies) {
-                    if (leftNodeProxies.erase(proxy)) {
+                    if (nodeProxies[best_node_index + 1]->count(proxy)) {
                         leftNodeAdditionalSize -= proxy->Size();
                     }
 
-                    if (leftSubtreeProxies.erase(proxy)) {
+                    if (subtreeProxies[best_node_index + 1]->count(proxy)) {
                         leftSubtreeAdditionalSize -= proxy->Size();
                     }
 
-                    if (rightNodeProxies.erase(proxy)) {
+                    if (nodeProxies[best_node.secondChildOffset]->count(proxy)) {
                         rightNodeAdditionalSize -= proxy->Size();
                     }
 
-                    if (rightSubtreeProxies.erase(proxy)) {
+                    if (subtreeProxies[best_node.secondChildOffset]->count(proxy)) {
                         rightSubtreeAdditionalSize -= proxy->Size();
                     }
                 }
 
-                cut.emplace_back(best_node_index + 1, move(leftNodeProxies), move(leftSubtreeProxies),
-                                 leftNodeAdditionalSize, leftSubtreeAdditionalSize);
-                cut.emplace_back(best_node.secondChildOffset, move(rightNodeProxies), move(rightSubtreeProxies),
-                                 rightNodeAdditionalSize, rightSubtreeAdditionalSize);
+                cut.emplace_back(best_node_index + 1, leftNodeAdditionalSize, leftSubtreeAdditionalSize);
+                cut.emplace_back(best_node.secondChildOffset, rightNodeAdditionalSize, rightSubtreeAdditionalSize);
             }
 
             labels[best_node_index] = current_treelet;

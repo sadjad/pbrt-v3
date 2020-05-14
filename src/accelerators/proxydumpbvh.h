@@ -133,6 +133,8 @@ class ProxyDumpBVH : public BVHAccel {
     std::vector<uint64_t> nodeParents;
     std::vector<uint64_t> nodeSizes;
     std::vector<uint64_t> subtreeSizes;
+    std::vector<uint64_t> nodeProxySizes;
+    std::vector<uint64_t> subtreeProxySizes;
     std::vector<float> nodeBounds;
 
     std::unordered_set<std::unordered_set<const ProxyBVH *>> proxySets;
