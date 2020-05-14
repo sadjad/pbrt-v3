@@ -113,6 +113,7 @@ void ProxyDumpBVH::SetNodeInfo(int maxTreeletBytes, int copyableThreshold) {
     subtreeSizes.resize(nodeCount);
     nodeParents.resize(nodeCount);
     nodeProxies.resize(nodeCount);
+    nodeUnsharedProxies.resize(nodeCount);
     subtreeProxies.resize(nodeCount);
     nodeProxySizes.resize(nodeCount);
     subtreeProxySizes.resize(nodeCount);
@@ -148,7 +149,12 @@ void ProxyDumpBVH::SetNodeInfo(int maxTreeletBytes, int copyableThreshold) {
                     if (proxy->Size() > copyableThreshold) {
                         largeProxies.emplace(proxy);
                     } else {
-                        includedProxies.emplace(proxy);
+                        if (proxy->UsageCount() == 1) {
+                            totalSize += proxy->Size();
+                            nodeUnsharedProxies[nodeIdx].push_back(proxy);
+                        } else {
+                            includedProxies.emplace(proxy);
+                        }
                     }
                 };
 
@@ -248,12 +254,26 @@ ProxyDumpBVH::ProxySetPtr ProxyDumpBVH::ProxyUnion(ProxyDumpBVH::ProxySetPtr a,
     return &*kv.first;
 }
 
-unordered_map<uint32_t, ProxyDumpBVH::TreeletInfo> ProxyDumpBVH::MergeDisjointTreelets(int dirIdx, int maxTreeletBytes, const TraversalGraph &graph) {
-    unordered_map<uint32_t, TreeletInfo> treelets;
+ProxyDumpBVH::TreeletInfo::TreeletInfo(IntermediateTreeletInfo &&info)
+    : nodes(move(info.nodes)),
+      proxies(),
+      noProxySize(info.noProxySize),
+      proxySize(info.proxySize),
+      dirIdx(info.dirIdx),
+      totalProb(info.totalProb)
+{
+    proxies.insert(proxies.end(), info.proxies->begin(), info.proxies->end());
+    proxies.insert(proxies.end(), info.unsharedProxies.begin(), info.unsharedProxies.end());
+}
+
+unordered_map<uint32_t, ProxyDumpBVH::IntermediateTreeletInfo> ProxyDumpBVH::MergeDisjointTreelets(int dirIdx, int maxTreeletBytes, const TraversalGraph &graph) {
+    unordered_map<uint32_t, IntermediateTreeletInfo> treelets;
     for (uint64_t nodeIdx = 0; nodeIdx < nodeCount; nodeIdx++) {
         uint32_t curTreelet = treeletAllocations[dirIdx][nodeIdx];
-        TreeletInfo &treelet = treelets[curTreelet];
+        IntermediateTreeletInfo &treelet = treelets[curTreelet];
         treelet.proxies = ProxyUnion(treelet.proxies, nodeProxies[nodeIdx]);
+        treelet.unsharedProxies.insert(treelet.unsharedProxies.end(), nodeUnsharedProxies[nodeIdx].begin(),
+                                       nodeUnsharedProxies[nodeIdx].end());
         treelet.dirIdx = dirIdx;
         treelet.nodes.push_back(nodeIdx);
         treelet.noProxySize += nodeSizes[nodeIdx];
@@ -263,12 +283,12 @@ unordered_map<uint32_t, ProxyDumpBVH::TreeletInfo> ProxyDumpBVH::MergeDisjointTr
             Edge *edge = outgoingBounds.first + edgeIdx;
             uint32_t dstTreelet = treeletAllocations[dirIdx][edge->dst];
             if (curTreelet != dstTreelet) {
-                TreeletInfo &dstTreeletInfo = treelets[dstTreelet];
+                IntermediateTreeletInfo &dstTreeletInfo = treelets[dstTreelet];
                 dstTreeletInfo.totalProb += edge->weight;
             }
         }
     }
-    TreeletInfo &rootTreelet = treelets.at(treeletAllocations[dirIdx][0]);
+    IntermediateTreeletInfo &rootTreelet = treelets.at(treeletAllocations[dirIdx][0]);
     rootTreelet.totalProb += 1.0;
 
     struct TreeletSortKey {
@@ -294,7 +314,7 @@ unordered_map<uint32_t, ProxyDumpBVH::TreeletInfo> ProxyDumpBVH::MergeDisjointTr
         }
     };
 
-    map<TreeletSortKey, TreeletInfo, TreeletCmp> sortedTreelets;
+    map<TreeletSortKey, IntermediateTreeletInfo, TreeletCmp> sortedTreelets;
     for (auto &kv : treelets) {
         CHECK_NE(kv.first, 0);
         CHECK_LE(kv.second.noProxySize + kv.second.proxySize, maxTreeletBytes);
@@ -304,16 +324,16 @@ unordered_map<uint32_t, ProxyDumpBVH::TreeletInfo> ProxyDumpBVH::MergeDisjointTr
     }
 
     // Merge treelets together
-    unordered_map<uint32_t, TreeletInfo> mergedTreelets;
+    unordered_map<uint32_t, IntermediateTreeletInfo> mergedTreelets;
 
     auto iter = sortedTreelets.begin();
     while (iter != sortedTreelets.end()) {
-        TreeletInfo &info = iter->second;
+        IntermediateTreeletInfo &info = iter->second;
 
         auto candidateIter = next(iter);
         while (candidateIter != sortedTreelets.end()) {
             auto nextCandidateIter = next(candidateIter);
-            TreeletInfo &candidateInfo = candidateIter->second;
+            IntermediateTreeletInfo &candidateInfo = candidateIter->second;
 
             uint64_t noProxySize = info.noProxySize + candidateInfo.noProxySize;
             if (noProxySize > maxTreeletBytes) {
@@ -333,6 +353,7 @@ unordered_map<uint32_t, ProxyDumpBVH::TreeletInfo> ProxyDumpBVH::MergeDisjointTr
                     info.nodes = move(candidateInfo.nodes);
                 }
                 info.proxies = mergedProxies;
+                info.unsharedProxies.splice(info.unsharedProxies.end(), move(candidateInfo.unsharedProxies));
                 info.noProxySize = noProxySize;
                 info.proxySize = mergedProxySize;
                 info.totalProb += candidateInfo.totalProb;
@@ -452,7 +473,7 @@ vector<ProxyDumpBVH::TreeletInfo> ProxyDumpBVH::AllocateUnspecializedTreelets(in
 
     vector<TreeletInfo> finalTreelets;
     for (auto iter = intermediateTreelets.begin(); iter != intermediateTreelets.end(); iter++) {
-        TreeletInfo &info = iter->second;
+        IntermediateTreeletInfo &info = iter->second;
         if (info.nodes.front() == 0) {
             finalTreelets.emplace_back(move(info));
             intermediateTreelets.erase(iter);
@@ -484,7 +505,7 @@ vector<ProxyDumpBVH::TreeletInfo> ProxyDumpBVH::AllocateUnspecializedTreelets(in
 }
 
 vector<ProxyDumpBVH::TreeletInfo> ProxyDumpBVH::AllocateDirectionalTreelets(int maxTreeletBytes) {
-    array<unordered_map<uint32_t, TreeletInfo>, 8> intermediateTreelets;
+    array<unordered_map<uint32_t, IntermediateTreeletInfo>, 8> intermediateTreelets;
 
     for (int dirIdx = 0; dirIdx < 8; dirIdx++) {
         Vector3f dir = ComputeRayDir(dirIdx);
@@ -512,7 +533,7 @@ vector<ProxyDumpBVH::TreeletInfo> ProxyDumpBVH::AllocateDirectionalTreelets(int 
     for (int dirIdx = 0; dirIdx < 8; dirIdx++) {
         // Search for treelet that holds node 0
         for (auto iter = intermediateTreelets[dirIdx].begin(); iter != intermediateTreelets[dirIdx].end(); iter++) {
-            TreeletInfo &info = iter->second;
+            IntermediateTreeletInfo &info = iter->second;
             if (info.nodes.front() == 0) {
                 finalTreelets.push_back(move(info));
                 intermediateTreelets[dirIdx].erase(iter);
@@ -525,7 +546,7 @@ vector<ProxyDumpBVH::TreeletInfo> ProxyDumpBVH::AllocateDirectionalTreelets(int 
     // Assign the rest contiguously
     for (int dirIdx = 0; dirIdx < 8; dirIdx++) {
         for (auto &p : intermediateTreelets[dirIdx]) {
-            TreeletInfo &treelet = p.second;
+            IntermediateTreeletInfo &treelet = p.second;
             finalTreelets.emplace_back(move(treelet));
         }
     }
@@ -1329,7 +1350,7 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
         }
 
         uint32_t proxyIdx = treelet.nodes.size();
-        for (const ProxyBVH *proxy : *(treelet.proxies)) {
+        for (const ProxyBVH *proxy : treelet.proxies) {
             treeletProxyStarts[treeletID].emplace(proxy, proxyIdx);
             proxyIdx += proxy->nodeCount();
         }
@@ -1418,7 +1439,7 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
 
         uint32_t numProxyMeshes = 0;
         if (inlineProxies) {
-            for (const ProxyBVH *proxy : *(treelet.proxies)) {
+            for (const ProxyBVH *proxy : treelet.proxies) {
                 auto readers = proxy->GetReaders();
                 // Definitely shouldn't be inlining a proxy that takes up more than 1 full treelet
                 CHECK_EQ(readers.size(), 1);
@@ -1521,7 +1542,7 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
         // Write out the full triangle meshes for all the included proxies referenced by this treelet
         unordered_map<const ProxyBVH *, unordered_map<uint32_t, uint32_t>> proxyMeshIndices;
         if (inlineProxies) {
-            for (const ProxyBVH *proxy : *(treelet.proxies)) {
+            for (const ProxyBVH *proxy : treelet.proxies) {
                 auto readers = proxy->GetReaders();
                 uint32_t numMeshes;
                 readers[0]->read(&numMeshes);
@@ -1560,7 +1581,7 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
                     CHECK_NOTNULL(proxy.get());
                     uint64_t instanceRef;
                     if (inlineProxies) {
-                        if (treelet.proxies->count(proxy.get())) {
+                        if (!largeProxies.count(proxy.get())) {
                             instanceRef = treeletID;
                             instanceRef <<= 32;
                             instanceRef |= treeletProxyStarts[treeletID].at(proxy.get());
@@ -1626,7 +1647,7 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
 
         // Write out nodes for instances
         if (inlineProxies) {
-            for (const ProxyBVH *proxy : *(treelet.proxies)) {
+            for (const ProxyBVH *proxy : treelet.proxies) {
                 auto readers = proxy->GetReaders();
                 auto &reader = readers[0];
 

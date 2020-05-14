@@ -83,13 +83,25 @@ class ProxyDumpBVH : public BVHAccel {
 
     using ProxySetPtr = const std::unordered_set<const ProxyBVH *> *;
   private:
-    struct TreeletInfo {
+    struct IntermediateTreeletInfo {
         std::list<uint64_t> nodes {}; 
         ProxySetPtr proxies {nullptr};
+        std::list<const ProxyBVH *> unsharedProxies {};
         uint64_t noProxySize {0};
         uint64_t proxySize {0};
         int dirIdx {-1};
         float totalProb {0};
+    };
+
+    struct TreeletInfo {
+        std::list<uint64_t> nodes {}; 
+        std::vector<const ProxyBVH *> proxies {};
+        uint64_t noProxySize {0};
+        uint64_t proxySize {0};
+        int dirIdx {-1};
+        float totalProb {0};
+
+        TreeletInfo(IntermediateTreeletInfo &&info);
     };
 
     void SetNodeInfo(int maxTreeletBytes, int copyableThreshold);
@@ -98,7 +110,7 @@ class ProxyDumpBVH : public BVHAccel {
 
     ProxySetPtr ProxyUnion(ProxySetPtr a, ProxySetPtr b) const;
 
-    std::unordered_map<uint32_t, TreeletInfo> MergeDisjointTreelets(int dirIdx, int maxTreeletBytes, const TraversalGraph &graph);
+    std::unordered_map<uint32_t, IntermediateTreeletInfo> MergeDisjointTreelets(int dirIdx, int maxTreeletBytes, const TraversalGraph &graph);
     void OrderTreeletNodesDepthFirst(int numDirs, std::vector<TreeletInfo> &treelets);
 
     std::vector<TreeletInfo> AllocateUnspecializedTreelets(int maxTreeletBytes);
@@ -141,6 +153,7 @@ class ProxyDumpBVH : public BVHAccel {
     std::unordered_map<ProxySetPtr, uint64_t> proxySizeCache;
 
     std::vector<ProxySetPtr> nodeProxies;
+    std::vector<std::list<const ProxyBVH *>> nodeUnsharedProxies;
     std::vector<ProxySetPtr> subtreeProxies;
     std::unordered_set<const ProxyBVH *> largeProxies;
     std::unordered_set<const ProxyBVH *> allProxies;
