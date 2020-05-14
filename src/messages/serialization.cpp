@@ -75,7 +75,7 @@ size_t RecordReader::skip(const size_t n_records)
     size_t skipped = 0;
     for (skipped = 0; !eof_ && skipped < n_records; skipped++) {
         if (next_size_ == 0 || coded_input_.Skip(next_size_)) {
-            eof_ = coded_input_.ReadLittleEndian32(&next_size_);
+            eof_ = not coded_input_.ReadLittleEndian32(&next_size_);
         }
         else {
             break;
