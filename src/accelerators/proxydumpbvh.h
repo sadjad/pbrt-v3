@@ -89,6 +89,7 @@ class ProxyDumpBVH : public BVHAccel {
         std::list<const ProxyBVH *> unsharedProxies {};
         uint64_t noProxySize {0};
         uint64_t proxySize {0};
+        uint64_t unsharedProxySize {0};
         int dirIdx {-1};
         float totalProb {0};
     };
@@ -147,13 +148,14 @@ class ProxyDumpBVH : public BVHAccel {
     std::vector<uint64_t> subtreeSizes;
     std::vector<uint64_t> nodeProxySizes;
     std::vector<uint64_t> subtreeProxySizes;
+    std::vector<uint64_t> nodeUnsharedProxySizes;
+    std::vector<std::list<const ProxyBVH *>> nodeUnsharedProxies;
     std::vector<float> nodeBounds;
 
     std::unordered_set<std::unordered_set<const ProxyBVH *>> proxySets;
     std::unordered_map<ProxySetPtr, uint64_t> proxySizeCache;
 
     std::vector<ProxySetPtr> nodeProxies;
-    std::vector<std::list<const ProxyBVH *>> nodeUnsharedProxies;
     std::vector<ProxySetPtr> subtreeProxies;
     std::unordered_set<const ProxyBVH *> largeProxies;
     std::unordered_set<const ProxyBVH *> allProxies;

@@ -117,6 +117,7 @@ void ProxyDumpBVH::SetNodeInfo(int maxTreeletBytes, int copyableThreshold) {
     subtreeProxies.resize(nodeCount);
     nodeProxySizes.resize(nodeCount);
     subtreeProxySizes.resize(nodeCount);
+    nodeUnsharedProxySizes.resize(nodeCount);
     nodeBounds.resize(nodeCount);
 
     // Specific to NVIDIA algorithm
@@ -152,6 +153,7 @@ void ProxyDumpBVH::SetNodeInfo(int maxTreeletBytes, int copyableThreshold) {
                         if (proxy->UsageCount() == 1) {
                             totalSize += proxy->Size();
                             nodeUnsharedProxies[nodeIdx].push_back(proxy);
+                            nodeUnsharedProxySizes[nodeIdx] += proxy->Size();
                         } else {
                             includedProxies.emplace(proxy);
                         }
@@ -258,7 +260,7 @@ ProxyDumpBVH::TreeletInfo::TreeletInfo(IntermediateTreeletInfo &&info)
     : nodes(move(info.nodes)),
       proxies(),
       noProxySize(info.noProxySize),
-      proxySize(info.proxySize),
+      proxySize(info.proxySize + info.unsharedProxySize),
       dirIdx(info.dirIdx),
       totalProb(info.totalProb)
 {
@@ -276,7 +278,9 @@ unordered_map<uint32_t, ProxyDumpBVH::IntermediateTreeletInfo> ProxyDumpBVH::Mer
                                        nodeUnsharedProxies[nodeIdx].end());
         treelet.dirIdx = dirIdx;
         treelet.nodes.push_back(nodeIdx);
-        treelet.noProxySize += nodeSizes[nodeIdx];
+        // Don't want to count unshared proxies as raw node sizes, will double count
+        treelet.noProxySize += nodeSizes[nodeIdx] - nodeUnsharedProxySizes[nodeIdx];
+        treelet.unsharedProxySize += nodeUnsharedProxySizes[nodeIdx];
 
         auto outgoingBounds = graph.outgoing[nodeIdx];
         for (uint64_t edgeIdx = 0; edgeIdx < outgoingBounds.second; edgeIdx++) {
@@ -288,6 +292,14 @@ unordered_map<uint32_t, ProxyDumpBVH::IntermediateTreeletInfo> ProxyDumpBVH::Mer
             }
         }
     }
+
+    for (auto &kv : treelets) {
+        kv.second.proxySize = 0;
+        for (const ProxyBVH *proxy : *(kv.second.proxies)) {
+            kv.second.proxySize += proxy->Size();
+        }
+    }
+
     IntermediateTreeletInfo &rootTreelet = treelets.at(treeletAllocations[dirIdx][0]);
     rootTreelet.totalProb += 1.0;
 
@@ -317,9 +329,9 @@ unordered_map<uint32_t, ProxyDumpBVH::IntermediateTreeletInfo> ProxyDumpBVH::Mer
     map<TreeletSortKey, IntermediateTreeletInfo, TreeletCmp> sortedTreelets;
     for (auto &kv : treelets) {
         CHECK_NE(kv.first, 0);
-        CHECK_LE(kv.second.noProxySize + kv.second.proxySize, maxTreeletBytes);
+        CHECK_LE(kv.second.noProxySize + kv.second.proxySize + kv.second.unsharedProxySize, maxTreeletBytes);
         sortedTreelets.emplace(piecewise_construct,
-                forward_as_tuple(kv.first, kv.second.noProxySize + kv.second.proxySize),
+                forward_as_tuple(kv.first, kv.second.noProxySize + kv.second.proxySize + kv.second.unsharedProxySize),
                 forward_as_tuple(move(kv.second)));
     }
 
@@ -343,8 +355,10 @@ unordered_map<uint32_t, ProxyDumpBVH::IntermediateTreeletInfo> ProxyDumpBVH::Mer
 
             ProxySetPtr mergedProxies = ProxyUnion(info.proxies, candidateInfo.proxies);
             uint64_t mergedProxySize = GetProxyBytes(mergedProxies);
+            uint64_t mergedUnsharedProxySize = info.unsharedProxySize +
+                candidateInfo.unsharedProxySize;
 
-            uint64_t totalSize = noProxySize + mergedProxySize;
+            uint64_t totalSize = noProxySize + mergedProxySize + mergedUnsharedProxySize;
             if (totalSize <= maxTreeletBytes) {
                 if (info.nodes.front() < candidateInfo.nodes.front()) {
                     info.nodes.splice(info.nodes.end(), move(candidateInfo.nodes));
@@ -356,6 +370,7 @@ unordered_map<uint32_t, ProxyDumpBVH::IntermediateTreeletInfo> ProxyDumpBVH::Mer
                 info.unsharedProxies.splice(info.unsharedProxies.end(), move(candidateInfo.unsharedProxies));
                 info.noProxySize = noProxySize;
                 info.proxySize = mergedProxySize;
+                info.unsharedProxySize = mergedUnsharedProxySize;
                 info.totalProb += candidateInfo.totalProb;
                 sortedTreelets.erase(candidateIter);
             }
