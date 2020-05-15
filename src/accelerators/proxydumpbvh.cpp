@@ -100,6 +100,11 @@ shared_ptr<ProxyDumpBVH> CreateProxyDumpBVH(
     }
     int maxPrimsInNode = ps.FindOneInt("maxnodeprims", 4);
 
+    // Top level BVH should have as many prims to work with as possible
+    if (inlineProxies) {
+        maxPrimsInNode = 1;
+    }
+
     return make_shared<ProxyDumpBVH>(move(prims), maxTreeletBytes,
                                      copyableThreshold,
                                      writeHeader, inlineProxies,

@@ -32,6 +32,8 @@ static void customParse(unique_ptr<Tokenizer> t,
     fileStack.push_back(move(t));
     parserLoc = &fileStack.back()->loc;
 
+    const int maxPrimsPerChunk = 10;
+
     bool ungetTokenSet = false;
     string ungetTokenValue;
 
