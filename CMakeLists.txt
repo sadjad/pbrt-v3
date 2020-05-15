@@ -626,6 +626,14 @@ SET_TARGET_PROPERTIES ( extract_instances PROPERTIES OUTPUT_NAME "extract-instan
 TARGET_COMPILE_FEATURES ( extract_instances PRIVATE ${PBRT_CXX11_FEATURES} )
 TARGET_LINK_LIBRARIES ( extract_instances ${ALL_PBRT_LIBS} )
 
+# print-proxy-header
+ADD_EXECUTABLE ( print_proxy_header src/cloud/print-proxy-header.cpp )
+ADD_SANITIZERS ( print_proxy_header )
+
+SET_TARGET_PROPERTIES ( print_proxy_header PROPERTIES OUTPUT_NAME "print-proxy-header" )
+TARGET_COMPILE_FEATURES ( print_proxy_header PRIVATE ${PBRT_CXX11_FEATURES} )
+TARGET_LINK_LIBRARIES ( print_proxy_header ${ALL_PBRT_LIBS} )
+
 # Unit test
 
 FILE ( GLOB PBRT_TEST_SOURCE
