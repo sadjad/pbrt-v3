@@ -527,6 +527,15 @@ vector<ProxyDumpBVH::TreeletInfo> ProxyDumpBVH::AllocateUnspecializedTreelets(in
         CHECK_EQ(count, 1);
     }
 
+    cout << "Final treelets: " << finalTreelets.size() << endl;
+    uint64_t totalBytes = 0;
+    for (int i = 0; i < finalTreelets.size(); i++) {
+	    const auto &treelet = finalTreelets[i];
+	    cout << "Treelet " << i << ": " << treelet.noProxySize + treelet.proxySize << endl;
+	    totalBytes += treelet.noProxySize + treelet.proxySize;
+    }
+    cout << "Total bytes: " << totalBytes << endl;
+
     return finalTreelets;
 }
 
