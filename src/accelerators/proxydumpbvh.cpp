@@ -125,14 +125,9 @@ void ProxyDumpBVH::SetNodeInfo(int maxTreeletBytes, int copyableThreshold) {
     nodeUnsharedProxySizes.resize(nodeCount);
     nodeBounds.resize(nodeCount);
 
-    // Specific to NVIDIA algorithm
-    float max_nodes = (float)maxTreeletBytes / sizeof(CloudBVH::TreeletNode);
-    const float AREA_EPSILON = nodes[0].bounds.SurfaceArea() * max_nodes / (nodeCount * 10);
-
+    uint64_t totalNodeBytes = 0;
     for (uint64_t nodeIdx = 0; nodeIdx < nodeCount; nodeIdx++) {
         const LinearBVHNode &node = nodes[nodeIdx];
-
-        nodeBounds[nodeIdx] = nodes[nodeIdx].bounds.SurfaceArea() + AREA_EPSILON;
 
         uint64_t totalSize = SizeEstimates::nodeSize;
 
@@ -182,6 +177,17 @@ void ProxyDumpBVH::SetNodeInfo(int maxTreeletBytes, int copyableThreshold) {
             nodeParents[nodeIdx + 1] = nodeIdx;
             nodeParents[node.secondChildOffset] = nodeIdx;
         }
+
+	totalNodeBytes += nodeSizes[nodeIdx];
+    }
+
+    // Specific to NVIDIA algorithm
+    const float AREA_EPSILON = nodes[0].bounds.SurfaceArea() * maxTreeletBytes / (totalNodeBytes * 10);
+
+    for (uint64_t nodeIdx = 0; nodeIdx < nodeCount; nodeIdx++) {
+        const LinearBVHNode &node = nodes[nodeIdx];
+
+        nodeBounds[nodeIdx] = nodes[nodeIdx].bounds.SurfaceArea() + AREA_EPSILON;
     }
 
     uint32_t proxyIdx = 0;
