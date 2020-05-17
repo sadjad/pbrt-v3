@@ -41,7 +41,7 @@ ProxyDumpBVH::ProxyDumpBVH(vector<shared_ptr<Primitive>> &&p,
 {
     SetNodeInfo(maxTreeletBytes, copyableThreshold);
     allTreelets = AllocateTreelets(maxTreeletBytes);
-    
+
     if (writeHeader) {
         DumpHeader();
     }
@@ -178,7 +178,7 @@ void ProxyDumpBVH::SetNodeInfo(int maxTreeletBytes, int copyableThreshold) {
             nodeParents[node.secondChildOffset] = nodeIdx;
         }
 
-	totalNodeBytes += nodeSizes[nodeIdx];
+        totalNodeBytes += nodeSizes[nodeIdx];
     }
 
     // Specific to NVIDIA algorithm
@@ -530,9 +530,9 @@ vector<ProxyDumpBVH::TreeletInfo> ProxyDumpBVH::AllocateUnspecializedTreelets(in
     cout << "Final treelets: " << finalTreelets.size() << endl;
     uint64_t totalBytes = 0;
     for (int i = 0; i < finalTreelets.size(); i++) {
-	    const auto &treelet = finalTreelets[i];
-	    cout << "Treelet " << i << ": " << treelet.noProxySize + treelet.proxySize << endl;
-	    totalBytes += treelet.noProxySize + treelet.proxySize;
+        const auto &treelet = finalTreelets[i];
+        cout << "Treelet " << i << ": " << treelet.noProxySize + treelet.proxySize << endl;
+        totalBytes += treelet.noProxySize + treelet.proxySize;
     }
     cout << "Total bytes: " << totalBytes << endl;
 
@@ -1394,7 +1394,8 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
     DumpSanityCheck(treeletNodeLocations);
 
     auto copyTreelet = [&](unique_ptr<protobuf::RecordReader> &reader,
-                           unique_ptr<protobuf::RecordWriter> &writer) {
+                           unique_ptr<protobuf::RecordWriter> &writer,
+                           const vector<uint32_t> &mapping) {
         uint32_t numMeshes = 0;
         reader->read(&numMeshes);
         writer->write(numMeshes);
@@ -1409,6 +1410,31 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
             protobuf::BVHNode proto_node;
             bool success = reader->read(&proto_node);
             CHECK_EQ(success, true);
+
+            if (proto_node.right_ref()) {
+                uint64_t right_ref = proto_node.right_ref();
+                uint32_t old_right_treelet = (uint32_t)(right_ref >> 32);
+                uint32_t new_right_treelet = mapping[old_right_treelet];
+                uint32_t right_node = (uint32_t)(right_ref);
+                uint64_t new_right_ref = new_right_treelet;
+                new_right_ref <<= 32;
+                new_right_ref |= right_node;
+
+                proto_node.set_right_ref(new_right_ref);
+            }
+
+            if (proto_node.left_ref()) {
+                uint64_t left_ref = proto_node.left_ref();
+                uint32_t old_left_treelet = (uint32_t)(left_ref >> 32);
+                uint32_t new_left_treelet = mapping[old_left_treelet];
+                uint32_t left_node = (uint32_t)(left_ref);
+                uint64_t new_left_ref = new_left_treelet;
+                new_left_ref <<= 32;
+                new_left_ref |= left_node;
+
+                proto_node.set_left_ref(new_left_ref);
+            }
+
             writer->write(proto_node);
         }
     };
@@ -1420,8 +1446,10 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
             auto readers = large->GetReaders();
             CHECK_GT(readers.size(), 0);
             // assign ids
+            vector<uint32_t> id_remap;
             for (auto &reader : readers) {
-                global::manager.getNextId(ObjectType::Treelet, reader.get());
+                uint32_t new_id = global::manager.getNextId(ObjectType::Treelet, reader.get());
+                id_remap.push_back(new_id);
             }
 
             if (!multiDir) {
@@ -1435,14 +1463,14 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
             // Redump 
             // FIXME if a large proxy references proxies that it expects to inline this will be wrong
             for (auto &reader : readers) {
-                uint32_t id = global::manager.getId(reader.get());
+                uint32_t new_id = global::manager.getId(reader.get());
                 global::manager.recordDependency(
-                    ObjectKey {ObjectType::Treelet, id},
-                    ObjectKey {ObjectType::Material, 0});
+                        ObjectKey {ObjectType::Treelet, new_id},
+                        ObjectKey {ObjectType::Material, 0});
 
-                auto writer = global::manager.GetWriter(ObjectType::Treelet, id);
+                auto writer = global::manager.GetWriter(ObjectType::Treelet, new_id);
 
-                copyTreelet(reader, writer);
+                copyTreelet(reader, writer, id_remap);
             }
         }
     }
