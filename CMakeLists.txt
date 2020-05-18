@@ -634,6 +634,14 @@ SET_TARGET_PROPERTIES ( print_proxy_header PROPERTIES OUTPUT_NAME "print-proxy-h
 TARGET_COMPILE_FEATURES ( print_proxy_header PRIVATE ${PBRT_CXX11_FEATURES} )
 TARGET_LINK_LIBRARIES ( print_proxy_header ${ALL_PBRT_LIBS} )
 
+# write-proxy-header
+ADD_EXECUTABLE ( write_proxy_header src/cloud/write-proxy-header.cpp )
+ADD_SANITIZERS ( write_proxy_header )
+
+SET_TARGET_PROPERTIES ( write_proxy_header PROPERTIES OUTPUT_NAME "write-proxy-header" )
+TARGET_COMPILE_FEATURES ( write_proxy_header PRIVATE ${PBRT_CXX11_FEATURES} )
+TARGET_LINK_LIBRARIES ( write_proxy_header ${ALL_PBRT_LIBS} )
+
 # Unit test
 
 FILE ( GLOB PBRT_TEST_SOURCE
