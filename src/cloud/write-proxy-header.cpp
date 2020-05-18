@@ -12,12 +12,13 @@ using namespace pbrt;
 using namespace std;
 
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        cerr << argv[0] << " DIR" << endl;
+    if (argc != 3) {
+        cerr << argv[0] << " DIR BYTES" << endl;
         exit(1);
     }
 
     const string sceneDir(argv[1]);
+    uint64_t numBytes(stoul(argv[2]));
 
     SceneManager mgr;
     mgr.init(sceneDir);
@@ -30,7 +31,8 @@ int main(int argc, char *argv[]) {
     Bounds3f root = from_protobuf(sceneProto.world_bound());
 
     header.write(reinterpret_cast<char *>(&root), sizeof(Bounds3f));
-    uint64_t treeletSize;
+
+    uint64_t treeletSize = numBytes;
     header.write(reinterpret_cast<char *>(&treeletSize), sizeof(uint64_t));
 
     uint64_t nodeCount = (uint64_t)-1;
