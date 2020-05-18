@@ -2109,7 +2109,10 @@ void DumpSceneObjects(const std::string &description,
         }
     }
 
-    pbrtWorldEnd();
+    if (currentApiState == APIState::WorldBlock) {
+        pbrtWorldEnd();
+    }
+
     pbrtCleanup();
 }
 
