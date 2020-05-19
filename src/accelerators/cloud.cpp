@@ -313,16 +313,21 @@ void CloudBVH::Trace(RayState &rayState) const {
                                 rayState.toVisitPush(move(next_primitive));
                             }
 
+                            Transform txfm;
                             tp->GetTransform().Interpolate(
-                                ray.time, &rayState.rayTransform);
+                                ray.time, &txfm);
 
                             RayState::TreeletNode next;
-                            // FIXME
                             next.treelet = cbvh->bvh_root_;
                             next.node = 0;
-                            next.transformed = true;
+
+                            if (txfm.IsIdentity()) {
+                                next.transformed = false;
+                            } else {
+                                rayState.rayTransform = txfm;
+                                next.transformed = true;
+                            }
                             rayState.toVisitPush(move(next));
-                            transformChanged = true;
                             break;
                         }
 
