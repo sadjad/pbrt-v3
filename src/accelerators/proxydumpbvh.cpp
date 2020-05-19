@@ -1435,6 +1435,17 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
                 proto_node.set_left_ref(new_left_ref);
             }
 
+            for (int tIdx = 0; tIdx < proto_node.transformed_primitives_size(); tIdx++) {
+                auto transformedProto = proto_node.mutable_transformed_primitives(tIdx);
+                uint64_t rootRef = transformedProto->root_ref();
+                uint32_t oldTreelet = (uint32_t)(rootRef >> 32);
+                uint32_t newTreelet = mapping[oldTreelet];
+                uint64_t newRootRef = newTreelet;
+                newRootRef <<= 32;
+                newRootRef |= (uint32_t)(rootRef);
+                transformedProto->set_root_ref(newRootRef);
+            }
+
             writer->write(proto_node);
         }
     };
