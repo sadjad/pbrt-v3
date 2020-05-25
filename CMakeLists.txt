@@ -642,6 +642,14 @@ SET_TARGET_PROPERTIES ( write_proxy_header PROPERTIES OUTPUT_NAME "write-proxy-h
 TARGET_COMPILE_FEATURES ( write_proxy_header PRIVATE ${PBRT_CXX11_FEATURES} )
 TARGET_LINK_LIBRARIES ( write_proxy_header ${ALL_PBRT_LIBS} )
 
+# dump-bboxes
+ADD_EXECUTABLE ( dump_bboxes src/cloud/dump-bboxes.cpp )
+ADD_SANITIZERS ( dump_bboxes )
+
+SET_TARGET_PROPERTIES ( dump_bboxes PROPERTIES OUTPUT_NAME "dump-bboxes" )
+TARGET_COMPILE_FEATURES ( dump_bboxes PRIVATE ${PBRT_CXX11_FEATURES} )
+TARGET_LINK_LIBRARIES ( dump_bboxes ${ALL_PBRT_LIBS} )
+
 # Unit test
 
 FILE ( GLOB PBRT_TEST_SOURCE
