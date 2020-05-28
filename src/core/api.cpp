@@ -1376,8 +1376,11 @@ void pbrtMaterial(const std::string &name, const ParamSet &params) {
     TextureParams mp(params, emptyParams, *graphicsState.floatTextures,
                      *graphicsState.spectrumTextures);
     std::shared_ptr<Material> mtl = MakeMaterial(name, mp);
-    graphicsState.currentMaterial =
-        std::make_shared<MaterialInstance>(name, mtl, params);
+
+    if (PbrtOptions.dumpMaterials) {
+        graphicsState.currentMaterial =
+            std::make_shared<MaterialInstance>(name, mtl, params);
+    }
 
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("%*sMaterial \"%s\" ", catIndentCount, "", name.c_str());
@@ -1429,7 +1432,10 @@ void pbrtNamedMaterial(const std::string &name) {
         Error("NamedMaterial \"%s\" unknown.", name.c_str());
         return;
     }
-    graphicsState.currentMaterial = iter->second;
+
+    if (PbrtOptions.dumpMaterials) {
+        graphicsState.currentMaterial = iter->second;
+    }
 }
 
 void pbrtLightSource(const std::string &name, const ParamSet &params) {
