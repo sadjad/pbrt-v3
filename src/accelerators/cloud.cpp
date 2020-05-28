@@ -21,9 +21,13 @@ namespace pbrt {
 
 STAT_COUNTER("BVH/Total Ray Transfers", totalRayTransfers);
 
-CloudBVH::CloudBVH(const uint32_t bvh_root) : bvh_root_(bvh_root) {
-    if (MaxThreadIndex() > 1) {
-        throw runtime_error("Cannot use CloudBVH with multiple threads");
+CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
+    : bvh_root_(bvh_root), preload_(preload_all) {
+    ProfilePhase _(Prof::AccelConstruction);
+
+    if (MaxThreadIndex() > 1 && !preload_all) {
+        throw runtime_error(
+            "Cannot use lazy-loading CloudBVH with multiple threads");
     }
 
     unique_ptr<Float[]> color(new Float[3]);
@@ -39,6 +43,11 @@ CloudBVH::CloudBVH(const uint32_t bvh_root) : bvh_root_(bvh_root) {
     map<string, shared_ptr<Texture<Spectrum>>> sTex;
     TextureParams textureParams(params, emptyParams, fTex, sTex);
     default_material.reset(CreateMatteMaterial(textureParams));
+
+    if (preload_) {
+        loadTreelet(bvh_root, nullptr);
+        preloading_done_ = true;
+    }
 }
 
 CloudBVH::~CloudBVH() {}
@@ -51,7 +60,8 @@ Bounds3f CloudBVH::WorldBound() const {
     return treelets_[bvh_root_].nodes[0].bounds;
 }
 
-// Sums the full surface area for each root. Does not account for overlap between roots
+// Sums the full surface area for each root. Does not account for overlap
+// between roots
 Float CloudBVH::RootSurfaceAreas(Transform txfm) const {
     loadTreelet(bvh_root_);
     CHECK_EQ(treelets_.size(), 1);
@@ -98,6 +108,10 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
         return; /* this tree is already loaded */
     }
 
+    if (preloading_done_) {
+        throw runtime_error("CloudBVH::loadTreelet cannot be called");
+    }
+
     TreeletInfo &info = treelet_info_[root_id];
 
     deque<TreeletNode> nodes;
@@ -120,7 +134,8 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
         protobuf::TriangleMesh tm;
         reader->read(&tm);
         int64_t tm_id = tm.id();
-        auto p = triangle_meshes_.emplace(tm_id, make_shared<TriangleMesh>(move(from_protobuf(tm))));
+        auto p = triangle_meshes_.emplace(
+            tm_id, make_shared<TriangleMesh>(move(from_protobuf(tm))));
         CHECK_EQ(p.second, true);
         triangle_mesh_material_ids_[tm_id] = tm.material_id();
     }
@@ -152,6 +167,9 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
             node.child_node[RIGHT] = (uint32_t)right_ref;
 
             info.children.insert(node.child_treelet[RIGHT]);
+
+            if (preload_) loadTreelet(node.child_treelet[RIGHT]);
+
         } else if (!is_leaf) {
             q.emplace(index, RIGHT);
         }
@@ -163,6 +181,8 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
             node.child_node[LEFT] = (uint32_t)left_ref;
 
             info.children.insert(node.child_treelet[LEFT]);
+
+            if (preload_) loadTreelet(node.child_treelet[RIGHT]);
         } else if (!is_leaf) {
             q.emplace(index, LEFT);
         }
@@ -207,7 +227,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
                         make_shared<IncludedInstance>(&treelet, instance_node);
                 } else {
                     bvh_instances_[instance_ref] =
-                        make_shared<CloudBVH>(instance_group);
+                        make_shared<CloudBVH>(instance_group, preload_);
                 }
             }
 
@@ -314,8 +334,7 @@ void CloudBVH::Trace(RayState &rayState) const {
                             }
 
                             Transform txfm;
-                            tp->GetTransform().Interpolate(
-                                ray.time, &txfm);
+                            tp->GetTransform().Interpolate(ray.time, &txfm);
 
                             RayState::TreeletNode next;
                             next.treelet = cbvh->bvh_root_;
@@ -625,7 +644,8 @@ void CloudBVH::clear() const {
 }
 
 shared_ptr<CloudBVH> CreateCloudBVH(const ParamSet &ps) {
-    return make_shared<CloudBVH>();
+    const bool preload = ps.FindOneBool("preload", false);
+    return make_shared<CloudBVH>(0, preload);
 }
 
 Bounds3f CloudBVH::IncludedInstance::WorldBound() const {

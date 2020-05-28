@@ -14,7 +14,7 @@ Sampler "halton" "integer pixelsamples" [8]
 
 Integrator "path" "integer maxdepth" [5]
 
-Accelerator "cloudbvh"
+Accelerator "cloudbvh" "bool preload" "true"
 
 WorldBegin
 
