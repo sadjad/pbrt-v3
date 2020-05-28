@@ -172,7 +172,6 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
             info.children.insert(node.child_treelet[RIGHT]);
 
             if (preload_) loadTreelet(node.child_treelet[RIGHT]);
-
         } else if (!is_leaf) {
             q.emplace(index, RIGHT);
         }
@@ -185,7 +184,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
 
             info.children.insert(node.child_treelet[LEFT]);
 
-            if (preload_) loadTreelet(node.child_treelet[RIGHT]);
+            if (preload_) loadTreelet(node.child_treelet[LEFT]);
         } else if (!is_leaf) {
             q.emplace(index, LEFT);
         }
