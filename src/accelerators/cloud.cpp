@@ -104,6 +104,8 @@ Float CloudBVH::SurfaceAreaUnion() const {
 }
 
 void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
+    ProfilePhase _(Prof::AccelConstruction);
+
     if (treelets_.count(root_id)) {
         return; /* this tree is already loaded */
     }
@@ -423,6 +425,8 @@ bool CloudBVH::Intersect(RayState &rayState, SurfaceInteraction *isect) const {
 }
 
 bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
+    ProfilePhase _(Prof::AccelIntersect);
+
     bool hit = false;
     Vector3f invDir(1 / ray.d.x, 1 / ray.d.y, 1 / ray.d.z);
     int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
@@ -504,6 +508,8 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
 }
 
 bool CloudBVH::IntersectP(const Ray &ray) const {
+    ProfilePhase _(Prof::AccelIntersectP);
+
     Vector3f invDir(1.f / ray.d.x, 1.f / ray.d.y, 1.f / ray.d.z);
     int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
 
