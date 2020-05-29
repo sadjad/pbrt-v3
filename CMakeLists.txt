@@ -537,8 +537,6 @@ FIND_PACKAGE(LZ4 REQUIRED)
 SET(ALL_PBRT_LIBS
   pbrt
   pbrt_messages
-  atomic
-  cryptopp
   ${CMAKE_THREAD_LIBS_INIT}
   ${OPENEXR_LIBS}
   glog
@@ -546,7 +544,6 @@ SET(ALL_PBRT_LIBS
   ${LZ4_LIBRARY}
   ${ZLIB_LIBRARY}
   ${Protobuf_LIBRARIES}
-  ${OPENSSL_LIBRARIES}
 )
 
 # Main renderer

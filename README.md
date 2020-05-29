@@ -64,12 +64,9 @@ $ git submodule update --init --recursive
 Our version of pbrt is dependent on the following libraries (listed by their
 apt package name):
 * `libprotobuf-dev`
-* `libcrypto++-dev`
-* `libssl-dev`
 * `libunwind-dev`
 * `liblzma-dev`
 * `liblz4-dev`
-* `uuid-dev`
 
 Before building, you'll need to install each of these using your package manager.
 On Ubuntu this is done by running something of the form:
