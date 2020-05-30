@@ -11,6 +11,7 @@
 #include "cloud/manager.h"
 #include "core/api.h"
 #include "core/api_makefns.h"
+#include "core/stats.h"
 #include "filters/box.h"
 #include "filters/gaussian.h"
 #include "filters/mitchell.h"
@@ -295,6 +296,8 @@ Bounds3f from_protobuf(const protobuf::Bounds3f& bounds) {
 }
 
 Matrix4x4 from_protobuf(const protobuf::Matrix& proto_matrix) {
+    ProfilePhase _(Prof::ConvertFromProtobuf);
+
     Matrix4x4 matrix;
     for (size_t i = 0; i < 4; i++) {
         for (size_t j = 0; j < 4 and (4 * i + j < proto_matrix.m_size()); j++) {
@@ -309,6 +312,8 @@ RGBSpectrum from_protobuf(const protobuf::RGBSpectrum& proto_spectrum) {
 }
 
 TriangleMesh from_protobuf(const protobuf::TriangleMesh& proto_tm) {
+    ProfilePhase _(Prof::ConvertFromProtobuf);
+
     Transform identity;
     vector<int> vertexIndices;
     vector<Point3f> p;
@@ -360,6 +365,8 @@ CloudIntegrator::SampleData from_protobuf(const protobuf::SampleData& proto_s) {
 }
 
 ParamSet from_protobuf(const protobuf::ParamSet& pp) {
+    ProfilePhase _(Prof::ConvertFromProtobuf);
+
     ParamSet ps;
 
     for (const auto& item : pp.bools()) {
@@ -430,6 +437,8 @@ TextureParams from_protobuf(
     ParamSet& material_params,
     std::map<std::string, std::shared_ptr<Texture<Float>>>& fTex,
     std::map<std::string, std::shared_ptr<Texture<Spectrum>>>& sTex) {
+    ProfilePhase _(Prof::ConvertFromProtobuf);
+
     for (auto& kv : texture_params.float_textures()) {
         auto texture_reader =
             global::manager.GetReader(ObjectType::FloatTexture, kv.second);

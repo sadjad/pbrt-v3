@@ -86,6 +86,8 @@ size_t RecordReader::skip(const size_t n_records)
 }
 
 bool RecordReader::read(std::string* string) {
+    ProfilePhase _(Prof::ReadRecord);
+
     if (eof_) { throw std::runtime_error("RecordReader: end of file reached"); }
 
     if (next_size_ == 0) {
@@ -103,6 +105,8 @@ bool RecordReader::read(std::string* string) {
 }
 
 bool RecordReader::read(char* data, const uint32_t max_len)  {
+    ProfilePhase _(Prof::ReadRecord);
+
     if (eof_) { throw std::runtime_error("RecordReader: end of file reached"); }
 
     if (next_size_ == 0) {
@@ -124,6 +128,8 @@ bool RecordReader::read(char* data, const uint32_t max_len)  {
 }
 
 bool RecordReader::read(uint32_t* integer) {
+    ProfilePhase _(Prof::ReadRecord);
+
     if (eof_) { throw std::runtime_error("RecordReader: end of file reached"); }
 
     if (next_size_ == 0) {
@@ -141,6 +147,8 @@ bool RecordReader::read(uint32_t* integer) {
 }
 
 bool RecordReader::read(uint64_t* integer) {
+    ProfilePhase _(Prof::ReadRecord);
+
     if (eof_) { throw std::runtime_error("RecordReader: end of file reached"); }
 
     if (next_size_ == 0) {

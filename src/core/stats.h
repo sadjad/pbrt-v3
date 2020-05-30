@@ -185,7 +185,11 @@ enum class Prof {
     TexFiltTrilerp,
     TexFiltEWA,
     TexFiltPtex,
-    NumProfCategories
+
+    ReadRecord,
+    ConvertFromProtobuf,
+
+    NumProfCategories,
 };
 
 static_assert((int)Prof::NumProfCategories <= 64,
@@ -240,6 +244,9 @@ static const char *ProfNames[] = {
     "MIPMap::Lookup() (trilinear)",
     "MIPMap::Lookup() (EWA)",
     "Ptex lookup",
+
+    "Read record",
+    "Convert from Protobuf"
 };
 
 static_assert((int)Prof::NumProfCategories ==

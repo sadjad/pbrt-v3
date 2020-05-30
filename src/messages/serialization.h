@@ -12,6 +12,7 @@
 #include "util/file_descriptor.h"
 #include "util/optional.h"
 #include "pbrt.pb.h"
+#include "core/stats.h"
 
 namespace pbrt {
 namespace protobuf {
@@ -87,6 +88,8 @@ void RecordWriter::write(const ProtobufType & proto) {
 
 template<class ProtobufType>
 bool RecordReader::read(ProtobufType * record) {
+    ProfilePhase _(Prof::ReadRecord);
+
     if (eof_) { throw std::runtime_error("RecordReader: end of file reached"); }
 
     if (next_size_ == 0) {
