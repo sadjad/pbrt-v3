@@ -104,11 +104,11 @@ Float CloudBVH::SurfaceAreaUnion() const {
 }
 
 void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
-    ProfilePhase _(Prof::AccelConstruction);
-
     if (treelets_.count(root_id)) {
         return; /* this tree is already loaded */
     }
+
+    ProfilePhase _(Prof::AccelConstruction);
 
     if (preloading_done_) {
         throw runtime_error("CloudBVH::loadTreelet cannot be called");
