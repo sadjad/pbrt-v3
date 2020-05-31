@@ -1859,6 +1859,8 @@ void pbrtWorldEnd() {
         ProfilerState = ProfToBits(Prof::SceneConstruction);
     }
 
+    ProfilePhase _(Prof::CleanUp);
+
     // Clean up after rendering. Do this before reporting stats so that
     // destructors can run and update stats as needed.
     graphicsState = GraphicsState();

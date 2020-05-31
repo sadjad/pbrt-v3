@@ -186,8 +186,11 @@ enum class Prof {
     TexFiltEWA,
     TexFiltPtex,
 
+    LoadTreelet,
     ReadRecord,
     ConvertFromProtobuf,
+
+    CleanUp,
 
     NumProfCategories,
 };
@@ -245,8 +248,11 @@ static const char *ProfNames[] = {
     "MIPMap::Lookup() (EWA)",
     "Ptex lookup",
 
+    "CloudBVH::LoadTreelet()",
     "Read record",
-    "Convert from Protobuf"
+    "Convert from Protobuf",
+
+    "Clean up"
 };
 
 static_assert((int)Prof::NumProfCategories ==
