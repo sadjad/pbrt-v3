@@ -48,6 +48,8 @@
 
 namespace pbrt {
 
+TimePoints __timepoints;
+
 // Statistics Local Variables
 std::vector<std::function<void(StatsAccumulator &)>> *StatRegisterer::funcs;
 static StatsAccumulator statsAccumulator;

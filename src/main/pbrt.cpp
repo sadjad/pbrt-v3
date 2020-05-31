@@ -82,6 +82,8 @@ Cloud:
 
 // main program
 int main(int argc, char *argv[]) {
+    __timepoints.job_start = TimePoints::clock::now();
+
     google::InitGoogleLogging(argv[0]);
     FLAGS_stderrthreshold = 1; // Warning and above.
 
@@ -196,6 +198,9 @@ int main(int argc, char *argv[]) {
         printf("See the file LICENSE.txt for the conditions of the license.\n");
         fflush(stdout);
     }
+
+    __timepoints.parsing_start = TimePoints::clock::now();
+
     pbrtInit(options);
     // Process scene description
     if (filenames.empty()) {
@@ -207,5 +212,23 @@ int main(int argc, char *argv[]) {
             pbrtParseFile(f);
     }
     pbrtCleanup();
+
+    __timepoints.job_end = TimePoints::clock::now();
+
+    // Printing datapoints
+    auto printDuration = [](const char *label,
+                             const auto tp) {
+        printf("%s = %0.3f\n", label,
+               std::chrono::duration_cast<std::chrono::milliseconds>(
+                   tp).count() / 1e3);
+    };
+
+    printDuration("job_time", __timepoints.job_end - __timepoints.job_start);
+    printDuration("parsing_time",
+                  __timepoints.parsing_end - __timepoints.parsing_start);
+    printDuration("accelerator_creation_time",
+                  __timepoints.accelerator_creation_end - __timepoints.accelerator_creation_start);
+    printDuration("render_time", __timepoints.render_end - __timepoints.render_start);
+
     return 0;
 }

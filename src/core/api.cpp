@@ -1827,6 +1827,8 @@ void pbrtWorldEnd() {
         pushedTransforms.pop_back();
     }
 
+    __timepoints.parsing_end = TimePoints::clock::now();
+
     // Create scene and render
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("%*sWorldEnd\n", catIndentCount, "");
@@ -1978,8 +1980,11 @@ Scene *RenderOptions::MakeScene() {
         }
     }
 
+    __timepoints.accelerator_creation_start = TimePoints::clock::now();
     std::shared_ptr<Primitive> accelerator =
         MakeAccelerator(AcceleratorName, std::move(primitives), allAcceleratorParams);
+    __timepoints.accelerator_creation_end = TimePoints::clock::now();
+
     if (!accelerator) accelerator = std::make_shared<BVHAccel>(primitives);
     Scene *scene = new Scene(accelerator, lights);
     // Erase primitives and lights from _RenderOptions_

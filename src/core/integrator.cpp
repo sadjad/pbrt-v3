@@ -226,6 +226,8 @@ std::unique_ptr<Distribution1D> ComputeLightPowerDistribution(
 
 // SamplerIntegrator Method Definitions
 void SamplerIntegrator::Render(const Scene &scene) {
+    __timepoints.render_start = TimePoints::clock::now();
+
     Preprocess(scene, *sampler);
     // Render image tiles in parallel
 
@@ -333,6 +335,8 @@ void SamplerIntegrator::Render(const Scene &scene) {
         reporter.Done();
     }
     LOG(INFO) << "Rendering finished";
+
+    __timepoints.render_end = TimePoints::clock::now();
 
     // Save final image after rendering
     camera->film->WriteImage();

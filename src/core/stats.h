@@ -48,6 +48,20 @@
 
 namespace pbrt {
 
+struct TimePoints {
+    using clock = std::chrono::steady_clock;
+    clock::time_point job_start{};
+    clock::time_point parsing_start{};
+    clock::time_point parsing_end{};
+    clock::time_point accelerator_creation_start{};
+    clock::time_point accelerator_creation_end{};
+    clock::time_point render_start{};
+    clock::time_point render_end{};
+    clock::time_point job_end{};
+};
+
+extern TimePoints __timepoints;
+
 // Statistics Declarations
 class StatsAccumulator;
 class StatRegisterer {
