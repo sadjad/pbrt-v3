@@ -55,6 +55,7 @@ struct TimePoints {
     clock::time_point parsing_end{};
     clock::time_point accelerator_creation_start{};
     clock::time_point accelerator_creation_end{};
+    clock::time_point scene_creation_end{};
     clock::time_point render_start{};
     clock::time_point render_end{};
     clock::time_point job_end{};

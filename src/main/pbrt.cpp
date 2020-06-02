@@ -216,19 +216,25 @@ int main(int argc, char *argv[]) {
     __timepoints.job_end = TimePoints::clock::now();
 
     // Printing datapoints
-    auto printDuration = [](const char *label,
-                             const auto tp) {
-        printf("%s = %0.3f\n", label,
-               std::chrono::duration_cast<std::chrono::milliseconds>(
-                   tp).count() / 1e3);
-    };
 
-    printDuration("job_time", __timepoints.job_end - __timepoints.job_start);
-    printDuration("parsing_time",
-                  __timepoints.parsing_end - __timepoints.parsing_start);
-    printDuration("accelerator_creation_time",
-                  __timepoints.accelerator_creation_end - __timepoints.accelerator_creation_start);
-    printDuration("render_time", __timepoints.render_end - __timepoints.render_start);
+#define PRINT_DURATION(x)                                         \
+    printf("timepoint:" #x "=%0.3f\n",                                    \
+           std::chrono::duration_cast<std::chrono::milliseconds>( \
+               __timepoints.x - __timepoints.job_start)           \
+                   .count() /                                     \
+               1e3);
+
+    PRINT_DURATION(job_start);
+    PRINT_DURATION(parsing_start);
+    PRINT_DURATION(parsing_end);
+    PRINT_DURATION(accelerator_creation_start);
+    PRINT_DURATION(accelerator_creation_end);
+    PRINT_DURATION(scene_creation_end);
+    PRINT_DURATION(render_start);
+    PRINT_DURATION(render_end);
+    PRINT_DURATION(job_end);
+
+#undef PRINT_DURATION
 
     return 0;
 }

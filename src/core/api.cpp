@@ -1836,6 +1836,8 @@ void pbrtWorldEnd() {
         std::unique_ptr<Integrator> integrator(renderOptions->MakeIntegrator());
         std::unique_ptr<Scene> scene(renderOptions->MakeScene());
 
+        __timepoints.scene_creation_end = TimePoints::clock::now();
+
         if (PbrtOptions.dumpScene) {
             auto writer = global::manager.GetWriter(ObjectType::Scene);
             writer->write(to_protobuf(*scene));
@@ -1855,7 +1857,9 @@ void pbrtWorldEnd() {
         CHECK_EQ(CurrentProfilerState(), ProfToBits(Prof::SceneConstruction));
         ProfilerState = ProfToBits(Prof::IntegratorRender);
 
+        __timepoints.render_start = TimePoints::clock::now();
         if (scene && integrator) integrator->Render(*scene);
+        __timepoints.render_end = TimePoints::clock::now();
 
         CHECK_EQ(CurrentProfilerState(), ProfToBits(Prof::IntegratorRender));
         ProfilerState = ProfToBits(Prof::SceneConstruction);
