@@ -45,6 +45,7 @@
 #include "accelerators/cloud.h"
 #include "accelerators/kdtreeaccel.h"
 #include "accelerators/proxy.h"
+#include "accelerators/vanilla.h"
 #include "cameras/environment.h"
 #include "cameras/orthographic.h"
 #include "cameras/perspective.h"
@@ -908,6 +909,8 @@ std::shared_ptr<Primitive> MakeAccelerator(
         accel = CreateTreeletDumpBVH(std::move(prims), paramSet);
     else if (name == "proxydumpbvh")
         accel = CreateProxyDumpBVH(std::move(prims), paramSet);
+    else if (name == "vanilla")
+        accel = CreateVanillaBVH(std::move(prims), paramSet);
     else
         Warning("Accelerator \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();

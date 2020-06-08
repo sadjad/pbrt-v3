@@ -108,6 +108,8 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
         return; /* this tree is already loaded */
     }
 
+    cout << "Loaded treelet: " << root_id << endl;
+
     ProfilePhase _(Prof::LoadTreelet);
 
     TreeletInfo &info = treelet_info_[root_id];
