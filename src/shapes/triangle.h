@@ -48,6 +48,8 @@ namespace pbrt {
 
 STAT_MEMORY_COUNTER("Memory/Triangle meshes", triMeshBytes);
 
+class VanillaBVHAccel;
+
 // Triangle Declarations
 struct TriangleMesh {
     // TriangleMesh Public Methods
@@ -119,6 +121,7 @@ class Triangle : public Shape {
     int faceIndex;
 
     friend BVHAccel;
+    friend VanillaBVHAccel;
     friend TreeletDumpBVH;
     friend ProxyDumpBVH;
 };

@@ -910,7 +910,7 @@ std::shared_ptr<Primitive> MakeAccelerator(
     else if (name == "proxydumpbvh")
         accel = CreateProxyDumpBVH(std::move(prims), paramSet);
     else if (name == "vanilla")
-        accel = CreateVanillaBVH(std::move(prims), paramSet);
+        accel = CreateVanillaBVHAccelerator(std::move(prims), paramSet);
     else
         Warning("Accelerator \"%s\" unknown.", name.c_str());
     paramSet.ReportUnused();

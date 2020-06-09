@@ -136,7 +136,7 @@ inline uint32_t EncodeMorton3(const Vector3f &v) {
     return (LeftShift3(v.z) << 2) | (LeftShift3(v.y) << 1) | LeftShift3(v.x);
 }
 
-static void RadixSort(std::vector<VanillaVanillaMortonPrimitive> *v) {
+static void RadixSort(std::vector<VanillaMortonPrimitive> *v) {
     std::vector<VanillaMortonPrimitive> tempVector(v->size());
     PBRT_CONSTEXPR int bitsPerPass = 6;
     PBRT_CONSTEXPR int nBits = 30;
@@ -156,7 +156,7 @@ static void RadixSort(std::vector<VanillaVanillaMortonPrimitive> *v) {
         PBRT_CONSTEXPR int nBuckets = 1 << bitsPerPass;
         int bucketCount[nBuckets] = {0};
         PBRT_CONSTEXPR int bitMask = (1 << bitsPerPass) - 1;
-        for (const VanillaVanillaMortonPrimitive &mp : in) {
+        for (const VanillaMortonPrimitive &mp : in) {
             int bucket = (mp.mortonCode >> lowBit) & bitMask;
             CHECK_GE(bucket, 0);
             CHECK_LT(bucket, nBuckets);
