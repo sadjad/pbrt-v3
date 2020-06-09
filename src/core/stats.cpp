@@ -46,6 +46,8 @@
 #include <sys/time.h>
 #endif  // PBRT_HAVE_ITIMER
 
+#include "pbrt/main.h"
+
 namespace pbrt {
 
 TimePoints __timepoints;
@@ -201,6 +203,40 @@ void StatsAccumulator::Clear() {
     floatDistributionMaxs.clear();
     percentages.clear();
     ratios.clear();
+}
+
+AccumulatedStats StatsAccumulator::Export() const
+{
+    AccumulatedStats result;
+
+    result.counters = this->counters;
+    result.memoryCounters = this->memoryCounters;
+    result.intDistributionSums = this->intDistributionSums;
+    result.intDistributionCounts = this->intDistributionCounts;
+    result.intDistributionMins = this->intDistributionMins;
+    result.intDistributionMaxs = this->intDistributionMaxs;
+    result.floatDistributionSums = this->floatDistributionSums;
+    result.floatDistributionCounts = this->floatDistributionCounts;
+    result.floatDistributionMins = this->floatDistributionMins;
+    result.floatDistributionMaxs = this->floatDistributionMaxs;
+    result.percentages = this->percentages;
+    result.ratios = this->ratios;
+
+    return result;
+}
+
+AccumulatedStats pbrt::stats::GetThreadStats()
+{
+    static PBRT_THREAD_LOCAL bool statsFetched = false;
+    static PBRT_THREAD_LOCAL AccumulatedStats stats;
+
+    if (!statsFetched) {
+        ReportThreadStats();
+        statsFetched = true;
+        stats = statsAccumulator.Export();
+    }
+
+    return stats;
 }
 
 PBRT_THREAD_LOCAL uint64_t ProfilerState;

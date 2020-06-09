@@ -10,6 +10,7 @@
 #include "common.h"
 #include "geometry.h"
 #include "pbrt.h"
+#include "stats.h"
 
 namespace pbrt {
 
@@ -87,6 +88,12 @@ void AccumulateImage(const std::shared_ptr<Camera> &camera,
 void WriteImage(const std::shared_ptr<Camera> &camera);
 
 }  // namespace graphics
+
+namespace stats {
+
+AccumulatedStats GetThreadStats();
+
+}
 
 }  // namespace pbrt
 
