@@ -1037,7 +1037,7 @@ ProxyDumpBVH::ComputeTreelets(const TraversalGraph &graph,
         }
     }
 
-    printf("Generated %lu treelets: %lu total bytes from %d nodes\n",
+    printf("Generated %lu treelets: %lu total bytes from %ld nodes\n",
            sizes.size(), totalBytesStats, nodeCount);
 
     for (auto &sz : sizes) {
