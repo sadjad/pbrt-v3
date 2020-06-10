@@ -13,15 +13,21 @@ using namespace std;
 
 namespace pbrt {
 
-STAT_COUNTER("Integrator/Camera rays traced", nCameraRays);
+STAT_COUNTER("Integrator/Camera rays generated", nCameraRays);
 STAT_COUNTER("Intersections/Regular ray intersection tests",
              nIntersectionTests);
 STAT_COUNTER("Intersections/Shadow ray intersection tests", nShadowTests);
-STAT_INT_DISTRIBUTION("Integrator/Path length", pathLength);
+STAT_COUNTER("Integrator/Total rays traced", totalRays);
+STAT_INT_DISTRIBUTION("Integrator/Unused bounces per path", nRemainingBounces);
 
 RayStatePtr CloudIntegrator::Trace(RayStatePtr &&rayState,
                                    const CloudBVH &treelet) {
     treelet.Trace(*rayState);
+
+    if (!rayState->isShadowRay && rayState->toVisitEmpty() && !rayState->hit) {
+        ReportValue(nRemainingBounces, rayState->remainingBounces);
+    }
+
     return move(rayState);
 }
 
@@ -90,6 +96,7 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
                 shadowRay.StartTrace();
 
                 ++nShadowTests;
+                ++totalRays;
             }
         }
     }
@@ -113,8 +120,6 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
             newRay.remainingBounces -= 1;
             newRay.StartTrace();
 
-            ++nIntersectionTests;
-
             // Russian roulette will need etaScale when transmission is
             // supported
             Float rrThreshold = 1.0;
@@ -136,6 +141,13 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
     } else if (shadowRayPtr) {
         /* if bounce isn't produced, this is the last ray in the path */
         shadowRayPtr->remainingBounces = 0;
+    }
+
+    if (!bouncePtr) {
+        ReportValue(nRemainingBounces, rayStatePtr->remainingBounces);
+    } else {
+        ++nIntersectionTests;
+        ++totalRays;
     }
 
     return {move(bouncePtr), move(shadowRayPtr)};

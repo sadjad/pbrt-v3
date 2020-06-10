@@ -108,8 +108,6 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
         return; /* this tree is already loaded */
     }
 
-    cout << "Loaded treelet: " << root_id << endl;
-
     ProfilePhase _(Prof::LoadTreelet);
 
     TreeletInfo &info = treelet_info_[root_id];
@@ -135,8 +133,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
         reader->read(&tm);
         TriangleMeshId tm_id = make_pair(root_id, tm.id());
         auto p = triangle_meshes_.emplace(
-            tm_id,
-            make_shared<TriangleMesh>(move(from_protobuf(tm))));
+            tm_id, make_shared<TriangleMesh>(move(from_protobuf(tm))));
         CHECK_EQ(p.second, true);
         triangle_mesh_material_ids_[tm_id] = tm.material_id();
     }

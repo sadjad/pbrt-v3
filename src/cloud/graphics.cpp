@@ -3,6 +3,7 @@
 #include "core/camera.h"
 #include "core/geometry.h"
 #include "core/sampler.h"
+#include "core/stats.h"
 #include "integrators/cloud.h"
 #include "messages/utils.h"
 #include "pbrt/main.h"
@@ -11,6 +12,11 @@
 using namespace std;
 
 namespace pbrt {
+
+STAT_COUNTER("Integrator/Camera rays generated", nCameraRays);
+STAT_COUNTER("Integrator/Total rays traced", totalRays);
+STAT_COUNTER("Intersections/Regular ray intersection tests",
+             nIntersectionTests);
 
 namespace scene {
 
@@ -127,6 +133,10 @@ RayStatePtr GenerateCameraRay(const shared_ptr<Camera> &camera,
     state.ray.ScaleDifferentials(rayScale);
     state.remainingBounces = maxDepth - 1;
     state.StartTrace();
+
+    ++nCameraRays;
+    ++nIntersectionTests;
+    ++totalRays;
 
     return statePtr;
 }
