@@ -138,16 +138,15 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
 
     if (bouncePtr) {
         bouncePtr->sample.dim = sampler->GetCurrentDimension();
+        ++nIntersectionTests;
+        ++totalRays;
     } else if (shadowRayPtr) {
         /* if bounce isn't produced, this is the last ray in the path */
         shadowRayPtr->remainingBounces = 0;
     }
 
-    if (!bouncePtr) {
-        ReportValue(nRemainingBounces, rayStatePtr->remainingBounces);
-    } else {
-        ++nIntersectionTests;
-        ++totalRays;
+    if (bouncePtr == nullptr) {
+        ReportValue(nRemainingBounces, rayState.remainingBounces);
     }
 
     return {move(bouncePtr), move(shadowRayPtr)};
