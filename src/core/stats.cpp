@@ -205,7 +205,7 @@ void StatsAccumulator::Clear() {
     ratios.clear();
 }
 
-AccumulatedStats StatsAccumulator::Export() const
+pbrt::AccumulatedStats StatsAccumulator::Export() const
 {
     AccumulatedStats result;
 
@@ -225,7 +225,7 @@ AccumulatedStats StatsAccumulator::Export() const
     return result;
 }
 
-AccumulatedStats pbrt::stats::GetThreadStats()
+pbrt::AccumulatedStats pbrt::stats::GetThreadStats()
 {
     static PBRT_THREAD_LOCAL bool statsFetched = false;
     static PBRT_THREAD_LOCAL AccumulatedStats stats;

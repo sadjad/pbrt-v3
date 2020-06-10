@@ -63,6 +63,8 @@ struct TimePoints {
 
 extern TimePoints __timepoints;
 
+struct AccumulatedStats;
+
 // Statistics Declarations
 class StatsAccumulator;
 class StatRegisterer {
@@ -85,21 +87,6 @@ class StatRegisterer {
 void PrintStats(FILE *dest);
 void ClearStats();
 void ReportThreadStats();
-
-struct AccumulatedStats {
-    std::map<std::string, int64_t> counters;
-    std::map<std::string, int64_t> memoryCounters;
-    std::map<std::string, int64_t> intDistributionSums;
-    std::map<std::string, int64_t> intDistributionCounts;
-    std::map<std::string, int64_t> intDistributionMins;
-    std::map<std::string, int64_t> intDistributionMaxs;
-    std::map<std::string, double> floatDistributionSums;
-    std::map<std::string, int64_t> floatDistributionCounts;
-    std::map<std::string, double> floatDistributionMins;
-    std::map<std::string, double> floatDistributionMaxs;
-    std::map<std::string, std::pair<int64_t, int64_t>> percentages;
-    std::map<std::string, std::pair<int64_t, int64_t>> ratios;
-};
 
 class StatsAccumulator {
   public:
