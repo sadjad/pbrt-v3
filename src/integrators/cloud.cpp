@@ -75,6 +75,8 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
         VisibilityTester visibility;
         Spectrum Li = light->Sample_Li(it, uLight, &wi, &lightPdf, &visibility);
 
+        ++totalRays;
+
         if (lightPdf > 0 && !Li.IsBlack()) {
             Spectrum f;
             f = it.bsdf->f(it.wo, wi, bsdfFlags) * AbsDot(wi, it.shading.n);
@@ -96,7 +98,6 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
                 shadowRay.StartTrace();
 
                 ++nShadowTests;
-                ++totalRays;
             }
         }
     }
