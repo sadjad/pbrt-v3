@@ -1332,6 +1332,10 @@ void pbrtTexture(const std::string &name, const std::string &type,
         return;
     }
 
+    if (!PbrtOptions.dumpMaterials) {
+        return;
+    }
+
     TextureParams tp(params, params, *graphicsState.floatTextures,
                      *graphicsState.spectrumTextures);
 
@@ -1375,15 +1379,18 @@ void pbrtTexture(const std::string &name, const std::string &type,
 
 void pbrtMaterial(const std::string &name, const ParamSet &params) {
     VERIFY_WORLD("Material");
+
+    if (!PbrtOptions.dumpMaterials) {
+        return;
+    }
+
     ParamSet emptyParams;
     TextureParams mp(params, emptyParams, *graphicsState.floatTextures,
                      *graphicsState.spectrumTextures);
     std::shared_ptr<Material> mtl = MakeMaterial(name, mp);
 
-    if (PbrtOptions.dumpMaterials) {
-        graphicsState.currentMaterial =
-            std::make_shared<MaterialInstance>(name, mtl, params);
-    }
+    graphicsState.currentMaterial =
+        std::make_shared<MaterialInstance>(name, mtl, params);
 
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("%*sMaterial \"%s\" ", catIndentCount, "", name.c_str());
@@ -1394,6 +1401,11 @@ void pbrtMaterial(const std::string &name, const ParamSet &params) {
 
 void pbrtMakeNamedMaterial(const std::string &name, const ParamSet &params) {
     VERIFY_WORLD("MakeNamedMaterial");
+
+    if (!PbrtOptions.dumpMaterials) {
+        return;
+    }
+
     // error checking, warning if replace, what to use for transform?
     ParamSet emptyParams;
     TextureParams mp(params, emptyParams, *graphicsState.floatTextures,
@@ -1425,6 +1437,11 @@ void pbrtMakeNamedMaterial(const std::string &name, const ParamSet &params) {
 
 void pbrtNamedMaterial(const std::string &name) {
     VERIFY_WORLD("NamedMaterial");
+
+    if (!PbrtOptions.dumpMaterials) {
+        return;
+    }
+
     if (PbrtOptions.cat || PbrtOptions.toPly) {
         printf("%*sNamedMaterial \"%s\"\n", catIndentCount, "", name.c_str());
         return;
@@ -1436,9 +1453,7 @@ void pbrtNamedMaterial(const std::string &name) {
         return;
     }
 
-    if (PbrtOptions.dumpMaterials) {
-        graphicsState.currentMaterial = iter->second;
-    }
+    graphicsState.currentMaterial = iter->second;
 }
 
 void pbrtLightSource(const std::string &name, const ParamSet &params) {
@@ -1625,7 +1640,7 @@ bool shapeMaySetMaterialParameters(const ParamSet &ps) {
 std::shared_ptr<Material> GraphicsState::GetMaterialForShape(
     const ParamSet &shapeParams) {
     CHECK(currentMaterial);
-    if (shapeMaySetMaterialParameters(shapeParams)) {
+    if (PbrtOptions.dumpMaterials && shapeMaySetMaterialParameters(shapeParams)) {
         // Only create a unique material for the shape if the shape's
         // parameters are (apparently) going to provide values for some of
         // the material parameters.
