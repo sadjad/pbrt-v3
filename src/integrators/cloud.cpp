@@ -20,8 +20,12 @@ STAT_COUNTER("Intersections/Shadow ray intersection tests", nShadowTests);
 STAT_COUNTER("Integrator/Total rays traced", totalRays);
 STAT_INT_DISTRIBUTION("Integrator/Unused bounces per path", nRemainingBounces);
 
+STAT_COUNTER("Integrator/Shade() calls", nShadeCalls);
+STAT_COUNTER("Integrator/Trace() calls", nTraceCalls);
+
 RayStatePtr CloudIntegrator::Trace(RayStatePtr &&rayState,
                                    const CloudBVH &treelet) {
+    nTraceCalls++;
     treelet.Trace(*rayState);
 
     if (!rayState->isShadowRay && rayState->toVisitEmpty() && !rayState->hit) {
@@ -35,6 +39,8 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
     RayStatePtr &&rayStatePtr, const CloudBVH &treelet,
     const vector<shared_ptr<Light>> &lights, const Vector2i &sampleExtent,
     shared_ptr<GlobalSampler> &sampler, int maxPathDepth, MemoryArena &arena) {
+    nShadeCalls++;
+
     RayStatePtr bouncePtr = nullptr;
     RayStatePtr shadowRayPtr = nullptr;
 
