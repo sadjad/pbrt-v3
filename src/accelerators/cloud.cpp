@@ -20,6 +20,9 @@ using namespace std;
 namespace pbrt {
 
 STAT_COUNTER("BVH/Total Ray Transfers", totalRayTransfers);
+STAT_COUNTER("BVH/Total nodes", nNodes);
+STAT_COUNTER("BVH/Visited nodes", nNodesVisited);
+STAT_COUNTER("BVH/Visited primitives", nPrimitivesVisited);
 
 CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
     : bvh_root_(bvh_root), preload_(preload_all) {
@@ -262,6 +265,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
         }
 
         nodes.emplace_back(move(node));
+        nNodes++;
     }
 
     treelet.nodes = move(nodes);
@@ -288,6 +292,7 @@ void CloudBVH::Trace(RayState &rayState) const {
 
         RayState::TreeletNode current = move(top);
         rayState.toVisitPop();
+        nNodesVisited++;
 
         auto &treelet = treelets_[current.treelet];
         auto &node = treelet.nodes[current.node];
@@ -315,6 +320,8 @@ void CloudBVH::Trace(RayState &rayState) const {
 
                 for (int i = node.primitive_offset + current.primitive;
                      i < node.primitive_offset + node.primitive_count; i++) {
+                    nPrimitivesVisited++;
+
                     if (primitives[i]->GetType() ==
                         PrimitiveType::Transformed) {
                         TransformedPrimitive *tp =
