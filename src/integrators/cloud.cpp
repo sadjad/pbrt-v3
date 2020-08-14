@@ -20,8 +20,8 @@ STAT_COUNTER("Intersections/Shadow ray intersection tests", nShadowTests);
 STAT_COUNTER("Integrator/Total rays traced", totalRays);
 STAT_INT_DISTRIBUTION("Integrator/Unused bounces per path", nRemainingBounces);
 
-STAT_COUNTER("Integrator/Shade() calls", nShadeCalls);
-STAT_COUNTER("Integrator/Trace() calls", nTraceCalls);
+STAT_COUNTER("Integrator/Calls to Shade", nShadeCalls);
+STAT_COUNTER("Integrator/Calls to Trace", nTraceCalls);
 
 RayStatePtr CloudIntegrator::Trace(RayStatePtr &&rayState,
                                    const CloudBVH &treelet) {
