@@ -18,6 +18,74 @@ STAT_COUNTER("Integrator/Total rays traced", totalRays);
 STAT_COUNTER("Intersections/Regular ray intersection tests",
              nIntersectionTests);
 
+void AccumulatedStats::Merge(const AccumulatedStats &other) {
+    for (const auto &item : other.counters) {
+        counters[item.first] += item.second;
+    }
+
+    for (const auto &item : other.memoryCounters) {
+        memoryCounters[item.first] += item.second;
+    }
+
+    for (const auto &item : other.intDistributionCounts) {
+        intDistributionCounts[item.first] += item.second;
+        intDistributionSums[item.first] +=
+            other.intDistributionSums.at(item.first);
+
+        if (intDistributionMins.count(item.first) == 0) {
+            intDistributionMins[item.first] =
+                other.intDistributionMins.at(item.first);
+        } else {
+            intDistributionMins[item.first] =
+                min(intDistributionMins[item.first],
+                    other.intDistributionMins.at(item.first));
+        }
+
+        if (intDistributionMaxs.count(item.first) == 0) {
+            intDistributionMaxs[item.first] =
+                other.intDistributionMaxs.at(item.first);
+        } else {
+            intDistributionMaxs[item.first] =
+                max(intDistributionMaxs[item.first],
+                    other.intDistributionMaxs.at(item.first));
+        }
+    }
+
+    for (const auto &item : other.floatDistributionCounts) {
+        floatDistributionCounts[item.first] += item.second;
+        floatDistributionSums[item.first] +=
+            other.floatDistributionSums.at(item.first);
+
+        if (!floatDistributionMins.count(item.first)) {
+            floatDistributionMins[item.first] =
+                other.floatDistributionMins.at(item.first);
+        } else {
+            floatDistributionMins[item.first] =
+                min(floatDistributionMins.at(item.first),
+                    other.floatDistributionMins.at(item.first));
+        }
+
+        if (!floatDistributionMaxs.count(item.first)) {
+            floatDistributionMaxs[item.first] =
+                other.floatDistributionMaxs.at(item.first);
+        } else {
+            floatDistributionMaxs[item.first] =
+                max(floatDistributionMaxs[item.first],
+                    other.floatDistributionMaxs.at(item.first));
+        }
+    }
+
+    for (const auto &item : other.percentages) {
+        percentages[item.first].first += item.second.first;
+        percentages[item.first].second += item.second.second;
+    }
+
+    for (const auto &item : other.ratios) {
+        ratios[item.first].first += item.second.first;
+        ratios[item.first].second += item.second.second;
+    }
+}
+
 namespace scene {
 
 string GetObjectName(const ObjectType type, const uint32_t id) {

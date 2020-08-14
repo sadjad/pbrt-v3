@@ -21,18 +21,20 @@ class RayState;
 using RayStatePtr = std::unique_ptr<RayState>;
 
 struct AccumulatedStats {
-    std::map<std::string, int64_t> counters;
-    std::map<std::string, int64_t> memoryCounters;
-    std::map<std::string, int64_t> intDistributionSums;
-    std::map<std::string, int64_t> intDistributionCounts;
-    std::map<std::string, int64_t> intDistributionMins;
-    std::map<std::string, int64_t> intDistributionMaxs;
-    std::map<std::string, double> floatDistributionSums;
-    std::map<std::string, int64_t> floatDistributionCounts;
-    std::map<std::string, double> floatDistributionMins;
-    std::map<std::string, double> floatDistributionMaxs;
-    std::map<std::string, std::pair<int64_t, int64_t>> percentages;
-    std::map<std::string, std::pair<int64_t, int64_t>> ratios;
+    std::map<std::string, int64_t> counters{};
+    std::map<std::string, int64_t> memoryCounters{};
+    std::map<std::string, int64_t> intDistributionSums{};
+    std::map<std::string, int64_t> intDistributionCounts{};
+    std::map<std::string, int64_t> intDistributionMins{};
+    std::map<std::string, int64_t> intDistributionMaxs{};
+    std::map<std::string, double> floatDistributionSums{};
+    std::map<std::string, int64_t> floatDistributionCounts{};
+    std::map<std::string, double> floatDistributionMins{};
+    std::map<std::string, double> floatDistributionMaxs{};
+    std::map<std::string, std::pair<int64_t, int64_t>> percentages{};
+    std::map<std::string, std::pair<int64_t, int64_t>> ratios{};
+
+    void Merge(const AccumulatedStats &other);
 };
 
 namespace scene {
