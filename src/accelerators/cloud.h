@@ -48,8 +48,7 @@ class CloudBVH : public Aggregate {
     }
 
     const TreeletInfo &GetInfo(const uint32_t treelet_id) {
-        loadTreelet(treelet_id);
-        return treelet_info_.at(treelet_id);
+        throw std::runtime_error("Not implemented");
     }
 
     struct TreeletNode {
@@ -104,18 +103,15 @@ class CloudBVH : public Aggregate {
     const bool preload_;
     bool preloading_done_ {false};
 
-    using TriangleMeshId = std::pair<uint32_t, uint32_t>;
-
     mutable std::map<uint32_t, std::unique_ptr<Treelet>> treelets_;
     mutable std::map<uint64_t, std::shared_ptr<Primitive>> bvh_instances_;
     mutable std::map<uint32_t, std::shared_ptr<Material>> materials_;
 
     mutable std::shared_ptr<Material> default_material;
 
-    mutable std::map<uint32_t, TreeletInfo> treelet_info_;
-
     void loadTreelet(const uint32_t root_id,
                      std::istream *stream = nullptr) const;
+
     void clear() const;
 
     // returns array of Bounds3f with structure of Treelet's internal BVH nodes
