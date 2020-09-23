@@ -128,6 +128,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
     auto &tree_meshes = treelet.meshes;
     auto &tree_primitives = treelet.primitives;
     auto &tree_transforms = treelet.transforms;
+    auto &tree_instances = treelet.instances;
 
     map<uint32_t, uint32_t> mesh_material_ids;
 
@@ -227,24 +228,30 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
             uint16_t instance_group = (uint16_t)(instance_ref >> 32);
             uint32_t instance_node = (uint32_t)instance_ref;
 
-            if (not bvh_instances_.count(instance_ref)) {
-                if (instance_group == root_id) {
-                    bvh_instances_[instance_ref] =
+            if (instance_group == root_id) {
+                if (not tree_instances.count(instance_ref)) {
+                    tree_instances[instance_ref] =
                         make_shared<IncludedInstance>(&treelet, instance_node);
-                } else {
+                }
+            } else {
+                if (not bvh_instances_.count(instance_ref)) {
                     bvh_instances_[instance_ref] =
                         make_shared<CloudBVH>(instance_group, preload_);
                 }
             }
 
-            CloudBVH *instance =
-                dynamic_cast<CloudBVH *>(bvh_instances_[instance_ref].get());
-            if (instance) {
+            auto primitive = (instance_group == root_id)
+                                 ? dynamic_pointer_cast<Primitive>(
+                                       tree_instances[instance_ref])
+                                 : dynamic_pointer_cast<Primitive>(
+                                       bvh_instances_[instance_ref]);
+
+            if (instance_group != root_id) {
                 info.instances[instance_group] += node.bounds.SurfaceArea();
             }
 
             tree_primitives.emplace_back(move(make_unique<TransformedPrimitive>(
-                bvh_instances_.at(instance_ref), primitive_to_world)));
+                primitive, primitive_to_world)));
         }
 
         for (int i = 0; i < proto_node.triangles_size(); i++) {

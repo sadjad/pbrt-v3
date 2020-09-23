@@ -82,6 +82,7 @@ class CloudBVH : public Aggregate {
         std::deque<std::unique_ptr<Primitive>> primitives{};
         std::map<uint32_t, std::shared_ptr<TriangleMesh>> meshes;
         std::list<std::unique_ptr<Transform>> transforms;
+        std::map<uint64_t, std::shared_ptr<Primitive>> instances;
     };
 
     class IncludedInstance : public Aggregate {
