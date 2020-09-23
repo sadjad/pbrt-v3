@@ -24,7 +24,7 @@ class CloudBVH : public Aggregate {
   public:
     struct TreeletInfo {
         std::set<uint32_t> children{};
-        std::map<uint32_t, uint64_t> instances {};
+        std::map<uint32_t, uint64_t> instances{};
     };
 
     CloudBVH(const uint32_t bvh_root = 0, const bool preload_all = false);
@@ -43,9 +43,8 @@ class CloudBVH : public Aggregate {
     void Trace(RayState &rayState) const;
     bool Intersect(RayState &rayState, SurfaceInteraction *isect) const;
 
-    void LoadTreelet(const uint32_t root_id, std::istream *stream) const {
-        loadTreelet(root_id, stream);
-    }
+    void LoadTreelet(const uint32_t root_id,
+                     std::istream *stream = nullptr) const;
 
     const TreeletInfo &GetInfo(const uint32_t treelet_id) {
         throw std::runtime_error("Not implemented");
@@ -76,12 +75,45 @@ class CloudBVH : public Aggregate {
   private:
     enum Child { LEFT = 0, RIGHT = 1 };
 
+    struct UnfinishedTransformedPrimitive {
+        size_t primitive_index;
+        uint64_t instance_ref;
+        uint16_t instance_group;
+        AnimatedTransform primitive_to_world;
+
+        UnfinishedTransformedPrimitive(const size_t primitive_index,
+                                       const uint64_t instance_ref,
+                                       AnimatedTransform &&primitive_to_world)
+            : primitive_index(primitive_index),
+              instance_ref(instance_ref),
+              primitive_to_world(std::move(primitive_to_world)) {}
+    };
+
+    struct UnfinishedGeometricPrimitive {
+        size_t primitive_index;
+        uint32_t material_id;
+        std::unique_ptr<Shape> shape;
+
+        UnfinishedGeometricPrimitive(const size_t primitive_index,
+                                     const uint32_t material_id,
+                                     std::unique_ptr<Shape> &&shape)
+            : primitive_index(primitive_index),
+              material_id(material_id),
+              shape(std::move(shape)) {}
+    };
+
     struct Treelet {
         std::deque<TreeletNode> nodes{};
         std::deque<std::unique_ptr<Primitive>> primitives{};
-        std::map<uint32_t, std::shared_ptr<TriangleMesh>> meshes;
-        std::list<std::unique_ptr<Transform>> transforms;
-        std::map<uint64_t, std::shared_ptr<Primitive>> instances;
+        std::map<uint32_t, std::shared_ptr<TriangleMesh>> meshes{};
+        std::list<std::unique_ptr<Transform>> transforms{};
+        std::map<uint64_t, std::shared_ptr<Primitive>> instances{};
+
+        std::set<uint32_t> required_materials{};
+        std::set<uint64_t> required_instances{};
+
+        std::vector<UnfinishedTransformedPrimitive> unfinished_transformed{};
+        std::vector<UnfinishedGeometricPrimitive> unfinished_geometric{};
     };
 
     class IncludedInstance : public Aggregate {
@@ -101,7 +133,7 @@ class CloudBVH : public Aggregate {
     const std::string bvh_path_;
     const uint32_t bvh_root_;
     const bool preload_;
-    bool preloading_done_ {false};
+    bool preloading_done_{false};
 
     mutable std::map<uint32_t, std::unique_ptr<Treelet>> treelets_;
     mutable std::map<uint64_t, std::shared_ptr<Primitive>> bvh_instances_;
@@ -109,12 +141,14 @@ class CloudBVH : public Aggregate {
 
     mutable std::shared_ptr<Material> default_material;
 
-    void loadTreelet(const uint32_t root_id,
-                     std::istream *stream = nullptr) const;
+    void finializeTreeletLoad(const uint32_t root_id) const;
+    bool loadTreeletBase(const uint32_t root_id,
+                         std::istream *stream = nullptr) const;
 
     void clear() const;
 
-    // returns array of Bounds3f with structure of Treelet's internal BVH nodes
+    // returns array of Bounds3f with structure of Treelet's internal BVH
+    // nodes
     std::vector<Bounds3f> getTreeletNodeBounds(
         const uint32_t treelet_id, const int recursionLimit = 4) const;
 
