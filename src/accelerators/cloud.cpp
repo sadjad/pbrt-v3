@@ -25,7 +25,7 @@ STAT_COUNTER("BVH/Visited nodes", nNodesVisited);
 STAT_COUNTER("BVH/Visited primitives", nPrimitivesVisited);
 
 CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
-    : bvh_root_(bvh_root), preload_(preload_all) {
+    : bvh_root_(bvh_root) {
     ProfilePhase _(Prof::AccelConstruction);
 
     if (MaxThreadIndex() > 1 && !preload_all) {
@@ -47,7 +47,7 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
     TextureParams textureParams(params, emptyParams, fTex, sTex);
     default_material.reset(CreateMatteMaterial(textureParams));
 
-    if (preload_) {
+    if (preload_all) {
         LoadTreelet(bvh_root, nullptr);
         preloading_done_ = true;
     }
@@ -225,8 +225,6 @@ bool CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
             uint16_t treelet_id = (uint16_t)(right_ref >> 32);
             node.child_treelet[RIGHT] = treelet_id;
             node.child_node[RIGHT] = (uint32_t)right_ref;
-
-            if (preload_) LoadTreelet(node.child_treelet[RIGHT]);
         } else if (!is_leaf) {
             q.emplace(index, RIGHT);
         }
@@ -236,8 +234,6 @@ bool CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
             uint16_t treelet_id = (uint16_t)(left_ref >> 32);
             node.child_treelet[LEFT] = treelet_id;
             node.child_node[LEFT] = (uint32_t)left_ref;
-
-            if (preload_) LoadTreelet(node.child_treelet[LEFT]);
         } else if (!is_leaf) {
             q.emplace(index, LEFT);
         }

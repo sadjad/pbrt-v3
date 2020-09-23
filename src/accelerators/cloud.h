@@ -132,7 +132,6 @@ class CloudBVH : public Aggregate {
 
     const std::string bvh_path_;
     const uint32_t bvh_root_;
-    const bool preload_;
     bool preloading_done_{false};
 
     mutable std::map<uint32_t, std::unique_ptr<Treelet>> treelets_;
