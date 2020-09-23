@@ -106,7 +106,7 @@ class CloudBVH : public Aggregate {
 
     using TriangleMeshId = std::pair<uint32_t, uint32_t>;
 
-    mutable std::map<uint32_t, Treelet> treelets_;
+    mutable std::map<uint32_t, std::unique_ptr<Treelet>> treelets_;
     mutable std::map<uint64_t, std::shared_ptr<Primitive>> bvh_instances_;
     mutable std::map<uint32_t, std::shared_ptr<Material>> materials_;
 

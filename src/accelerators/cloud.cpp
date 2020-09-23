@@ -60,7 +60,7 @@ Bounds3f CloudBVH::WorldBound() const {
     CHECK_EQ(bvh_root_, 0);
 
     loadTreelet(bvh_root_);
-    return treelets_[bvh_root_].nodes[0].bounds;
+    return treelets_[bvh_root_]->nodes[0].bounds;
 }
 
 // Sums the full surface area for each root. Does not account for overlap
@@ -73,7 +73,7 @@ Float CloudBVH::RootSurfaceAreas(Transform txfm) const {
 
     vector<Bounds3f> roots;
 
-    for (const TreeletNode &node : treelets_[bvh_root_].nodes) {
+    for (const TreeletNode &node : treelets_[bvh_root_]->nodes) {
         auto cur = txfm(node.bounds);
 
         bool newRoot = true;
@@ -99,7 +99,7 @@ Float CloudBVH::SurfaceAreaUnion() const {
     CHECK_EQ(treelets_.size(), 1);
 
     Bounds3f boundUnion;
-    for (const TreeletNode &node : treelets_[bvh_root_].nodes) {
+    for (const TreeletNode &node : treelets_[bvh_root_]->nodes) {
         boundUnion = Union(boundUnion, node.bounds);
     }
 
@@ -124,7 +124,9 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
         reader = make_unique<protobuf::RecordReader>(stream);
     }
 
-    auto &treelet = treelets_[root_id];
+    treelets_[root_id] = make_unique<Treelet>();
+
+    auto &treelet = *treelets_[root_id];
     auto &tree_meshes = treelet.meshes;
     auto &tree_primitives = treelet.primitives;
     auto &tree_transforms = treelet.transforms;
@@ -306,7 +308,7 @@ void CloudBVH::Trace(RayState &rayState) const {
         rayState.toVisitPop();
         nNodesVisited++;
 
-        auto &treelet = treelets_[current.treelet];
+        auto &treelet = *treelets_[current.treelet];
         auto &node = treelet.nodes[current.node];
 
         /* prepare the ray */
@@ -414,7 +416,7 @@ bool CloudBVH::Intersect(RayState &rayState, SurfaceInteraction *isect) const {
     auto &hit = rayState.hitNode;
     loadTreelet(hit.treelet);
 
-    auto &treelet = treelets_[hit.treelet];
+    auto &treelet = *treelets_[hit.treelet];
     auto &node = treelet.nodes[hit.node];
     auto &primitives = treelet.primitives;
 
@@ -461,7 +463,7 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     uint32_t prevTreelet = startTreelet;
     while (true) {
         loadTreelet(current.first);
-        auto &treelet = treelets_[current.first];
+        auto &treelet = *treelets_[current.first];
         auto &node = treelet.nodes[current.second];
 
         bool instanceReturn = false;
@@ -543,7 +545,7 @@ bool CloudBVH::IntersectP(const Ray &ray) const {
     uint32_t prevTreelet = startTreelet;
     while (true) {
         loadTreelet(current.first);
-        auto &treelet = treelets_[current.first];
+        auto &treelet = *treelets_[current.first];
         auto &node = treelet.nodes[current.second];
 
         bool instanceReturn = false;
@@ -615,7 +617,7 @@ vector<Bounds3f> CloudBVH::getTreeletNodeBounds(
     const int idx = 1;
 
     // load base node bounds
-    auto &currTreelet = treelets_.at(treelet_id);
+    auto &currTreelet = *treelets_.at(treelet_id);
     auto &currNode = currTreelet.nodes[0];
 
     // size reflects indexing starting at 1
