@@ -80,6 +80,8 @@ class CloudBVH : public Aggregate {
     struct Treelet {
         std::deque<TreeletNode> nodes{};
         std::deque<std::unique_ptr<Primitive>> primitives{};
+        std::map<uint32_t, std::shared_ptr<TriangleMesh>> meshes;
+        std::list<std::unique_ptr<Transform>> transforms;
     };
 
     class IncludedInstance : public Aggregate {
@@ -105,9 +107,6 @@ class CloudBVH : public Aggregate {
 
     mutable std::map<uint32_t, Treelet> treelets_;
     mutable std::map<uint64_t, std::shared_ptr<Primitive>> bvh_instances_;
-    mutable std::list<std::unique_ptr<Transform>> transforms_;
-    mutable std::map<TriangleMeshId, std::shared_ptr<TriangleMesh>> triangle_meshes_;
-    mutable std::map<TriangleMeshId, uint32_t> triangle_mesh_material_ids_;
     mutable std::map<uint32_t, std::shared_ptr<Material>> materials_;
 
     mutable std::shared_ptr<Material> default_material;

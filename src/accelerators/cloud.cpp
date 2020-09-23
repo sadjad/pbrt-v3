@@ -71,7 +71,7 @@ Float CloudBVH::RootSurfaceAreas(Transform txfm) const {
 
     Float area = 0;
 
-    std::vector<Bounds3f> roots;
+    vector<Bounds3f> roots;
 
     for (const TreeletNode &node : treelets_[bvh_root_].nodes) {
         auto cur = txfm(node.bounds);
@@ -125,7 +125,11 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
     }
 
     auto &treelet = treelets_[root_id];
+    auto &tree_meshes = treelet.meshes;
     auto &tree_primitives = treelet.primitives;
+    auto &tree_transforms = treelet.transforms;
+
+    map<uint32_t, uint32_t> mesh_material_ids;
 
     /* read in the triangle meshes for this treelet first */
     uint32_t num_triangle_meshes = 0;
@@ -134,11 +138,12 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
         /* load the TriangleMesh if necessary */
         protobuf::TriangleMesh tm;
         reader->read(&tm);
-        TriangleMeshId tm_id = make_pair(root_id, tm.id());
-        auto p = triangle_meshes_.emplace(
-            tm_id, make_shared<TriangleMesh>(move(from_protobuf(tm))));
+
+        auto p = tree_meshes.emplace(
+            tm.id(), make_shared<TriangleMesh>(move(from_protobuf(tm))));
         CHECK_EQ(p.second, true);
-        triangle_mesh_material_ids_[tm_id] = tm.material_id();
+
+        mesh_material_ids[tm.id()] = tm.material_id();
     }
 
     stack<pair<uint32_t, Child>> q;
@@ -197,17 +202,18 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
         for (int i = 0; i < proto_node.transformed_primitives_size(); i++) {
             auto &proto_tp = proto_node.transformed_primitives(i);
 
-            transforms_.push_back(move(make_unique<Transform>(
+            tree_transforms.push_back(move(make_unique<Transform>(
                 from_protobuf(proto_tp.transform().start_transform()))));
-            const Transform *start = transforms_.back().get();
+            const Transform *start = tree_transforms.back().get();
 
             Matrix4x4 end_mat =
                 from_protobuf(proto_tp.transform().end_transform());
 
             const Transform *end;
             if (start->GetMatrix() != end_mat) {
-                transforms_.push_back(move(make_unique<Transform>(end_mat)));
-                end = transforms_.back().get();
+                tree_transforms.push_back(
+                    move(make_unique<Transform>(end_mat)));
+                end = tree_transforms.back().get();
             } else {
                 end = start;
             }
@@ -243,9 +249,8 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
 
         for (int i = 0; i < proto_node.triangles_size(); i++) {
             auto &proto_t = proto_node.triangles(i);
-            const TriangleMeshId tm_id = make_pair(root_id, proto_t.mesh_id());
+            const auto material_id = mesh_material_ids[proto_t.mesh_id()];
 
-            const auto material_id = triangle_mesh_material_ids_[tm_id];
             /* load the Material if necessary */
             if (materials_.count(material_id) == 0) {
                 auto material_reader = global::manager.GetReader(
@@ -258,7 +263,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
 
             auto shape = make_shared<Triangle>(
                 &identity_transform_, &identity_transform_, false,
-                triangle_meshes_.at(tm_id), proto_t.tri_number());
+                tree_meshes.at(proto_t.mesh_id()), proto_t.tri_number());
 
             tree_primitives.emplace_back(move(make_unique<GeometricPrimitive>(
                 shape, materials_[material_id], nullptr, MediumInterface{})));
@@ -648,7 +653,7 @@ void CloudBVH::recurseBVHNodes(const int depth, const int recursionLimit,
 void CloudBVH::clear() const {
     treelets_.clear();
     bvh_instances_.clear();
-    transforms_.clear();
+    materials_.clear();
 }
 
 shared_ptr<CloudBVH> CreateCloudBVH(const ParamSet &ps) {
