@@ -159,7 +159,7 @@ class CloudBVH : public Aggregate {
     const uint32_t bvh_root_;
     bool preloading_done_{false};
 
-    mutable std::map<uint32_t, std::unique_ptr<Treelet>> treelets_;
+    mutable std::vector<std::unique_ptr<Treelet>> treelets_;
     mutable std::map<uint64_t, std::shared_ptr<Primitive>> bvh_instances_;
     mutable std::map<uint32_t, std::shared_ptr<Material>> materials_;
 

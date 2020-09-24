@@ -50,9 +50,7 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
         /* (1) load all the treelets in parallel */
         const auto treelet_count = global::manager.treeletCount();
 
-        for (size_t i = 0; i < treelet_count; i++) {
-            treelets_[i] = nullptr;
-        }
+        treelets_.resize(treelet_count + 1);
 
         ParallelFor([&](int64_t treelet_id) { loadTreeletBase(treelet_id); },
                     treelet_count);
@@ -152,8 +150,13 @@ Float CloudBVH::SurfaceAreaUnion() const {
 }
 
 void CloudBVH::LoadTreelet(const uint32_t root_id, istream *stream) const {
-    if (preloading_done_ or treelets_.count(root_id)) {
+    if (preloading_done_ or
+        (treelets_.size() > root_id && treelets_[root_id] != nullptr)) {
         return; /* this tree is already loaded */
+    }
+
+    if (treelets_.size() <= root_id) {
+        treelets_.resize(root_id + 1);
     }
 
     loadTreeletBase(root_id, stream);
