@@ -470,6 +470,11 @@ bool CloudBVH::Intersect(RayState &rayState, SurfaceInteraction *isect) const {
 }
 
 bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
+    return Intersect(ray, isect, bvh_root_);
+}
+
+bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect,
+                         const uint32_t bvh_root) const {
     ProfilePhase _(Prof::AccelIntersect);
 
     bool hit = false;
@@ -480,8 +485,8 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     pair<uint32_t, uint32_t> toVisit[64];
     uint8_t toVisitOffset = 0;
 
-    uint32_t startTreelet = bvh_root_;
-    if (bvh_root_ == 0) {
+    uint32_t startTreelet = bvh_root;
+    if (bvh_root == 0) {
         startTreelet = ComputeIdx(ray.d);
     }
 
@@ -531,6 +536,10 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
 }
 
 bool CloudBVH::IntersectP(const Ray &ray) const {
+    return IntersectP(ray, bvh_root_);
+}
+
+bool CloudBVH::IntersectP(const Ray &ray, const uint32_t bvh_root) const {
     ProfilePhase _(Prof::AccelIntersectP);
 
     Vector3f invDir(1.f / ray.d.x, 1.f / ray.d.y, 1.f / ray.d.z);
@@ -540,8 +549,8 @@ bool CloudBVH::IntersectP(const Ray &ray) const {
     uint8_t toVisitOffset = 0;
     pair<uint32_t, uint32_t> toVisit[64];
 
-    uint32_t startTreelet = bvh_root_;
-    if (bvh_root_ == 0) {
+    uint32_t startTreelet = bvh_root;
+    if (bvh_root == 0) {
         startTreelet = ComputeIdx(ray.d);
     }
 

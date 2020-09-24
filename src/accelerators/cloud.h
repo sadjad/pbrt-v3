@@ -140,6 +140,9 @@ class CloudBVH : public Aggregate {
 
     mutable std::shared_ptr<Material> default_material;
 
+    bool Intersect(const Ray &ray, SurfaceInteraction *isect, uint32_t) const;
+    bool IntersectP(const Ray &ray, uint32_t) const;
+
     void finializeTreeletLoad(const uint32_t root_id) const;
     bool loadTreeletBase(const uint32_t root_id,
                          std::istream *stream = nullptr) const;
