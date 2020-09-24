@@ -47,7 +47,53 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
     default_material.reset(CreateMatteMaterial(textureParams));
 
     if (preload_all) {
-        LoadTreelet(bvh_root, nullptr);
+        /* (1) load all the treelets in parallel */
+        const auto treelet_count = global::manager.treeletCount();
+
+        for (size_t i = 0; i < treelet_count; i++) {
+            treelets_[i] = nullptr;
+        }
+
+        ParallelFor([&](int64_t treelet_id) { loadTreeletBase(treelet_id); },
+                    treelet_count);
+
+        /* (2.A) load all the necessary materials */
+        set<uint32_t> required_materials;
+
+        for (size_t i = 0; i < treelet_count; i++) {
+            required_materials.insert(treelets_[i]->required_materials.begin(),
+                                      treelets_[i]->required_materials.end());
+        }
+
+        for (const auto mid : required_materials) {
+            if (materials_.count(mid) == 0) {
+                auto r = global::manager.GetReader(ObjectType::Material, mid);
+                protobuf::Material material;
+                r->read(&material);
+                materials_[mid] = material::from_protobuf(material);
+            }
+        }
+
+        /* (2.B) create all the necessary external instances */
+        set<uint64_t> required_instances;
+
+        for (size_t i = 0; i < treelet_count; i++) {
+            required_instances.insert(treelets_[i]->required_instances.begin(),
+                                      treelets_[i]->required_instances.end());
+        }
+
+        for (const auto rid : required_instances) {
+            if (not bvh_instances_.count(rid)) {
+                bvh_instances_[rid] =
+                    make_shared<ExternalInstance>(*this, (uint16_t)(rid >> 32));
+            }
+        }
+
+        /* (3) finish loading the treelets */
+        ParallelFor(
+            [&](int64_t treelet_id) { finializeTreeletLoad(treelet_id); },
+            treelet_count);
+
         preloading_done_ = true;
     }
 }
@@ -106,9 +152,11 @@ Float CloudBVH::SurfaceAreaUnion() const {
 }
 
 void CloudBVH::LoadTreelet(const uint32_t root_id, istream *stream) const {
-    if (not loadTreeletBase(root_id, stream)) {
-        return;
+    if (preloading_done_ or treelets_.count(root_id)) {
+        return; /* this tree is already loaded */
     }
+
+    loadTreeletBase(root_id, stream);
 
     auto &treelet = *treelets_[root_id];
 
@@ -157,11 +205,7 @@ void CloudBVH::finializeTreeletLoad(const uint32_t root_id) const {
     treelet.unfinished_transformed.clear();
 }
 
-bool CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
-    if (preloading_done_ or treelets_.count(root_id)) {
-        return false; /* this tree is already loaded */
-    }
-
+void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
     ProfilePhase _(Prof::LoadTreelet);
 
     deque<TreeletNode> nodes;
@@ -311,8 +355,6 @@ bool CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
     }
 
     treelet.nodes = move(nodes);
-
-    return true;
 }
 
 void CloudBVH::Trace(RayState &rayState) const {
