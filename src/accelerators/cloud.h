@@ -40,6 +40,9 @@ class CloudBVH : public Aggregate {
     bool Intersect(const Ray &ray, SurfaceInteraction *isect) const;
     bool IntersectP(const Ray &ray) const;
 
+    bool Intersect(const Ray &ray, SurfaceInteraction *isect, uint32_t) const;
+    bool IntersectP(const Ray &ray, uint32_t) const;
+
     void Trace(RayState &rayState) const;
     bool Intersect(RayState &rayState, SurfaceInteraction *isect) const;
 
@@ -130,6 +133,26 @@ class CloudBVH : public Aggregate {
         int nodeIdx_;
     };
 
+    class ExternalInstance : public Aggregate {
+      public:
+        ExternalInstance(const CloudBVH &bvh, int root_id)
+            : bvh_(bvh), root_id_(root_id) {}
+
+        Bounds3f WorldBound() const { return bvh_.WorldBound(); }
+
+        bool Intersect(const Ray &ray, SurfaceInteraction *isect) const {
+            return bvh_.Intersect(ray, isect, root_id_);
+        }
+
+        bool IntersectP(const Ray &ray) const {
+            return bvh_.IntersectP(ray, root_id_);
+        }
+
+      private:
+        size_t root_id_;
+        const CloudBVH &bvh_;
+    };
+
     const std::string bvh_path_;
     const uint32_t bvh_root_;
     bool preloading_done_{false};
@@ -139,9 +162,6 @@ class CloudBVH : public Aggregate {
     mutable std::map<uint32_t, std::shared_ptr<Material>> materials_;
 
     mutable std::shared_ptr<Material> default_material;
-
-    bool Intersect(const Ray &ray, SurfaceInteraction *isect, uint32_t) const;
-    bool IntersectP(const Ray &ray, uint32_t) const;
 
     void finializeTreeletLoad(const uint32_t root_id) const;
     bool loadTreeletBase(const uint32_t root_id,
