@@ -19,7 +19,6 @@ using namespace std;
 
 namespace pbrt {
 
-STAT_COUNTER("BVH/Total Ray Transfers", totalRayTransfers);
 STAT_COUNTER("BVH/Total nodes", nNodes);
 STAT_COUNTER("BVH/Visited nodes", nNodesVisited);
 STAT_COUNTER("BVH/Visited primitives", nPrimitivesVisited);
@@ -484,8 +483,6 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     uint32_t startTreelet = bvh_root_;
     if (bvh_root_ == 0) {
         startTreelet = ComputeIdx(ray.d);
-    } else {
-        totalRayTransfers++;
     }
 
     pair<uint32_t, uint32_t> current(startTreelet, 0);
@@ -496,30 +493,13 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
         auto &treelet = *treelets_[current.first];
         auto &node = treelet.nodes[current.second];
 
-        bool instanceReturn = false;
-
         // Check ray against BVH node
         if (node.bounds.IntersectP(ray, invDir, dirIsNeg)) {
             if (node.is_leaf()) {
                 auto &primitives = treelet.primitives;
                 for (int i = node.primitive_offset;
                      i < node.primitive_offset + node.primitive_count; i++) {
-                    auto &prim = primitives[i];
-                    if (prim->Intersect(ray, isect)) hit = true;
-
-                    if (primitives[i]->GetType() ==
-                        PrimitiveType::Transformed) {
-                        auto tp =
-                            dynamic_cast<TransformedPrimitive *>(prim.get());
-                        if (dynamic_pointer_cast<CloudBVH>(
-                                tp->GetPrimitive()) != nullptr) {
-                            if (i == node.primitive_offset +
-                                         node.primitive_count - 1) {
-                                instanceReturn = true;
-                            }
-                            totalRayTransfers++;
-                        }
-                    }
+                    if (primitives[i]->Intersect(ray, isect)) hit = true;
                 }
 
                 if (toVisitOffset == 0) break;
@@ -544,9 +524,6 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
             current = toVisit[--toVisitOffset];
         }
 
-        if (current.first != prevTreelet && !instanceReturn) {
-            totalRayTransfers++;
-        }
         prevTreelet = current.first;
     }
 
@@ -566,8 +543,6 @@ bool CloudBVH::IntersectP(const Ray &ray) const {
     uint32_t startTreelet = bvh_root_;
     if (bvh_root_ == 0) {
         startTreelet = ComputeIdx(ray.d);
-    } else {
-        totalRayTransfers++;
     }
 
     pair<uint32_t, uint32_t> current(startTreelet, 0);
@@ -578,30 +553,13 @@ bool CloudBVH::IntersectP(const Ray &ray) const {
         auto &treelet = *treelets_[current.first];
         auto &node = treelet.nodes[current.second];
 
-        bool instanceReturn = false;
-
         // Check ray against BVH node
         if (node.bounds.IntersectP(ray, invDir, dirIsNeg)) {
             if (node.is_leaf()) {
                 auto &primitives = treelet.primitives;
                 for (int i = node.primitive_offset;
                      i < node.primitive_offset + node.primitive_count; i++) {
-                    auto &prim = primitives[i];
-                    if (prim->IntersectP(ray)) return true;
-
-                    if (primitives[i]->GetType() ==
-                        PrimitiveType::Transformed) {
-                        auto tp =
-                            dynamic_cast<TransformedPrimitive *>(prim.get());
-                        if (dynamic_pointer_cast<CloudBVH>(
-                                tp->GetPrimitive()) != nullptr) {
-                            if (i == node.primitive_offset +
-                                         node.primitive_count - 1) {
-                                instanceReturn = true;
-                            }
-                            totalRayTransfers++;
-                        }
-                    }
+                    if (primitives[i]->IntersectP(ray)) return true;
                 }
 
                 if (toVisitOffset == 0) break;
@@ -626,9 +584,6 @@ bool CloudBVH::IntersectP(const Ray &ray) const {
             current = toVisit[--toVisitOffset];
         }
 
-        if (current.first != prevTreelet && !instanceReturn) {
-            totalRayTransfers++;
-        }
         prevTreelet = current.first;
     }
 
