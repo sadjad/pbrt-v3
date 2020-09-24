@@ -125,7 +125,8 @@ void CloudBVH::LoadTreelet(const uint32_t root_id, istream *stream) const {
     /* create the instances */
     for (const auto rid : treelet.required_instances) {
         if (not bvh_instances_.count(rid)) {
-            bvh_instances_[rid] = make_shared<CloudBVH>((uint16_t)(rid >> 32));
+            bvh_instances_[rid] =
+                make_shared<ExternalInstance>(*this, (uint16_t)(rid >> 32));
         }
     }
 
