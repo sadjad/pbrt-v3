@@ -135,7 +135,7 @@ class CloudBVH : public Aggregate {
 
     class ExternalInstance : public Aggregate {
       public:
-        ExternalInstance(const CloudBVH &bvh, int root_id)
+        ExternalInstance(const CloudBVH &bvh, uint32_t root_id)
             : bvh_(bvh), root_id_(root_id) {}
 
         Bounds3f WorldBound() const { return bvh_.WorldBound(); }
@@ -148,8 +148,10 @@ class CloudBVH : public Aggregate {
             return bvh_.IntersectP(ray, root_id_);
         }
 
+        uint32_t RootID() { return root_id_; }
+
       private:
-        size_t root_id_;
+        uint32_t root_id_;
         const CloudBVH &bvh_;
     };
 

@@ -414,8 +414,10 @@ void CloudBVH::Trace(RayState &rayState) const {
                             dynamic_cast<TransformedPrimitive *>(
                                 primitives[i].get());
 
-                        shared_ptr<CloudBVH> cbvh =
-                            dynamic_pointer_cast<CloudBVH>(tp->GetPrimitive());
+                        shared_ptr<ExternalInstance> cbvh =
+                            dynamic_pointer_cast<ExternalInstance>(
+                                tp->GetPrimitive());
+
                         if (cbvh) {
                             if (current.primitive + 1 < node.primitive_count) {
                                 RayState::TreeletNode next_primitive = current;
@@ -427,7 +429,7 @@ void CloudBVH::Trace(RayState &rayState) const {
                             tp->GetTransform().Interpolate(ray.time, &txfm);
 
                             RayState::TreeletNode next;
-                            next.treelet = cbvh->bvh_root_;
+                            next.treelet = cbvh->RootID();
                             next.node = 0;
 
                             if (txfm.IsIdentity()) {
@@ -440,8 +442,8 @@ void CloudBVH::Trace(RayState &rayState) const {
                             break;
                         }
 
-                        shared_ptr<CloudBVH::IncludedInstance> included =
-                            dynamic_pointer_cast<CloudBVH::IncludedInstance>(
+                        shared_ptr<IncludedInstance> included =
+                            dynamic_pointer_cast<IncludedInstance>(
                                 tp->GetPrimitive());
                         if (included) {
                             if (tp->Intersect(ray, &isect)) {
