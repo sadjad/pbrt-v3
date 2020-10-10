@@ -1894,7 +1894,7 @@ void pbrtWorldEnd() {
     ImageTexture<RGBSpectrum, Spectrum>::ClearCache();
     renderOptions.reset(new RenderOptions);
 
-    if (!PbrtOptions.cat && !PbrtOptions.toPly && !PbrtOptions.noRender) {
+    if (!PbrtOptions.cat && !PbrtOptions.toPly && !PbrtOptions.noRender && !PbrtOptions.noStats) {
         MergeWorkerThreadStats();
         ReportThreadStats();
         if (!PbrtOptions.quiet) {
