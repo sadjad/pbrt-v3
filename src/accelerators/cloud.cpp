@@ -19,12 +19,13 @@ using namespace std;
 
 namespace pbrt {
 
+STAT_COUNTER("BVH/Total Ray Transfers", totalRayTransfers);
 STAT_COUNTER("BVH/Total nodes", nNodes);
 STAT_COUNTER("BVH/Visited nodes", nNodesVisited);
 STAT_COUNTER("BVH/Visited primitives", nPrimitivesVisited);
 
 CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
-    : bvh_root_(bvh_root) {
+    : bvh_root_(bvh_root), preload_(preload_all) {
     ProfilePhase _(Prof::AccelConstruction);
 
     if (MaxThreadIndex() > 1 && !preload_all) {
@@ -46,52 +47,8 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
     TextureParams textureParams(params, emptyParams, fTex, sTex);
     default_material.reset(CreateMatteMaterial(textureParams));
 
-    if (preload_all) {
-        /* (1) load all the treelets in parallel */
-        const auto treelet_count = global::manager.treeletCount();
-
-        treelets_.resize(treelet_count + 1);
-
-        ParallelFor([&](int64_t treelet_id) { loadTreeletBase(treelet_id); },
-                    treelet_count);
-
-        /* (2.A) load all the necessary materials */
-        set<uint32_t> required_materials;
-
-        for (size_t i = 0; i < treelet_count; i++) {
-            required_materials.insert(treelets_[i]->required_materials.begin(),
-                                      treelets_[i]->required_materials.end());
-        }
-
-        for (const auto mid : required_materials) {
-            if (materials_.count(mid) == 0) {
-                auto r = global::manager.GetReader(ObjectType::Material, mid);
-                protobuf::Material material;
-                r->read(&material);
-                materials_[mid] = material::from_protobuf(material);
-            }
-        }
-
-        /* (2.B) create all the necessary external instances */
-        set<uint64_t> required_instances;
-
-        for (size_t i = 0; i < treelet_count; i++) {
-            required_instances.insert(treelets_[i]->required_instances.begin(),
-                                      treelets_[i]->required_instances.end());
-        }
-
-        for (const auto rid : required_instances) {
-            if (not bvh_instances_.count(rid)) {
-                bvh_instances_[rid] =
-                    make_shared<ExternalInstance>(*this, (uint16_t)(rid >> 32));
-            }
-        }
-
-        /* (3) finish loading the treelets */
-        ParallelFor(
-            [&](int64_t treelet_id) { finializeTreeletLoad(treelet_id); },
-            treelet_count);
-
+    if (preload_) {
+        loadTreelet(bvh_root, nullptr);
         preloading_done_ = true;
     }
 }
@@ -102,21 +59,21 @@ Bounds3f CloudBVH::WorldBound() const {
     // The correctness of this function is only guaranteed for the root treelet
     CHECK_EQ(bvh_root_, 0);
 
-    LoadTreelet(bvh_root_);
-    return treelets_[bvh_root_]->nodes[0].bounds;
+    loadTreelet(bvh_root_);
+    return treelets_[bvh_root_].nodes[0].bounds;
 }
 
 // Sums the full surface area for each root. Does not account for overlap
 // between roots
 Float CloudBVH::RootSurfaceAreas(Transform txfm) const {
-    LoadTreelet(bvh_root_);
+    loadTreelet(bvh_root_);
     CHECK_EQ(treelets_.size(), 1);
 
     Float area = 0;
 
-    vector<Bounds3f> roots;
+    std::vector<Bounds3f> roots;
 
-    for (const TreeletNode &node : treelets_[bvh_root_]->nodes) {
+    for (const TreeletNode &node : treelets_[bvh_root_].nodes) {
         auto cur = txfm(node.bounds);
 
         bool newRoot = true;
@@ -138,78 +95,25 @@ Float CloudBVH::RootSurfaceAreas(Transform txfm) const {
 }
 
 Float CloudBVH::SurfaceAreaUnion() const {
-    LoadTreelet(bvh_root_);
+    loadTreelet(bvh_root_);
     CHECK_EQ(treelets_.size(), 1);
 
     Bounds3f boundUnion;
-    for (const TreeletNode &node : treelets_[bvh_root_]->nodes) {
+    for (const TreeletNode &node : treelets_[bvh_root_].nodes) {
         boundUnion = Union(boundUnion, node.bounds);
     }
 
     return boundUnion.SurfaceArea();
 }
 
-void CloudBVH::LoadTreelet(const uint32_t root_id, istream *stream) const {
-    if (preloading_done_ or
-        (treelets_.size() > root_id && treelets_[root_id] != nullptr)) {
+void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
+    if (preloading_done_ or treelets_.count(root_id)) {
         return; /* this tree is already loaded */
     }
 
-    if (treelets_.size() <= root_id) {
-        treelets_.resize(root_id + 1);
-    }
-
-    loadTreeletBase(root_id, stream);
-
-    auto &treelet = *treelets_[root_id];
-
-    /* load the materials */
-    for (const auto mid : treelet.required_materials) {
-        if (materials_.count(mid) == 0) {
-            auto reader = global::manager.GetReader(ObjectType::Material, mid);
-            protobuf::Material material;
-            reader->read(&material);
-            materials_[mid] = material::from_protobuf(material);
-        }
-    }
-
-    /* create the instances */
-    for (const auto rid : treelet.required_instances) {
-        if (not bvh_instances_.count(rid)) {
-            bvh_instances_[rid] =
-                make_shared<ExternalInstance>(*this, (uint16_t)(rid >> 32));
-        }
-    }
-
-    finializeTreeletLoad(root_id);
-}
-
-void CloudBVH::finializeTreeletLoad(const uint32_t root_id) const {
-    auto &treelet = *treelets_[root_id];
-
-    /* fill in unfinished primitives */
-    for (auto &u : treelet.unfinished_transformed) {
-        treelet.primitives[u.primitive_index] =
-            make_unique<TransformedPrimitive>(bvh_instances_[u.instance_ref],
-                                              move(u.primitive_to_world));
-    }
-
-    MediumInterface medium_interface{};
-
-    for (auto &u : treelet.unfinished_geometric) {
-        treelet.primitives[u.primitive_index] = make_unique<GeometricPrimitive>(
-            move(u.shape), materials_[u.material_id], nullptr,
-            medium_interface);
-    }
-
-    treelet.required_instances.clear();
-    treelet.required_materials.clear();
-    treelet.unfinished_geometric.clear();
-    treelet.unfinished_transformed.clear();
-}
-
-void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
     ProfilePhase _(Prof::LoadTreelet);
+
+    TreeletInfo &info = treelet_info_[root_id];
 
     deque<TreeletNode> nodes;
     unique_ptr<protobuf::RecordReader> reader;
@@ -220,34 +124,24 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
         reader = make_unique<protobuf::RecordReader>(stream);
     }
 
-    treelets_[root_id] = make_unique<Treelet>();
-
-    auto &treelet = *treelets_[root_id];
-    auto &tree_meshes = treelet.meshes;
+    auto &treelet = treelets_[root_id];
     auto &tree_primitives = treelet.primitives;
-    auto &tree_transforms = treelet.transforms;
-    auto &tree_instances = treelet.instances;
-
-    map<uint32_t, uint32_t> mesh_material_ids;
 
     /* read in the triangle meshes for this treelet first */
     uint32_t num_triangle_meshes = 0;
     reader->read(&num_triangle_meshes);
-
     for (int i = 0; i < num_triangle_meshes; ++i) {
         /* load the TriangleMesh if necessary */
         protobuf::TriangleMesh tm;
         reader->read(&tm);
-
-        auto p = tree_meshes.emplace(
-            tm.id(), make_shared<TriangleMesh>(move(from_protobuf(tm))));
+        TriangleMeshId tm_id = make_pair(root_id, tm.id());
+        auto p = triangle_meshes_.emplace(
+            tm_id, make_shared<TriangleMesh>(move(from_protobuf(tm))));
         CHECK_EQ(p.second, true);
-
-        mesh_material_ids[tm.id()] = tm.material_id();
+        triangle_mesh_material_ids_[tm_id] = tm.material_id();
     }
 
     stack<pair<uint32_t, Child>> q;
-
     while (not reader->eof()) {
         protobuf::BVHNode proto_node;
         bool success = reader->read(&proto_node);
@@ -269,18 +163,26 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
 
         if (proto_node.right_ref()) {
             uint64_t right_ref = proto_node.right_ref();
-            uint16_t treelet_id = (uint16_t)(right_ref >> 32);
-            node.child_treelet[RIGHT] = treelet_id;
+            uint16_t treeletID = (uint16_t)(right_ref >> 32);
+            node.child_treelet[RIGHT] = treeletID;
             node.child_node[RIGHT] = (uint32_t)right_ref;
+
+            info.children.insert(node.child_treelet[RIGHT]);
+
+            if (preload_) loadTreelet(node.child_treelet[RIGHT]);
         } else if (!is_leaf) {
             q.emplace(index, RIGHT);
         }
 
         if (proto_node.left_ref()) {
             uint64_t left_ref = proto_node.left_ref();
-            uint16_t treelet_id = (uint16_t)(left_ref >> 32);
-            node.child_treelet[LEFT] = treelet_id;
+            uint16_t treeletID = (uint16_t)(left_ref >> 32);
+            node.child_treelet[LEFT] = treeletID;
             node.child_node[LEFT] = (uint32_t)left_ref;
+
+            info.children.insert(node.child_treelet[LEFT]);
+
+            if (preload_) loadTreelet(node.child_treelet[LEFT]);
         } else if (!is_leaf) {
             q.emplace(index, LEFT);
         }
@@ -295,22 +197,22 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
         for (int i = 0; i < proto_node.transformed_primitives_size(); i++) {
             auto &proto_tp = proto_node.transformed_primitives(i);
 
-            tree_transforms.push_back(make_unique<Transform>(
-                from_protobuf(proto_tp.transform().start_transform())));
-            const Transform *start = tree_transforms.back().get();
+            transforms_.push_back(move(make_unique<Transform>(
+                from_protobuf(proto_tp.transform().start_transform()))));
+            const Transform *start = transforms_.back().get();
 
             Matrix4x4 end_mat =
                 from_protobuf(proto_tp.transform().end_transform());
 
             const Transform *end;
             if (start->GetMatrix() != end_mat) {
-                tree_transforms.push_back(make_unique<Transform>(end_mat));
-                end = tree_transforms.back().get();
+                transforms_.push_back(move(make_unique<Transform>(end_mat)));
+                end = transforms_.back().get();
             } else {
                 end = start;
             }
 
-            AnimatedTransform primitive_to_world{
+            const AnimatedTransform primitive_to_world{
                 start, proto_tp.transform().start_time(), end,
                 proto_tp.transform().end_time()};
 
@@ -319,38 +221,47 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
             uint16_t instance_group = (uint16_t)(instance_ref >> 32);
             uint32_t instance_node = (uint32_t)instance_ref;
 
-            if (instance_group == root_id) {
-                if (not tree_instances.count(instance_ref)) {
-                    tree_instances[instance_ref] =
+            if (not bvh_instances_.count(instance_ref)) {
+                if (instance_group == root_id) {
+                    bvh_instances_[instance_ref] =
                         make_shared<IncludedInstance>(&treelet, instance_node);
+                } else {
+                    bvh_instances_[instance_ref] =
+                        make_shared<CloudBVH>(instance_group, preload_);
                 }
-
-                tree_primitives.push_back(make_unique<TransformedPrimitive>(
-                    tree_instances[instance_ref], primitive_to_world));
-            } else {
-                treelet.required_instances.insert(instance_ref);
-
-                treelet.unfinished_transformed.emplace_back(
-                    tree_primitives.size(), instance_ref,
-                    move(primitive_to_world));
-
-                tree_primitives.push_back(nullptr);
             }
+
+            CloudBVH *instance =
+                dynamic_cast<CloudBVH *>(bvh_instances_[instance_ref].get());
+            if (instance) {
+                info.instances[instance_group] += node.bounds.SurfaceArea();
+            }
+
+            tree_primitives.emplace_back(move(make_unique<TransformedPrimitive>(
+                bvh_instances_.at(instance_ref), primitive_to_world)));
         }
 
         for (int i = 0; i < proto_node.triangles_size(); i++) {
             auto &proto_t = proto_node.triangles(i);
-            const auto material_id = mesh_material_ids[proto_t.mesh_id()];
-            treelet.required_materials.insert(material_id);
+            const TriangleMeshId tm_id = make_pair(root_id, proto_t.mesh_id());
 
-            auto shape = make_unique<Triangle>(
+            const auto material_id = triangle_mesh_material_ids_[tm_id];
+            /* load the Material if necessary */
+            if (materials_.count(material_id) == 0) {
+                auto material_reader = global::manager.GetReader(
+                    ObjectType::Material, material_id);
+                protobuf::Material material;
+                material_reader->read(&material);
+                materials_[material_id] =
+                    move(material::from_protobuf(material));
+            }
+
+            auto shape = make_shared<Triangle>(
                 &identity_transform_, &identity_transform_, false,
-                tree_meshes.at(proto_t.mesh_id()), proto_t.tri_number());
+                triangle_meshes_.at(tm_id), proto_t.tri_number());
 
-            treelet.unfinished_geometric.emplace_back(tree_primitives.size(),
-                                                      material_id, move(shape));
-
-            tree_primitives.push_back(nullptr);
+            tree_primitives.emplace_back(move(make_unique<GeometricPrimitive>(
+                shape, materials_[material_id], nullptr, MediumInterface{})));
         }
 
         nodes.emplace_back(move(node));
@@ -368,7 +279,7 @@ void CloudBVH::Trace(RayState &rayState) const {
     int dirIsNeg[3] = {invDir.x < 0, invDir.y < 0, invDir.z < 0};
 
     const uint32_t currentTreelet = rayState.toVisitTop().treelet;
-    LoadTreelet(currentTreelet); /* we don't load any other treelets */
+    loadTreelet(currentTreelet); /* we don't load any other treelets */
 
     bool hasTransform = false;
     bool transformChanged = false;
@@ -383,7 +294,7 @@ void CloudBVH::Trace(RayState &rayState) const {
         rayState.toVisitPop();
         nNodesVisited++;
 
-        auto &treelet = *treelets_[current.treelet];
+        auto &treelet = treelets_[current.treelet];
         auto &node = treelet.nodes[current.node];
 
         /* prepare the ray */
@@ -417,10 +328,8 @@ void CloudBVH::Trace(RayState &rayState) const {
                             dynamic_cast<TransformedPrimitive *>(
                                 primitives[i].get());
 
-                        shared_ptr<ExternalInstance> cbvh =
-                            dynamic_pointer_cast<ExternalInstance>(
-                                tp->GetPrimitive());
-
+                        shared_ptr<CloudBVH> cbvh =
+                            dynamic_pointer_cast<CloudBVH>(tp->GetPrimitive());
                         if (cbvh) {
                             if (current.primitive + 1 < node.primitive_count) {
                                 RayState::TreeletNode next_primitive = current;
@@ -432,7 +341,7 @@ void CloudBVH::Trace(RayState &rayState) const {
                             tp->GetTransform().Interpolate(ray.time, &txfm);
 
                             RayState::TreeletNode next;
-                            next.treelet = cbvh->RootID();
+                            next.treelet = cbvh->bvh_root_;
                             next.node = 0;
 
                             if (txfm.IsIdentity()) {
@@ -445,8 +354,8 @@ void CloudBVH::Trace(RayState &rayState) const {
                             break;
                         }
 
-                        shared_ptr<IncludedInstance> included =
-                            dynamic_pointer_cast<IncludedInstance>(
+                        shared_ptr<CloudBVH::IncludedInstance> included =
+                            dynamic_pointer_cast<CloudBVH::IncludedInstance>(
                                 tp->GetPrimitive());
                         if (included) {
                             if (tp->Intersect(ray, &isect)) {
@@ -491,9 +400,9 @@ bool CloudBVH::Intersect(RayState &rayState, SurfaceInteraction *isect) const {
     }
 
     auto &hit = rayState.hitNode;
-    LoadTreelet(hit.treelet);
+    loadTreelet(hit.treelet);
 
-    auto &treelet = *treelets_[hit.treelet];
+    auto &treelet = treelets_[hit.treelet];
     auto &node = treelet.nodes[hit.node];
     auto &primitives = treelet.primitives;
 
@@ -518,11 +427,6 @@ bool CloudBVH::Intersect(RayState &rayState, SurfaceInteraction *isect) const {
 }
 
 bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
-    return Intersect(ray, isect, bvh_root_);
-}
-
-bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect,
-                         const uint32_t bvh_root) const {
     ProfilePhase _(Prof::AccelIntersect);
 
     bool hit = false;
@@ -533,18 +437,22 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect,
     pair<uint32_t, uint32_t> toVisit[64];
     uint8_t toVisitOffset = 0;
 
-    uint32_t startTreelet = bvh_root;
-    if (bvh_root == 0) {
+    uint32_t startTreelet = bvh_root_;
+    if (bvh_root_ == 0) {
         startTreelet = ComputeIdx(ray.d);
+    } else {
+        totalRayTransfers++;
     }
 
     pair<uint32_t, uint32_t> current(startTreelet, 0);
 
     uint32_t prevTreelet = startTreelet;
     while (true) {
-        LoadTreelet(current.first);
-        auto &treelet = *treelets_[current.first];
+        loadTreelet(current.first);
+        auto &treelet = treelets_[current.first];
         auto &node = treelet.nodes[current.second];
+
+        bool instanceReturn = false;
 
         // Check ray against BVH node
         if (node.bounds.IntersectP(ray, invDir, dirIsNeg)) {
@@ -552,7 +460,22 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect,
                 auto &primitives = treelet.primitives;
                 for (int i = node.primitive_offset;
                      i < node.primitive_offset + node.primitive_count; i++) {
-                    if (primitives[i]->Intersect(ray, isect)) hit = true;
+                    auto &prim = primitives[i];
+                    if (prim->Intersect(ray, isect)) hit = true;
+
+                    if (primitives[i]->GetType() ==
+                        PrimitiveType::Transformed) {
+                        auto tp =
+                            dynamic_cast<TransformedPrimitive *>(prim.get());
+                        if (dynamic_pointer_cast<CloudBVH>(
+                                tp->GetPrimitive()) != nullptr) {
+                            if (i == node.primitive_offset +
+                                         node.primitive_count - 1) {
+                                instanceReturn = true;
+                            }
+                            totalRayTransfers++;
+                        }
+                    }
                 }
 
                 if (toVisitOffset == 0) break;
@@ -577,6 +500,9 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect,
             current = toVisit[--toVisitOffset];
         }
 
+        if (current.first != prevTreelet && !instanceReturn) {
+            totalRayTransfers++;
+        }
         prevTreelet = current.first;
     }
 
@@ -584,10 +510,6 @@ bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect,
 }
 
 bool CloudBVH::IntersectP(const Ray &ray) const {
-    return IntersectP(ray, bvh_root_);
-}
-
-bool CloudBVH::IntersectP(const Ray &ray, const uint32_t bvh_root) const {
     ProfilePhase _(Prof::AccelIntersectP);
 
     Vector3f invDir(1.f / ray.d.x, 1.f / ray.d.y, 1.f / ray.d.z);
@@ -597,18 +519,22 @@ bool CloudBVH::IntersectP(const Ray &ray, const uint32_t bvh_root) const {
     uint8_t toVisitOffset = 0;
     pair<uint32_t, uint32_t> toVisit[64];
 
-    uint32_t startTreelet = bvh_root;
-    if (bvh_root == 0) {
+    uint32_t startTreelet = bvh_root_;
+    if (bvh_root_ == 0) {
         startTreelet = ComputeIdx(ray.d);
+    } else {
+        totalRayTransfers++;
     }
 
     pair<uint32_t, uint32_t> current(startTreelet, 0);
 
     uint32_t prevTreelet = startTreelet;
     while (true) {
-        LoadTreelet(current.first);
-        auto &treelet = *treelets_[current.first];
+        loadTreelet(current.first);
+        auto &treelet = treelets_[current.first];
         auto &node = treelet.nodes[current.second];
+
+        bool instanceReturn = false;
 
         // Check ray against BVH node
         if (node.bounds.IntersectP(ray, invDir, dirIsNeg)) {
@@ -616,7 +542,22 @@ bool CloudBVH::IntersectP(const Ray &ray, const uint32_t bvh_root) const {
                 auto &primitives = treelet.primitives;
                 for (int i = node.primitive_offset;
                      i < node.primitive_offset + node.primitive_count; i++) {
-                    if (primitives[i]->IntersectP(ray)) return true;
+                    auto &prim = primitives[i];
+                    if (prim->IntersectP(ray)) return true;
+
+                    if (primitives[i]->GetType() ==
+                        PrimitiveType::Transformed) {
+                        auto tp =
+                            dynamic_cast<TransformedPrimitive *>(prim.get());
+                        if (dynamic_pointer_cast<CloudBVH>(
+                                tp->GetPrimitive()) != nullptr) {
+                            if (i == node.primitive_offset +
+                                         node.primitive_count - 1) {
+                                instanceReturn = true;
+                            }
+                            totalRayTransfers++;
+                        }
+                    }
                 }
 
                 if (toVisitOffset == 0) break;
@@ -641,6 +582,9 @@ bool CloudBVH::IntersectP(const Ray &ray, const uint32_t bvh_root) const {
             current = toVisit[--toVisitOffset];
         }
 
+        if (current.first != prevTreelet && !instanceReturn) {
+            totalRayTransfers++;
+        }
         prevTreelet = current.first;
     }
 
@@ -651,7 +595,7 @@ vector<Bounds3f> CloudBVH::getTreeletNodeBounds(
     const uint32_t treelet_id, const int recursionLimit) const {
     return vector<Bounds3f>();
 #if 0
-    LoadTreelet(treelet_id);
+    loadTreelet(treelet_id);
 
     vector<Bounds3f> treeletBounds;
 
@@ -659,7 +603,7 @@ vector<Bounds3f> CloudBVH::getTreeletNodeBounds(
     const int idx = 1;
 
     // load base node bounds
-    auto &currTreelet = *treelets_.at(treelet_id);
+    auto &currTreelet = treelets_.at(treelet_id);
     auto &currNode = currTreelet.nodes[0];
 
     // size reflects indexing starting at 1
@@ -704,7 +648,7 @@ void CloudBVH::recurseBVHNodes(const int depth, const int recursionLimit,
 void CloudBVH::clear() const {
     treelets_.clear();
     bvh_instances_.clear();
-    materials_.clear();
+    transforms_.clear();
 }
 
 shared_ptr<CloudBVH> CreateCloudBVH(const ParamSet &ps) {
