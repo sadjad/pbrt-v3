@@ -102,7 +102,8 @@ RayStatePtr GenerateCameraRay(const std::shared_ptr<Camera> &camera,
 void AccumulateImage(const std::shared_ptr<Camera> &camera,
                      const std::vector<Sample> &rays);
 
-void WriteImage(const std::shared_ptr<Camera> &camera);
+void WriteImage(const std::shared_ptr<Camera> &camera,
+                const std::string &filename = {});
 
 }  // namespace graphics
 

@@ -221,7 +221,11 @@ void AccumulateImage(const shared_ptr<Camera> &camera,
     camera->film->MergeFilmTile(move(filmTile));
 }
 
-void WriteImage(const shared_ptr<Camera> &camera) {
+void WriteImage(const shared_ptr<Camera> &camera, const string &filename) {
+    if (not filename.empty()) {
+        camera->film->setFilename(filename);
+    }
+
     camera->film->WriteImage();
 }
 
