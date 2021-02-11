@@ -4,5 +4,8 @@ src/bin
 src/objs
 .sconsign.dblite
 
+compile_commands.json
+tags
+
 /build
 /build-debug
