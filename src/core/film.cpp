@@ -165,6 +165,37 @@ void Film::AddSplat(const Point2f &p, Spectrum v) {
     for (int i = 0; i < 3; ++i) pixel.splatXYZ[i].Add(xyz[i]);
 }
 
+void Film::Serialize(std::vector<Float> &output) {
+    if (output.size() != croppedPixelBounds.Area() * 4) {
+        Error("Film::Serialize: excepted output size: %d, got: %d.",
+              croppedPixelBounds.Area() * 4, output.size());
+    }
+
+    for (size_t i = 0; i < croppedPixelBounds.Area(); i++) {
+        output[4 * i + 0] = pixels[i].xyz[0];
+        output[4 * i + 1] = pixels[i].xyz[1];
+        output[4 * i + 2] = pixels[i].xyz[2];
+        output[4 * i + 3] = pixels[i].filterWeightSum;
+    }
+}
+
+void Film::Deserialize(const std::vector<Float> &bytes) {
+    if (bytes.size() != croppedPixelBounds.Area() * 4) {
+        Error("Film::Deserialize: excepted output size: %d, got: %d.",
+              croppedPixelBounds.Area() * 4, bytes.size());
+    }
+
+    for (size_t i = 0; i < croppedPixelBounds.Area(); i++) {
+        pixels[i].xyz[0] = bytes[4 * i + 0];
+        pixels[i].xyz[1] = bytes[4 * i + 1];
+        pixels[i].xyz[2] = bytes[4 * i + 2];
+        pixels[i].filterWeightSum = bytes[4 * i + 3];
+        pixels[i].splatXYZ[0] = pixels[i].splatXYZ[1] = pixels[i].splatXYZ[2] =
+            0;
+    }
+}
+
+
 void Film::WriteImage(Float splatScale) {
     // Convert image to RGB and compute final pixel values
     LOG(INFO) <<

@@ -71,6 +71,9 @@ class Film {
     void WriteImage(Float splatScale = 1);
     void Clear();
 
+    void Serialize(std::vector<Float> &output);
+    void Deserialize(const std::vector<Float> &bytes);
+
     void setFilename(const std::string &filename) { this->filename = filename; }
 
     // Film Public Data
