@@ -75,6 +75,7 @@ class Film {
     void Deserialize(const std::vector<Float> &bytes);
 
     void SetFilename(const std::string &filename) { this->filename = filename; }
+    void SetCroppedPixelBounds(const Bounds2i &bounds);
 
     // Film Public Data
     const Point2i fullResolution;

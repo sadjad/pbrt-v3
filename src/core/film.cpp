@@ -77,6 +77,15 @@ Film::Film(const Point2i &resolution, const Bounds2f &cropWindow,
     }
 }
 
+void Film::SetCroppedPixelBounds(const Bounds2i &bounds) {
+    Clear();
+
+    filmPixelMemory -= croppedPixelBounds.Area() * sizeof(Pixel);
+    croppedPixelBounds = bounds;
+    pixels = std::unique_ptr<Pixel[]>(new Pixel[croppedPixelBounds.Area()]);
+    filmPixelMemory += croppedPixelBounds.Area() * sizeof(Pixel);
+}
+
 Bounds2i Film::GetSampleBounds() const {
     Bounds2f floatBounds(Floor(Point2f(croppedPixelBounds.pMin) +
                                Vector2f(0.5f, 0.5f) - filter->radius),
