@@ -74,7 +74,7 @@ class Film {
     void Serialize(std::vector<Float> &output);
     void Deserialize(const std::vector<Float> &bytes);
 
-    void setFilename(const std::string &filename) { this->filename = filename; }
+    void SetFilename(const std::string &filename) { this->filename = filename; }
 
     // Film Public Data
     const Point2i fullResolution;

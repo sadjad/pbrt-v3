@@ -223,7 +223,7 @@ void AccumulateImage(const shared_ptr<Camera> &camera,
 
 void WriteImage(const shared_ptr<Camera> &camera, const string &filename) {
     if (not filename.empty()) {
-        camera->film->setFilename(filename);
+        camera->film->SetFilename(filename);
     }
 
     camera->film->WriteImage();
