@@ -108,6 +108,8 @@ class Sample {
     void Deserialize(const char *data, const size_t len);
 
     size_t MaxCompressedSize() const { return Size(); }
+
+    static const size_t MaxPackedSize;
 };
 
 }  // namespace pbrt

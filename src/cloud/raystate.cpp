@@ -391,6 +391,8 @@ struct __attribute__((packed, aligned(1))) PackedSample {
 
 size_t Sample::Size() const { return sizeof(PackedSample); }
 
+const size_t Sample::MaxPackedSize = sizeof(PackedSample);
+
 size_t PackSample(char *buffer, Sample &sample) {
     PackedSample *packed = new (buffer) PackedSample;
 
