@@ -114,8 +114,6 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
 
     ProfilePhase _(Prof::LoadTreelet);
 
-    TreeletInfo &info = treelet_info_[root_id];
-
     vector<TreeletNode> nodes;
     unique_ptr<protobuf::RecordReader> reader;
 
@@ -185,8 +183,6 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
             node.child_treelet[RIGHT] = treeletID;
             node.child_node[RIGHT] = (uint32_t)right_ref;
 
-            info.children.insert(node.child_treelet[RIGHT]);
-
             if (preload_) loadTreelet(node.child_treelet[RIGHT]);
         } else if (!is_leaf) {
             q.emplace(index, RIGHT);
@@ -197,8 +193,6 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
             uint16_t treeletID = (uint16_t)(left_ref >> 32);
             node.child_treelet[LEFT] = treeletID;
             node.child_node[LEFT] = (uint32_t)left_ref;
-
-            info.children.insert(node.child_treelet[LEFT]);
 
             if (preload_) loadTreelet(node.child_treelet[LEFT]);
         } else if (!is_leaf) {
@@ -253,9 +247,6 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
 
             CloudBVH *instance =
                 dynamic_cast<CloudBVH *>(bvh_instances_[instance_ref].get());
-            if (instance) {
-                info.instances[instance_group] += node.bounds.SurfaceArea();
-            }
 
             tree_primitives.emplace_back(move(make_unique<TransformedPrimitive>(
                 bvh_instances_.at(instance_ref), primitive_to_world)));
