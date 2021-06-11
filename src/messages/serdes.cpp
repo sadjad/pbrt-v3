@@ -85,6 +85,53 @@ string serialize(const TriangleMesh& tm, const int64_t id,
     return output;
 }
 
+TriangleMesh deserialize(const string& input) {
+    size_t offset = 2 * sizeof(int64_t);
+
+    const char* data = input.data();
+
+    const int nTriangles = *reinterpret_cast<const int*>(data + offset);
+    offset += sizeof(int);
+
+    const int nVertices = *reinterpret_cast<const int*>(data + offset);
+    offset += sizeof(int);
+
+    const int* vertex_indices = reinterpret_cast<const int*>(data + offset);
+    offset += sizeof(int) * nTriangles * 3;
+
+    const Point3f* p = reinterpret_cast<const Point3f*>(data + offset);
+    offset += sizeof(Point3f) * nVertices;
+
+    // n
+    const bool has_n = *reinterpret_cast<const bool*>(data + offset);
+    offset += sizeof(bool);
+
+    const Normal3f* n =
+        has_n ? reinterpret_cast<const Normal3f*>(data + offset) : nullptr;
+    offset += has_n ? sizeof(Normal3f) * nVertices : 0;
+
+    // s
+    const bool has_s = *reinterpret_cast<const bool*>(data + offset);
+    offset += sizeof(bool);
+
+    const Vector3f* s =
+        has_s ? reinterpret_cast<const Vector3f*>(data + offset) : nullptr;
+    offset += has_s ? sizeof(Vector3f) * nVertices : 0;
+
+    // uv
+    const bool has_uv = *reinterpret_cast<const bool*>(data + offset);
+    offset += sizeof(bool);
+
+    const Point2f* uv =
+        has_uv ? reinterpret_cast<const Point2f*>(data + offset) : nullptr;
+    offset += has_uv ? sizeof(Point2f) * nVertices : 0;
+
+    Transform identity;
+
+    return TriangleMesh(identity, nTriangles, vertex_indices, nVertices, p, s,
+                        n, uv, nullptr, nullptr, nullptr);
+}
+
 }  // namespace triangle_mesh
 
 }  // namespace pbrt::serdes
