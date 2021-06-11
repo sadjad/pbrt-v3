@@ -7,8 +7,7 @@ namespace pbrt::serdes {
 namespace triangle_mesh {
 
 size_t serialized_length(const TriangleMesh& tm) {
-    size_t len = sizeof(int64_t) /* id */ + sizeof(int64_t) /* material_id */ +
-                 sizeof(int) /* nTriangles */ + sizeof(int) /* nVertices */ +
+    size_t len = sizeof(int) /* nTriangles */ + sizeof(int) /* nVertices */ +
                  sizeof(int) * 3 * tm.nTriangles /* vertexIndices */ +
                  sizeof(tm.p[0]) * tm.nVertices /* p */ +
                  sizeof(bool) * 3 /* has n, s and us */;
@@ -37,8 +36,7 @@ void do_copy(string& dst, size_t& offset, const void* src, const size_t len) {
     offset += len;
 }
 
-string serialize(const TriangleMesh& tm, const int64_t id,
-                 const int64_t material_id) {
+string serialize(const TriangleMesh& tm) {
     string output;
 
     const auto output_len = serialized_length(tm);
@@ -49,9 +47,6 @@ string serialize(const TriangleMesh& tm, const int64_t id,
     bool has_n = (tm.n != nullptr);
     bool has_s = (tm.s != nullptr);
     bool has_uv = (tm.uv != nullptr);
-
-    do_copy(output, offset, &id, sizeof(int64_t));
-    do_copy(output, offset, &material_id, sizeof(int64_t));
 
     do_copy(output, offset, &tm.nTriangles, sizeof(int));
     do_copy(output, offset, &tm.nVertices, sizeof(int));
@@ -86,7 +81,7 @@ string serialize(const TriangleMesh& tm, const int64_t id,
 }
 
 TriangleMesh deserialize(const string& input) {
-    size_t offset = 2 * sizeof(int64_t);
+    size_t offset = 0;
 
     const char* data = input.data();
 

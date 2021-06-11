@@ -11,8 +11,7 @@ namespace pbrt::serdes {
 
 namespace triangle_mesh {
 
-std::string serialize(const TriangleMesh& tm, const int64_t id,
-                      const int64_t material_id);
+std::string serialize(const TriangleMesh& tm);
 
 TriangleMesh deserialize(const std::string& input);
 

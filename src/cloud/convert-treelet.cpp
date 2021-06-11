@@ -42,12 +42,14 @@ int main(int argc, char* argv[]) {
             protobuf::TriangleMesh tm_proto;
             reader.read(&tm_proto);
 
-            const int64_t id = tm_proto.id();
-            const int64_t material_id = tm_proto.material_id();
+            const uint64_t id = tm_proto.id();
+            const uint64_t material_id = tm_proto.material_id();
 
-            const string serialized_tm = serdes::triangle_mesh::serialize(
-                from_protobuf(tm_proto), id, material_id);
+            const string serialized_tm =
+                serdes::triangle_mesh::serialize(from_protobuf(tm_proto));
 
+            writer.write(id);
+            writer.write(material_id);
             writer.write(serialized_tm);
         }
 
