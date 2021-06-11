@@ -53,10 +53,46 @@ int main(int argc, char* argv[]) {
             writer.write(serialized_tm);
         }
 
+        serdes::cloudbvh::Node node;
+        serdes::cloudbvh::TransformedPrimitive primitive;
+        serdes::cloudbvh::Triangle triangle;
+
         while (not reader.eof()) {
-            protobuf::BVHNode proto_node;
-            reader.read(&proto_node);
-            writer.write(proto_node);
+            protobuf::BVHNode node_proto;
+            reader.read(&node_proto);
+
+            node.bounds = from_protobuf(node_proto.bounds());
+            node.left_ref = node_proto.left_ref();
+            node.right_ref = node_proto.right_ref();
+            node.axis = static_cast<uint8_t>(node_proto.axis());
+            node.transformed_primitives_count =
+                node_proto.transformed_primitives_size();
+            node.triangles_count = node_proto.triangles_size();
+
+            writer.write(reinterpret_cast<const char*>(&node), sizeof(node));
+
+            for (int i = 0; i < node.transformed_primitives_count; i++) {
+                auto& tp_proto = node_proto.transformed_primitives(i);
+
+                primitive.start =
+                    from_protobuf(tp_proto.transform().start_transform());
+                primitive.end =
+                    from_protobuf(tp_proto.transform().end_transform());
+                primitive.start_time = tp_proto.transform().start_time();
+                primitive.end_time = tp_proto.transform().end_time();
+
+                primitive.root_ref = tp_proto.root_ref();
+                writer.write(reinterpret_cast<const char*>(&primitive),
+                             sizeof(primitive));
+            }
+
+            for (int i = 0; i < node.triangles_count; i++) {
+                auto& t_proto = node_proto.triangles(i);
+                triangle.mesh_id = t_proto.mesh_id();
+                triangle.tri_number = t_proto.tri_number();
+                writer.write(reinterpret_cast<const char*>(&triangle),
+                             sizeof(triangle));
+            }
         }
     } catch (const exception& e) {
         print_exception(argv[0], e);
