@@ -27,8 +27,8 @@ struct Node {
         int64_t right_ref;
         uint8_t axis;
 
-        uint32_t transformed_primitives_count{0};
-        uint32_t triangles_count{0};
+        uint16_t transformed_primitives_count{0};
+        uint16_t triangles_count{0};
     };
 };
 
@@ -44,8 +44,8 @@ struct TransformedPrimitive {
 };
 
 struct __attribute__((packed, aligned(1))) Triangle {
-    int64_t mesh_id;
-    int64_t tri_number;
+    uint32_t mesh_id;
+    uint32_t tri_number;
 };
 
 }  // namespace cloudbvh
