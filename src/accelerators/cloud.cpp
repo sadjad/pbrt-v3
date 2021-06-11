@@ -149,6 +149,15 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
         triangle_mesh_material_ids_[tm_id] = material_id;
     }
 
+    uint32_t node_count;
+    uint32_t primitive_count;
+
+    reader->read(&node_count);
+    reader->read(&primitive_count);
+
+    nodes.reserve(node_count);
+    tree_primitives.reserve(primitive_count);
+
     stack<pair<uint32_t, Child>> q;
     while (not reader->eof()) {
         serdes::cloudbvh::Node serdes_node;

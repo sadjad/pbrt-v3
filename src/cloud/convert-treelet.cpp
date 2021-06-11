@@ -30,17 +30,18 @@ int main(int argc, char* argv[]) {
         string old_filename{argv[1]};
         string new_filename{argv[2]};
 
-        protobuf::RecordReader reader{old_filename};
         protobuf::RecordWriter writer{new_filename};
+        unique_ptr<protobuf::RecordReader> reader =
+            make_unique<protobuf::RecordReader>(old_filename);
 
         uint32_t num_triangle_meshes = 0;
-        reader.read(&num_triangle_meshes);
+        reader->read(&num_triangle_meshes);
 
         writer.write(num_triangle_meshes);
 
         for (int i = 0; i < num_triangle_meshes; ++i) {
             protobuf::TriangleMesh tm_proto;
-            reader.read(&tm_proto);
+            reader->read(&tm_proto);
 
             const uint64_t id = tm_proto.id();
             const uint64_t material_id = tm_proto.material_id();
@@ -53,13 +54,34 @@ int main(int argc, char* argv[]) {
             writer.write(serialized_tm);
         }
 
+        uint32_t node_count = 0;
+        uint32_t primitive_count = 0;
+
+        while (not reader->eof()) {
+            protobuf::BVHNode node_proto;
+            reader->read(&node_proto);
+            node_count++;
+            primitive_count += node_proto.transformed_primitives_size();
+            primitive_count += node_proto.triangles_size();
+
+            reader->skip(node_proto.transformed_primitives_size());
+            reader->skip(node_proto.triangles_size());
+        }
+
+        writer.write(node_count);
+        writer.write(primitive_count);
+
+        // resetting the reader
+        reader = make_unique<protobuf::RecordReader>(old_filename);
+        reader->skip(1 + num_triangle_meshes);
+
         serdes::cloudbvh::Node node;
         serdes::cloudbvh::TransformedPrimitive primitive;
         serdes::cloudbvh::Triangle triangle;
 
-        while (not reader.eof()) {
+        while (not reader->eof()) {
             protobuf::BVHNode node_proto;
-            reader.read(&node_proto);
+            reader->read(&node_proto);
 
             node.bounds = from_protobuf(node_proto.bounds());
             node.left_ref = node_proto.left_ref();
@@ -76,7 +98,7 @@ int main(int argc, char* argv[]) {
 
                 primitive.start_transform =
                     from_protobuf(tp_proto.transform().start_transform());
-                primitive.end_transform = 
+                primitive.end_transform =
                     from_protobuf(tp_proto.transform().end_transform());
 
                 primitive.start_time = tp_proto.transform().start_time();
