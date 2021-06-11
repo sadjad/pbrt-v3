@@ -6,6 +6,7 @@
 #include <fstream>
 
 #include "messages/utils.h"
+#include "messages/serdes.h"
 #include "pbrt.pb.h"
 #include <iomanip>
 using namespace std;
@@ -2032,10 +2033,10 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
             triMeshIDs[mesh] = sMeshID;
 
-            protobuf::TriangleMesh tmProto = to_protobuf(*newMesh);
-            tmProto.set_id(sMeshID);
-            tmProto.set_material_id(0);
-            writer->write(tmProto);
+            // writing the triangle mesh
+            writer->write(static_cast<uint64_t>(sMeshID));
+            writer->write(static_cast<uint64_t>(0));
+            writer->write(serdes::triangle_mesh::serialize(*newMesh));
         }
 
         // Write out the full triangle meshes for all the instances referenced by this treelet
@@ -2044,10 +2045,10 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
             triMeshIDs[instMesh] = sMeshID;
 
-            protobuf::TriangleMesh tmProto = to_protobuf(*instMesh);
-            tmProto.set_id(sMeshID);
-            tmProto.set_material_id(0);
-            writer->write(tmProto);
+            // writing the triangle mesh
+            writer->write(static_cast<uint64_t>(sMeshID));
+            writer->write(static_cast<uint64_t>(0));
+            writer->write(serdes::triangle_mesh::serialize(*instMesh));
         }
 
         // Write out nodes for treelet
