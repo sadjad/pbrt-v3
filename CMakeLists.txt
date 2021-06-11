@@ -607,6 +607,14 @@ SET_TARGET_PROPERTIES ( pbrt_treelet_info PROPERTIES OUTPUT_NAME "pbrt-treelet-i
 TARGET_COMPILE_FEATURES ( pbrt_treelet_info PRIVATE ${PBRT_CXX11_FEATURES} )
 TARGET_LINK_LIBRARIES ( pbrt_treelet_info ${ALL_PBRT_LIBS} )
 
+# convert-treelet
+ADD_EXECUTABLE ( convert_treelet src/cloud/convert-treelet.cpp )
+ADD_SANITIZERS ( convert_treelet )
+
+SET_TARGET_PROPERTIES ( convert_treelet PROPERTIES OUTPUT_NAME "convert-treelet" )
+TARGET_COMPILE_FEATURES ( convert_treelet PRIVATE ${PBRT_CXX11_FEATURES} )
+TARGET_LINK_LIBRARIES ( convert_treelet ${ALL_PBRT_LIBS} )
+
 # gen-static0
 ADD_EXECUTABLE ( gen_static0 src/cloud/gen-static0.cpp )
 ADD_SANITIZERS ( gen_static0 )
