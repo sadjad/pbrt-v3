@@ -10,6 +10,7 @@
 #include "core/paramset.h"
 #include "core/primitive.h"
 #include "materials/matte.h"
+#include "messages/serdes.h"
 #include "messages/serialization.h"
 #include "messages/utils.h"
 #include "pbrt.pb.h"
@@ -132,13 +133,20 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
     reader->read(&num_triangle_meshes);
     for (int i = 0; i < num_triangle_meshes; ++i) {
         /* load the TriangleMesh if necessary */
-        protobuf::TriangleMesh tm;
-        reader->read(&tm);
-        TriangleMeshId tm_id = make_pair(root_id, tm.id());
+        uint64_t id;
+        uint64_t material_id;
+        string tm_buffer;
+
+        reader->read(&id);
+        reader->read(&material_id);
+        reader->read(&tm_buffer);
+
+        TriangleMeshId tm_id = make_pair(root_id, id);
         auto p = triangle_meshes_.emplace(
-            tm_id, make_shared<TriangleMesh>(move(from_protobuf(tm))));
+            tm_id, make_shared<TriangleMesh>(
+                       move(serdes::triangle_mesh::deserialize(tm_buffer))));
         CHECK_EQ(p.second, true);
-        triangle_mesh_material_ids_[tm_id] = tm.material_id();
+        triangle_mesh_material_ids_[tm_id] = material_id;
     }
 
     stack<pair<uint32_t, Child>> q;
