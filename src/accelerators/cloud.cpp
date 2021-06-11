@@ -116,7 +116,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
 
     TreeletInfo &info = treelet_info_[root_id];
 
-    deque<TreeletNode> nodes;
+    vector<TreeletNode> nodes;
     unique_ptr<protobuf::RecordReader> reader;
 
     if (stream == nullptr) {

@@ -78,8 +78,8 @@ class CloudBVH : public Aggregate {
     enum Child { LEFT = 0, RIGHT = 1 };
 
     struct Treelet {
-        std::deque<TreeletNode> nodes{};
-        std::deque<std::unique_ptr<Primitive>> primitives{};
+        std::vector<TreeletNode> nodes{};
+        std::vector<std::unique_ptr<Primitive>> primitives{};
     };
 
     class IncludedInstance : public Aggregate {
