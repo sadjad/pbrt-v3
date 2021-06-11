@@ -21,23 +21,29 @@ namespace cloudbvh {
 
 struct Node {
     Bounds3f bounds;
-    int64_t left_ref;
-    int64_t right_ref;
-    uint8_t axis;
 
-    uint32_t transformed_primitives_count{0};
-    uint32_t triangles_count{0};
+    struct __attribute__((packed, aligned(1))) {
+        int64_t left_ref;
+        int64_t right_ref;
+        uint8_t axis;
+
+        uint32_t transformed_primitives_count{0};
+        uint32_t triangles_count{0};
+    };
 };
 
 struct TransformedPrimitive {
-    Transform start;
-    Transform end;
-    Float start_time;
-    Float end_time;
-    int64_t root_ref;
+    Matrix4x4 start_transform;
+    Matrix4x4 end_transform;
+
+    struct __attribute__((packed, aligned(1))) {
+        Float start_time;
+        Float end_time;
+        int64_t root_ref;
+    };
 };
 
-struct Triangle {
+struct __attribute__((packed, aligned(1))) Triangle {
     int64_t mesh_id;
     int64_t tri_number;
 };

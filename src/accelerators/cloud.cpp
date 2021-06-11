@@ -211,13 +211,13 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
                          sizeof(serdes_primitive));
 
             transforms_.push_back(
-                move(make_unique<Transform>(serdes_primitive.start)));
+                move(make_unique<Transform>(serdes_primitive.start_transform)));
             const Transform *start = transforms_.back().get();
 
             const Transform *end;
-            if (start->GetMatrix() != serdes_primitive.end.GetMatrix()) {
-                transforms_.push_back(
-                    move(make_unique<Transform>(serdes_primitive.end)));
+            if (start->GetMatrix() != serdes_primitive.end_transform) {
+                transforms_.push_back(move(
+                    make_unique<Transform>(serdes_primitive.end_transform)));
                 end = transforms_.back().get();
             } else {
                 end = start;
@@ -256,8 +256,9 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
             reader->read(reinterpret_cast<char *>(&serdes_triangle),
                          sizeof(serdes_triangle));
 
-            const TriangleMeshId tm_id =
-                make_pair(root_id, serdes_triangle.mesh_id);
+            const auto mesh_id = serdes_triangle.mesh_id;
+            const auto tri_number = serdes_triangle.tri_number;
+            const TriangleMeshId tm_id = make_pair(root_id, mesh_id);
 
             const auto material_id = triangle_mesh_material_ids_[tm_id];
             /* load the Material if necessary */
@@ -272,7 +273,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
 
             auto shape = make_shared<Triangle>(
                 &identity_transform_, &identity_transform_, false,
-                triangle_meshes_.at(tm_id), serdes_triangle.tri_number);
+                triangle_meshes_.at(tm_id), tri_number);
 
             tree_primitives.emplace_back(move(make_unique<GeometricPrimitive>(
                 shape, materials_[material_id], nullptr, MediumInterface{})));

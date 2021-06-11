@@ -74,10 +74,11 @@ int main(int argc, char* argv[]) {
             for (int i = 0; i < node.transformed_primitives_count; i++) {
                 auto& tp_proto = node_proto.transformed_primitives(i);
 
-                primitive.start = {
-                    from_protobuf(tp_proto.transform().start_transform())};
-                primitive.end = {
-                    from_protobuf(tp_proto.transform().end_transform())};
+                primitive.start_transform =
+                    from_protobuf(tp_proto.transform().start_transform());
+                primitive.end_transform = 
+                    from_protobuf(tp_proto.transform().end_transform());
+
                 primitive.start_time = tp_proto.transform().start_time();
                 primitive.end_time = tp_proto.transform().end_time();
 
