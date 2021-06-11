@@ -2052,6 +2052,16 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
         }
 
         // Write out nodes for treelet
+
+        size_t primitive_count = 0;
+        for_each(treelet.nodes.begin(), treelet.nodes.end(),
+                 [&](const uint64_t idx) {
+                     primitive_count += nodes[idx].nPrimitives;
+                 });
+
+        writer->write(static_cast<uint32_t>(treelet.nodes.size()));
+        writer->write(static_cast<uint32_t>(primitive_count));
+
         for (uint64_t nodeIdx : treelet.nodes) {
             const LinearBVHNode &node = nodes[nodeIdx];
 
