@@ -151,11 +151,12 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
 
     stack<pair<uint32_t, Child>> q;
     while (not reader->eof()) {
-        protobuf::BVHNode proto_node;
-        bool success = reader->read(&proto_node);
+        serdes::cloudbvh::Node serdes_node;
+        bool success = reader->read(reinterpret_cast<char *>(&serdes_node),
+                                    sizeof(serdes_node));
         CHECK_EQ(success, true);
 
-        TreeletNode node(from_protobuf(proto_node.bounds()), proto_node.axis());
+        TreeletNode node(serdes_node.bounds, serdes_node.axis);
         const uint32_t index = nodes.size();
 
         if (not q.empty()) {
@@ -166,11 +167,11 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
             nodes[parent.first].child_node[parent.second] = index;
         }
 
-        bool is_leaf = proto_node.transformed_primitives_size() ||
-                       proto_node.triangles_size();
+        bool is_leaf = serdes_node.transformed_primitives_count ||
+                       serdes_node.triangles_count;
 
-        if (proto_node.right_ref()) {
-            uint64_t right_ref = proto_node.right_ref();
+        if (serdes_node.right_ref) {
+            uint64_t right_ref = serdes_node.right_ref;
             uint16_t treeletID = (uint16_t)(right_ref >> 32);
             node.child_treelet[RIGHT] = treeletID;
             node.child_node[RIGHT] = (uint32_t)right_ref;
@@ -182,8 +183,8 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
             q.emplace(index, RIGHT);
         }
 
-        if (proto_node.left_ref()) {
-            uint64_t left_ref = proto_node.left_ref();
+        if (serdes_node.left_ref) {
+            uint64_t left_ref = serdes_node.left_ref;
             uint16_t treeletID = (uint16_t)(left_ref >> 32);
             node.child_treelet[LEFT] = treeletID;
             node.child_node[LEFT] = (uint32_t)left_ref;
@@ -198,33 +199,35 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
         if (is_leaf) {
             node.leaf_tag = ~0;
             node.primitive_offset = tree_primitives.size();
-            node.primitive_count = proto_node.transformed_primitives_size() +
-                                   proto_node.triangles_size();
+            node.primitive_count = serdes_node.transformed_primitives_count +
+                                   serdes_node.triangles_count;
         }
 
-        for (int i = 0; i < proto_node.transformed_primitives_size(); i++) {
-            auto &proto_tp = proto_node.transformed_primitives(i);
+        serdes::cloudbvh::TransformedPrimitive serdes_primitive;
+        serdes::cloudbvh::Triangle serdes_triangle;
 
-            transforms_.push_back(move(make_unique<Transform>(
-                from_protobuf(proto_tp.transform().start_transform()))));
+        for (int i = 0; i < serdes_node.transformed_primitives_count; i++) {
+            reader->read(reinterpret_cast<char *>(&serdes_primitive),
+                         sizeof(serdes_primitive));
+
+            transforms_.push_back(
+                move(make_unique<Transform>(serdes_primitive.start)));
             const Transform *start = transforms_.back().get();
 
-            Matrix4x4 end_mat =
-                from_protobuf(proto_tp.transform().end_transform());
-
             const Transform *end;
-            if (start->GetMatrix() != end_mat) {
-                transforms_.push_back(move(make_unique<Transform>(end_mat)));
+            if (start->GetMatrix() != serdes_primitive.end.GetMatrix()) {
+                transforms_.push_back(
+                    move(make_unique<Transform>(serdes_primitive.end)));
                 end = transforms_.back().get();
             } else {
                 end = start;
             }
 
             const AnimatedTransform primitive_to_world{
-                start, proto_tp.transform().start_time(), end,
-                proto_tp.transform().end_time()};
+                start, serdes_primitive.start_time, end,
+                serdes_primitive.end_time};
 
-            uint64_t instance_ref = proto_tp.root_ref();
+            uint64_t instance_ref = serdes_primitive.root_ref;
 
             uint16_t instance_group = (uint16_t)(instance_ref >> 32);
             uint32_t instance_node = (uint32_t)instance_ref;
@@ -249,9 +252,12 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
                 bvh_instances_.at(instance_ref), primitive_to_world)));
         }
 
-        for (int i = 0; i < proto_node.triangles_size(); i++) {
-            auto &proto_t = proto_node.triangles(i);
-            const TriangleMeshId tm_id = make_pair(root_id, proto_t.mesh_id());
+        for (int i = 0; i < serdes_node.triangles_count; i++) {
+            reader->read(reinterpret_cast<char *>(&serdes_triangle),
+                         sizeof(serdes_triangle));
+
+            const TriangleMeshId tm_id =
+                make_pair(root_id, serdes_triangle.mesh_id);
 
             const auto material_id = triangle_mesh_material_ids_[tm_id];
             /* load the Material if necessary */
@@ -266,7 +272,7 @@ void CloudBVH::loadTreelet(const uint32_t root_id, istream *stream) const {
 
             auto shape = make_shared<Triangle>(
                 &identity_transform_, &identity_transform_, false,
-                triangle_meshes_.at(tm_id), proto_t.tri_number());
+                triangle_meshes_.at(tm_id), serdes_triangle.tri_number);
 
             tree_primitives.emplace_back(move(make_unique<GeometricPrimitive>(
                 shape, materials_[material_id], nullptr, MediumInterface{})));
