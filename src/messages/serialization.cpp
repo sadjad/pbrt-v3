@@ -114,11 +114,11 @@ bool RecordReader::read(char* data, const uint32_t max_len)  {
         return false;
     }
 
-    if (coded_input_.ReadRaw(data, min(max_len, next_size_))) {
-      if (max_len < next_size_) {
-        coded_input_.Skip(next_size_ - max_len);
-      }
+    if (max_len != next_size_) {
+        throw std::runtime_error("buffer size mismatch");
+    }
 
+    if (coded_input_.ReadRaw(data, max_len)) {
       eof_ = not coded_input_.ReadLittleEndian32(&next_size_);
       return true;
     }
