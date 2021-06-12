@@ -80,7 +80,7 @@ private:
 
 template<class ProtobufType>
 void RecordWriter::write(const ProtobufType & proto) {
-    coded_output_.WriteLittleEndian32(proto.ByteSize());
+    coded_output_.WriteLittleEndian32(proto.ByteSizeLong());
     if (not proto.SerializeToCodedStream(&coded_output_)) {
         throw std::runtime_error("write: write protobuf error");
     }
