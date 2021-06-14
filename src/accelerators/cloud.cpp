@@ -281,60 +281,26 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
     reader.read(&node_count);
     reader.read(&primitive_count);
 
-    nodes.reserve(node_count);
+    nodes.resize(node_count);
     tree_primitives.reserve(primitive_count);
 
-    stack<pair<uint32_t, Child>> q;
+    const char * nodes_buffer;
+    size_t nodes_buf_len;
 
-    while (not reader.eof()) {
-        const serdes::cloudbvh::Node *serdes_node;
-        bool success =
-            reader.read(reinterpret_cast<const char **>(&serdes_node), nullptr);
-        CHECK_EQ(success, true);
+    reader.read(&nodes_buffer, &nodes_buf_len);
+    memcpy(&nodes[0], nodes_buffer, nodes_buf_len);
 
-        TreeletNode node(serdes_node->bounds, serdes_node->axis);
-        const uint32_t index = nodes.size();
-
-        if (not q.empty()) {
-            auto parent = q.top();
-            q.pop();
-
-            nodes[parent.first].child_treelet[parent.second] = root_id;
-            nodes[parent.first].child_node[parent.second] = index;
-        }
-
-        bool is_leaf = serdes_node->transformed_primitives_count ||
-                       serdes_node->triangles_count;
-
-        if (serdes_node->right_ref) {
-            uint64_t right_ref = serdes_node->right_ref;
-            uint16_t treelet_id = (uint16_t)(right_ref >> 32);
-            node.child_treelet[RIGHT] = treelet_id;
-            node.child_node[RIGHT] = (uint32_t)right_ref;
-        } else if (!is_leaf) {
-            q.emplace(index, RIGHT);
-        }
-
-        if (serdes_node->left_ref) {
-            uint64_t left_ref = serdes_node->left_ref;
-            uint16_t treelet_id = (uint16_t)(left_ref >> 32);
-            node.child_treelet[LEFT] = treelet_id;
-            node.child_node[LEFT] = (uint32_t)left_ref;
-        } else if (!is_leaf) {
-            q.emplace(index, LEFT);
-        }
-
-        if (is_leaf) {
-            node.leaf_tag = ~0;
-            node.primitive_offset = tree_primitives.size();
-            node.primitive_count = serdes_node->transformed_primitives_count +
-                                   serdes_node->triangles_count;
-        }
-
+    for (auto &node : nodes) {
         const serdes::cloudbvh::TransformedPrimitive *serdes_primitive;
         const serdes::cloudbvh::Triangle *serdes_triangle;
 
-        for (int i = 0; i < serdes_node->transformed_primitives_count; i++) {
+        uint32_t transformed_primitives_count;
+        uint32_t triangles_count;
+
+        reader.read(&transformed_primitives_count);
+        reader.read(&triangles_count);
+
+        for (int i = 0; i < transformed_primitives_count; i++) {
             reader.read(reinterpret_cast<const char **>(&serdes_primitive),
                         nullptr);
 
@@ -379,7 +345,7 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
             }
         }
 
-        for (int i = 0; i < serdes_node->triangles_count; i++) {
+        for (int i = 0; i < triangles_count; i++) {
             reader.read(reinterpret_cast<const char **>(&serdes_triangle),
                         nullptr);
 
@@ -398,7 +364,6 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
             tree_primitives.push_back(nullptr);
         }
 
-        nodes.emplace_back(move(node));
         nNodes++;
     }
 

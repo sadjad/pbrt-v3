@@ -54,8 +54,8 @@ class CloudBVH : public Aggregate {
     }
 
     struct TreeletNode {
-        Bounds3f bounds;
-        uint8_t axis;
+        Bounds3f bounds {};
+        uint8_t axis {};
 
         union {
             struct {
@@ -68,6 +68,8 @@ class CloudBVH : public Aggregate {
                 uint32_t primitive_count;
             };
         };
+
+        TreeletNode() {}
 
         TreeletNode(const Bounds3f &bounds, const uint8_t axis)
             : bounds(bounds), axis(axis) {}
