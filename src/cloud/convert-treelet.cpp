@@ -3,6 +3,7 @@
 #include <string>
 
 #include "accelerators/cloud.h"
+#include "messages/lite.h"
 #include "messages/serdes.h"
 #include "messages/utils.h"
 #include "pbrt.pb.h"
@@ -31,7 +32,7 @@ int main(int argc, char* argv[]) {
         string new_filename{argv[2]};
         const uint32_t root_id{static_cast<uint32_t>(stoul(argv[3]))};
 
-        protobuf::RecordWriter writer{new_filename};
+        LiteRecordWriter writer{new_filename};
         unique_ptr<protobuf::RecordReader> reader =
             make_unique<protobuf::RecordReader>(old_filename);
 
