@@ -52,7 +52,7 @@ static void PlyErrorCallback(p_ply, const char *message) {
 // Triangle Method Definitions
 STAT_RATIO("Scene/Triangles per triangle mesh", nTris, nMeshes);
 TriangleMesh::TriangleMesh(
-    const Transform &ObjectToWorld, int nTriangles, const int *vertexIndices,
+    const Transform &ObjectToWorld, int nTriangles, const int *vertexIndices_,
     int nVertices, const Point3f *P, const Vector3f *S, const Normal3f *N,
     const Point2f *UV, const std::shared_ptr<Texture<Float>> &alphaMask,
     const std::shared_ptr<Texture<Float>> &shadowAlphaMask,
@@ -63,12 +63,12 @@ TriangleMesh::TriangleMesh(
       shadowAlphaMask(shadowAlphaMask) {
     const size_t storageSize =
         sizeof(int) * 2 + nTriangles * 3 * sizeof(int) +
-        nVertices *
-            (sizeof(*P) + (N ? sizeof(*N) : 0) + (S ? sizeof(*S) : 0) +
-             (UV ? sizeof(*UV) : 0) + (fIndices ? sizeof(*fIndices) : 0)) +
-             sizeof(bool) * 3 /* presence flags for N, S and UV */;
+        nVertices * (sizeof(*P) + (N ? sizeof(*N) : 0) + (S ? sizeof(*S) : 0) +
+                     (UV ? sizeof(*UV) : 0)) +
+        sizeof(bool) * 3 /* presence flags for N, S and UV */;
 
-    triMeshBytes += sizeof(*this) + storageSize;
+    triMeshBytes += sizeof(*this) + storageSize +
+                    (fIndices ? sizeof(*fIndices) : 0) * nVertices;
     ++nMeshes;
     nTris += nTriangles;
 
@@ -92,6 +92,8 @@ TriangleMesh::TriangleMesh(
     storage[offset] = (UV != nullptr);
     uv = (Point2f *)(UV ? storage.get() + offset + 1 : nullptr);
     offset += (UV ? nVertices * sizeof(Point2f) : 0) + 1 /* presence flag */;
+
+    memcpy(vertexIndices, vertexIndices_, nTriangles * 3 * sizeof(int));
 
     // Transform mesh vertices to world space
     for (int i = 0; i < nVertices; ++i) p[i] = ObjectToWorld(P[i]);
