@@ -11,6 +11,7 @@
 #include "core/paramset.h"
 #include "core/primitive.h"
 #include "materials/matte.h"
+#include "messages/lite.h"
 #include "messages/serdes.h"
 #include "messages/serialization.h"
 #include "messages/utils.h"
@@ -218,13 +219,13 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
     ProfilePhase _(Prof::LoadTreelet);
 
     vector<TreeletNode> nodes;
-    unique_ptr<protobuf::RecordReader> reader;
+
+    if (stream != nullptr) {
+        throw runtime_error("not implemented");
+    }
 
     vector<char> treelet_buffer;
-    unique_ptr<membuf> treelet_membuf;
-    unique_ptr<istream> treelet_stream;
-
-    if (stream == nullptr) {
+    {
         const string treelet_path =
             global::manager.getScenePath() + "/" +
             global::manager.getFileName(ObjectType::Treelet, root_id);
@@ -235,16 +236,9 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
 
         treelet_buffer.resize(size);
         fin.read(treelet_buffer.data(), size);
-
-        treelet_membuf =
-            make_unique<membuf>(treelet_buffer.data(),
-                                treelet_buffer.data() + treelet_buffer.size());
-        treelet_stream = make_unique<istream>(treelet_membuf.get());
-
-        stream = treelet_stream.get();
     }
 
-    reader = make_unique<protobuf::RecordReader>(stream);
+    LiteRecordReader reader{treelet_buffer.data(), treelet_buffer.size()};
 
     treelets_[root_id] = make_unique<Treelet>();
 
@@ -258,21 +252,25 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
 
     /* read in the triangle meshes for this treelet first */
     uint32_t num_triangle_meshes = 0;
-    reader->read(&num_triangle_meshes);
+    reader.read(&num_triangle_meshes);
 
     for (int i = 0; i < num_triangle_meshes; ++i) {
         /* load the TriangleMesh if necessary */
         uint64_t tm_id;
         uint64_t material_id;
-        string tm_buffer;
 
-        reader->read(&tm_id);
-        reader->read(&material_id);
-        reader->read(&tm_buffer);
+        reader.read(&tm_id);
+        reader.read(&material_id);
+
+        const char *tm_buffer;
+        size_t tm_buffer_len;
+        reader.read(&tm_buffer, &tm_buffer_len);
 
         auto p = tree_meshes.emplace(
-            tm_id, make_shared<TriangleMesh>(
-                       move(serdes::triangle_mesh::deserialize(tm_buffer))));
+            tm_id,
+            make_shared<TriangleMesh>(move(
+                serdes::triangle_mesh::deserialize(tm_buffer, tm_buffer_len))));
+
         CHECK_EQ(p.second, true);
         mesh_material_ids[tm_id] = material_id;
     }
@@ -280,21 +278,21 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
     uint32_t node_count;
     uint32_t primitive_count;
 
-    reader->read(&node_count);
-    reader->read(&primitive_count);
+    reader.read(&node_count);
+    reader.read(&primitive_count);
 
     nodes.reserve(node_count);
     tree_primitives.reserve(primitive_count);
 
     stack<pair<uint32_t, Child>> q;
 
-    while (not reader->eof()) {
-        serdes::cloudbvh::Node serdes_node;
-        bool success = reader->read(reinterpret_cast<char *>(&serdes_node),
-                                    sizeof(serdes_node));
+    while (not reader.eof()) {
+        const serdes::cloudbvh::Node *serdes_node;
+        bool success =
+            reader.read(reinterpret_cast<const char **>(&serdes_node), nullptr);
         CHECK_EQ(success, true);
 
-        TreeletNode node(serdes_node.bounds, serdes_node.axis);
+        TreeletNode node(serdes_node->bounds, serdes_node->axis);
         const uint32_t index = nodes.size();
 
         if (not q.empty()) {
@@ -305,11 +303,11 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
             nodes[parent.first].child_node[parent.second] = index;
         }
 
-        bool is_leaf = serdes_node.transformed_primitives_count ||
-                       serdes_node.triangles_count;
+        bool is_leaf = serdes_node->transformed_primitives_count ||
+                       serdes_node->triangles_count;
 
-        if (serdes_node.right_ref) {
-            uint64_t right_ref = serdes_node.right_ref;
+        if (serdes_node->right_ref) {
+            uint64_t right_ref = serdes_node->right_ref;
             uint16_t treelet_id = (uint16_t)(right_ref >> 32);
             node.child_treelet[RIGHT] = treelet_id;
             node.child_node[RIGHT] = (uint32_t)right_ref;
@@ -317,8 +315,8 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
             q.emplace(index, RIGHT);
         }
 
-        if (serdes_node.left_ref) {
-            uint64_t left_ref = serdes_node.left_ref;
+        if (serdes_node->left_ref) {
+            uint64_t left_ref = serdes_node->left_ref;
             uint16_t treelet_id = (uint16_t)(left_ref >> 32);
             node.child_treelet[LEFT] = treelet_id;
             node.child_node[LEFT] = (uint32_t)left_ref;
@@ -329,35 +327,35 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
         if (is_leaf) {
             node.leaf_tag = ~0;
             node.primitive_offset = tree_primitives.size();
-            node.primitive_count = serdes_node.transformed_primitives_count +
-                                   serdes_node.triangles_count;
+            node.primitive_count = serdes_node->transformed_primitives_count +
+                                   serdes_node->triangles_count;
         }
 
-        serdes::cloudbvh::TransformedPrimitive serdes_primitive;
-        serdes::cloudbvh::Triangle serdes_triangle;
+        const serdes::cloudbvh::TransformedPrimitive *serdes_primitive;
+        const serdes::cloudbvh::Triangle *serdes_triangle;
 
-        for (int i = 0; i < serdes_node.transformed_primitives_count; i++) {
-            reader->read(reinterpret_cast<char *>(&serdes_primitive),
-                         sizeof(serdes_primitive));
+        for (int i = 0; i < serdes_node->transformed_primitives_count; i++) {
+            reader.read(reinterpret_cast<const char **>(&serdes_primitive),
+                        nullptr);
 
-            tree_transforms.push_back(
-                move(make_unique<Transform>(serdes_primitive.start_transform)));
+            tree_transforms.push_back(move(
+                make_unique<Transform>(serdes_primitive->start_transform)));
             const Transform *start = tree_transforms.back().get();
 
             const Transform *end;
-            if (start->GetMatrix() != serdes_primitive.end_transform) {
+            if (start->GetMatrix() != serdes_primitive->end_transform) {
                 tree_transforms.push_back(move(
-                    make_unique<Transform>(serdes_primitive.end_transform)));
+                    make_unique<Transform>(serdes_primitive->end_transform)));
                 end = tree_transforms.back().get();
             } else {
                 end = start;
             }
 
             AnimatedTransform primitive_to_world{
-                start, serdes_primitive.start_time, end,
-                serdes_primitive.end_time};
+                start, serdes_primitive->start_time, end,
+                serdes_primitive->end_time};
 
-            uint64_t instance_ref = serdes_primitive.root_ref;
+            uint64_t instance_ref = serdes_primitive->root_ref;
 
             uint16_t instance_group = (uint16_t)(instance_ref >> 32);
             uint32_t instance_node = (uint32_t)instance_ref;
@@ -381,12 +379,12 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
             }
         }
 
-        for (int i = 0; i < serdes_node.triangles_count; i++) {
-            reader->read(reinterpret_cast<char *>(&serdes_triangle),
-                         sizeof(serdes_triangle));
+        for (int i = 0; i < serdes_node->triangles_count; i++) {
+            reader.read(reinterpret_cast<const char **>(&serdes_triangle),
+                        nullptr);
 
-            const auto mesh_id = serdes_triangle.mesh_id;
-            const auto tri_number = serdes_triangle.tri_number;
+            const auto mesh_id = serdes_triangle->mesh_id;
+            const auto tri_number = serdes_triangle->tri_number;
             const auto material_id = mesh_material_ids[mesh_id];
             treelet.required_materials.insert(material_id);
 

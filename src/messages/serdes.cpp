@@ -80,10 +80,8 @@ string serialize(const TriangleMesh& tm) {
     return output;
 }
 
-TriangleMesh deserialize(const string& input) {
+TriangleMesh deserialize(const char* data, const size_t len) {
     size_t offset = 0;
-
-    const char* data = input.data();
 
     const int nTriangles = *reinterpret_cast<const int*>(data + offset);
     offset += sizeof(int);
@@ -122,6 +120,10 @@ TriangleMesh deserialize(const string& input) {
     offset += has_uv ? sizeof(Point2f) * nVertices : 0;
 
     Transform identity;
+
+    if (offset != len) {
+        throw runtime_error("invalid buffer size");
+    }
 
     return TriangleMesh(identity, nTriangles, vertex_indices, nVertices, p, s,
                         n, uv, nullptr, nullptr, nullptr);
