@@ -64,9 +64,6 @@ int main(int argc, char* argv[]) {
             node_count++;
             primitive_count += node_proto.transformed_primitives_size();
             primitive_count += node_proto.triangles_size();
-
-            reader->skip(node_proto.transformed_primitives_size());
-            reader->skip(node_proto.triangles_size());
         }
 
         writer.write(node_count);
@@ -132,9 +129,6 @@ int main(int argc, char* argv[]) {
 
                 current_primitive_offset += node.primitive_count;
             }
-
-            reader->skip(node_proto.transformed_primitives_size());
-            reader->skip(node_proto.triangles_size());
         }
 
         writer.write(reinterpret_cast<const char*>(nodes.data()),
