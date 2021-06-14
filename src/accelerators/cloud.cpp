@@ -1,5 +1,6 @@
 #include "cloud.h"
 
+#include <fstream>
 #include <memory>
 #include <stack>
 #include <thread>
@@ -23,6 +24,10 @@ namespace pbrt {
 STAT_COUNTER("BVH/Total nodes", nNodes);
 STAT_COUNTER("BVH/Visited nodes", nNodesVisited);
 STAT_COUNTER("BVH/Visited primitives", nPrimitivesVisited);
+
+struct membuf : streambuf {
+    membuf(char *begin, char *end) { this->setg(begin, begin, end); }
+};
 
 CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
     : bvh_root_(bvh_root) {
@@ -215,11 +220,31 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
     vector<TreeletNode> nodes;
     unique_ptr<protobuf::RecordReader> reader;
 
+    vector<char> treelet_buffer;
+    unique_ptr<membuf> treelet_membuf;
+    unique_ptr<istream> treelet_stream;
+
     if (stream == nullptr) {
-        reader = global::manager.GetReader(ObjectType::Treelet, root_id);
-    } else {
-        reader = make_unique<protobuf::RecordReader>(stream);
+        const string treelet_path =
+            global::manager.getScenePath() + "/" +
+            global::manager.getFileName(ObjectType::Treelet, root_id);
+
+        ifstream fin{treelet_path, ios::binary | ios::ate};
+        streamsize size = fin.tellg();
+        fin.seekg(0, ios::beg);
+
+        treelet_buffer.resize(size);
+        fin.read(treelet_buffer.data(), size);
+
+        treelet_membuf =
+            make_unique<membuf>(treelet_buffer.data(),
+                                treelet_buffer.data() + treelet_buffer.size());
+        treelet_stream = make_unique<istream>(treelet_membuf.get());
+
+        stream = treelet_stream.get();
     }
+
+    reader = make_unique<protobuf::RecordReader>(stream);
 
     treelets_[root_id] = make_unique<Treelet>();
 
