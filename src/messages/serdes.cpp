@@ -10,19 +10,10 @@ size_t serialized_length(const TriangleMesh& tm) {
     size_t len = sizeof(int) /* nTriangles */ + sizeof(int) /* nVertices */ +
                  sizeof(int) * 3 * tm.nTriangles /* vertexIndices */ +
                  sizeof(tm.p[0]) * tm.nVertices /* p */ +
-                 sizeof(bool) * 3 /* has n, s and us */;
-
-    if (tm.n) {
-        len += sizeof(tm.n[0]) * tm.nVertices;
-    }
-
-    if (tm.s) {
-        len += sizeof(tm.s[0]) * tm.nVertices;
-    }
-
-    if (tm.uv) {
-        len += sizeof(tm.uv[0]) * tm.nVertices;
-    }
+                 sizeof(bool) * 3 /* has n, s and us */ +
+                 (tm.n ? sizeof(tm.n[0]) * tm.nVertices : 0) +
+                 (tm.s ? sizeof(tm.s[0]) * tm.nVertices : 0) +
+                 (tm.uv ? sizeof(tm.uv[0]) * tm.nVertices : 0);
 
     return len;
 }

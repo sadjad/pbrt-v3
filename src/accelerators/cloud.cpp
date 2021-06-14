@@ -156,7 +156,8 @@ Float CloudBVH::SurfaceAreaUnion() const {
     return boundUnion.SurfaceArea();
 }
 
-void CloudBVH::LoadTreelet(const uint32_t root_id, istream *stream) const {
+void CloudBVH::LoadTreelet(const uint32_t root_id, const char *buffer,
+                           const size_t length) const {
     if (preloading_done_ or
         (treelets_.size() > root_id && treelets_[root_id] != nullptr)) {
         return; /* this tree is already loaded */
@@ -166,7 +167,7 @@ void CloudBVH::LoadTreelet(const uint32_t root_id, istream *stream) const {
         treelets_.resize(root_id + 1);
     }
 
-    loadTreeletBase(root_id, stream);
+    loadTreeletBase(root_id, buffer, length);
 
     auto &treelet = *treelets_[root_id];
 
@@ -215,17 +216,17 @@ void CloudBVH::finializeTreeletLoad(const uint32_t root_id) const {
     treelet.unfinished_transformed.clear();
 }
 
-void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
+void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
+                               const size_t length) const {
     ProfilePhase _(Prof::LoadTreelet);
 
     vector<TreeletNode> nodes;
-
-    if (stream != nullptr) {
-        throw runtime_error("not implemented");
-    }
+    LiteRecordReader reader;
 
     vector<char> treelet_buffer;
-    {
+    if (buffer) {
+        reader = {buffer, length};
+    } else {
         const string treelet_path =
             global::manager.getScenePath() + "/" +
             global::manager.getFileName(ObjectType::Treelet, root_id);
@@ -236,9 +237,8 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, istream *stream) const {
 
         treelet_buffer.resize(size);
         fin.read(treelet_buffer.data(), size);
+        reader = {treelet_buffer.data(), treelet_buffer.size()};
     }
-
-    LiteRecordReader reader{treelet_buffer.data(), treelet_buffer.size()};
 
     treelets_[root_id] = make_unique<Treelet>();
 

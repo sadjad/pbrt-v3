@@ -7,6 +7,7 @@
 
 class LiteRecordReader {
   public:
+    LiteRecordReader() = default;
     LiteRecordReader(const char* buffer, const size_t len);
 
     bool read(const char** buf, size_t* len);
@@ -17,9 +18,9 @@ class LiteRecordReader {
     bool eof() const { return buffer_ == end_; }
 
   private:
-    const char* buffer_;
-    const size_t len_;
-    const char* end_;
+    const char* buffer_{nullptr};
+    size_t len_{0};
+    const char* end_{nullptr};
 };
 
 template <class T>

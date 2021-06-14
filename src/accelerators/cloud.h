@@ -46,8 +46,8 @@ class CloudBVH : public Aggregate {
     void Trace(RayState &rayState) const;
     bool Intersect(RayState &rayState, SurfaceInteraction *isect) const;
 
-    void LoadTreelet(const uint32_t root_id,
-                     std::istream *stream = nullptr) const;
+    void LoadTreelet(const uint32_t root_id, const char *buffer = nullptr,
+                     const size_t length = 0) const;
 
     const TreeletInfo &GetInfo(const uint32_t treelet_id) {
         throw std::runtime_error("not implemented");
@@ -166,8 +166,8 @@ class CloudBVH : public Aggregate {
     mutable std::shared_ptr<Material> default_material;
 
     void finializeTreeletLoad(const uint32_t root_id) const;
-    void loadTreeletBase(const uint32_t root_id,
-                         std::istream *stream = nullptr) const;
+    void loadTreeletBase(const uint32_t root_id, const char *buffer = nullptr,
+                         const size_t length = 0) const;
 
     void clear() const;
 

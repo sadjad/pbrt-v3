@@ -76,7 +76,8 @@ Base LoadBase(const std::string &path, const int samplesPerPixel);
 
 std::shared_ptr<CloudBVH> LoadTreelet(const std::string &path,
                                       const TreeletId treeletId,
-                                      std::istream *stream = nullptr);
+                                      const char * buffer = nullptr,
+                                      const size_t length = 0);
 
 void DumpSceneObjects(const std::string &description,
                       const std::string outputPath);
