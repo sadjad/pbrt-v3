@@ -59,36 +59,82 @@ TriangleMesh::TriangleMesh(
     const int *fIndices)
     : nTriangles(nTriangles),
       nVertices(nVertices),
-      vertexIndices(vertexIndices, vertexIndices + 3 * nTriangles),
       alphaMask(alphaMask),
       shadowAlphaMask(shadowAlphaMask) {
+    const size_t storageSize =
+        sizeof(int) * 2 + nTriangles * 3 * sizeof(int) +
+        nVertices *
+            (sizeof(*P) + (N ? sizeof(*N) : 0) + (S ? sizeof(*S) : 0) +
+             (UV ? sizeof(*UV) : 0) + (fIndices ? sizeof(*fIndices) : 0)) +
+             sizeof(bool) * 3 /* presence flags for N, S and UV */;
+
+    triMeshBytes += sizeof(*this) + storageSize;
     ++nMeshes;
     nTris += nTriangles;
-    triMeshBytes += sizeof(*this) + this->vertexIndices.size() * sizeof(int) +
-                    nVertices * (sizeof(*P) + (N ? sizeof(*N) : 0) +
-                                 (S ? sizeof(*S) : 0) + (UV ? sizeof(*UV) : 0) +
-                                 (fIndices ? sizeof(*fIndices) : 0));
+
+    storage = std::make_unique<char[]>(storageSize);
+    size_t offset = sizeof(int) * 2;
+
+    vertexIndices = (int *)(storage.get() + offset);
+    offset += sizeof(int) * nTriangles * 3;
+
+    p = (Point3f *)(storage.get() + offset);
+    offset += sizeof(Point3f) * nVertices;
+
+    storage[offset] = (N != nullptr);
+    n = (Normal3f *)(N ? storage.get() + offset + 1 : nullptr);
+    offset += (N ? nVertices * sizeof(Normal3f) : 0) + 1 /* presence flag */;
+
+    storage[offset] = (S != nullptr);
+    s = (Vector3f *)(S ? storage.get() + offset + 1 : nullptr);
+    offset += (S ? nVertices * sizeof(Vector3f) : 0) + 1 /* presence flag */;
+
+    storage[offset] = (UV != nullptr);
+    uv = (Point2f *)(UV ? storage.get() + offset + 1 : nullptr);
+    offset += (UV ? nVertices * sizeof(Point2f) : 0) + 1 /* presence flag */;
 
     // Transform mesh vertices to world space
-    p.reset(new Point3f[nVertices]);
     for (int i = 0; i < nVertices; ++i) p[i] = ObjectToWorld(P[i]);
 
     // Copy _UV_, _N_, and _S_ vertex data, if present
     if (UV) {
-        uv.reset(new Point2f[nVertices]);
-        memcpy(uv.get(), UV, nVertices * sizeof(Point2f));
+        memcpy(uv, UV, nVertices * sizeof(Point2f));
     }
     if (N) {
-        n.reset(new Normal3f[nVertices]);
         for (int i = 0; i < nVertices; ++i) n[i] = ObjectToWorld(N[i]);
     }
     if (S) {
-        s.reset(new Vector3f[nVertices]);
         for (int i = 0; i < nVertices; ++i) s[i] = ObjectToWorld(S[i]);
     }
 
     if (fIndices)
         faceIndices = std::vector<int>(fIndices, fIndices + nTriangles);
+}
+
+TriangleMesh::TriangleMesh(const char *buffer, const size_t len)
+    : storage(std::make_unique<char[]>(len)),
+      nTriangles(*reinterpret_cast<const int *>(buffer)),
+      nVertices(*reinterpret_cast<const int *>(buffer + sizeof(int))),
+      alphaMask(),
+      shadowAlphaMask(),
+      faceIndices() {
+    memcpy(storage.get(), buffer, len);
+    size_t offset = sizeof(int) * 2;
+
+    vertexIndices = (int *)(storage.get() + offset);
+    offset += sizeof(int) * nTriangles * 3;
+
+    p = (Point3f *)(storage.get() + offset);
+    offset += sizeof(Point3f) * nVertices;
+
+    n = (Normal3f *)(storage[offset] ? storage.get() + offset + 1 : nullptr);
+    offset += (n ? nVertices * sizeof(Normal3f) : 0) + 1;
+
+    s = (Vector3f *)(storage[offset] ? storage.get() + offset + 1 : nullptr);
+    offset += (s ? nVertices * sizeof(Vector3f) : 0) + 1;
+
+    uv = (Point2f *)(storage[offset] ? storage.get() + offset + 1 : nullptr);
+    offset += (uv ? nVertices * sizeof(Point2f) : 0) + 1;
 }
 
 std::vector<std::shared_ptr<Shape>> CreateTriangleMesh(

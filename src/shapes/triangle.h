@@ -52,6 +52,10 @@ class VanillaBVHAccel;
 
 // Triangle Declarations
 struct TriangleMesh {
+  private:
+    std::unique_ptr<char[]> storage {nullptr};
+
+  public:
     // TriangleMesh Public Methods
     TriangleMesh(const Transform &ObjectToWorld, int nTriangles,
                  const int *vertexIndices, int nVertices, const Point3f *P,
@@ -60,13 +64,17 @@ struct TriangleMesh {
                  const std::shared_ptr<Texture<Float>> &shadowAlphaMask,
                  const int *faceIndices);
 
+    TriangleMesh(const char *buffer, const size_t len);
+
     // TriangleMesh Data
     const int nTriangles, nVertices;
-    std::vector<int> vertexIndices;
-    std::unique_ptr<Point3f[]> p;
-    std::unique_ptr<Normal3f[]> n;
-    std::unique_ptr<Vector3f[]> s;
-    std::unique_ptr<Point2f[]> uv;
+
+    int *vertexIndices = nullptr;
+    Point3f *p = nullptr;
+    Normal3f *n = nullptr;
+    Vector3f *s = nullptr;
+    Point2f *uv = nullptr;
+
     std::shared_ptr<Texture<Float>> alphaMask, shadowAlphaMask;
     std::vector<int> faceIndices;
 };

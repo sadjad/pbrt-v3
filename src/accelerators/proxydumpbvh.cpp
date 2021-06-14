@@ -1502,10 +1502,9 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
                     TriangleMesh *mesh = tri->mesh.get();
 
                     uint64_t triNum =
-                        (tri->v - tri->mesh->vertexIndices.data()) / 3;
+                        (tri->v - tri->mesh->vertexIndices) / 3;
 
                     CHECK_GE(triNum, 0);
-                    CHECK_LT(triNum * 3, tri->mesh->vertexIndices.size());
                     trianglesInTreelet[mesh].push_back(triNum);
                 }
             }
@@ -1582,22 +1581,22 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
                 int origIdx = kv.first;
                 int newIdx = kv.second;
                 P[newIdx] = mesh->p[origIdx];
-                if (mesh->s.get()) {
+                if (mesh->s) {
                     S[newIdx] = mesh->s[origIdx];
                 }
-                if (mesh->n.get()) {
+                if (mesh->n) {
                     N[newIdx] = mesh->n[origIdx];
                 }
-                if (mesh->uv.get()) {
+                if (mesh->uv) {
                     uv[newIdx] = mesh->uv[origIdx];
                 }
             }
 
             shared_ptr<TriangleMesh> newMesh = make_shared<TriangleMesh>(
                 Transform(), numTris, vertIdxs.data(), numVerts,
-                P.data(), mesh->s.get() ? S.data() : nullptr,
-                mesh->n.get() ? N.data() : nullptr,
-                mesh->uv.get() ? uv.data() : nullptr, mesh->alphaMask,
+                P.data(), mesh->s ? S.data() : nullptr,
+                mesh->n ? N.data() : nullptr,
+                mesh->uv ? uv.data() : nullptr, mesh->alphaMask,
                 mesh->shadowAlphaMask,
                 mesh->faceIndices.size() > 0 ? faceIdxs.data() : nullptr);
 
@@ -1685,7 +1684,7 @@ vector<uint32_t> ProxyDumpBVH::DumpTreelets(bool root, bool inlineProxies) const
                     TriangleMesh *mesh = tri->mesh.get();
 
                     uint32_t sMeshID = triMeshIDs.at(mesh);
-                    int origTriNum = (tri->v - mesh->vertexIndices.data()) / 3;
+                    int origTriNum = (tri->v - mesh->vertexIndices) / 3;
                     int newTriNum = triNumRemap.at(mesh).at(origTriNum);
 
                     protobuf::Triangle triProto;

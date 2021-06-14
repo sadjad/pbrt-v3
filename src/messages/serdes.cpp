@@ -41,27 +41,26 @@ string serialize(const TriangleMesh& tm) {
 
     do_copy(output, offset, &tm.nTriangles, sizeof(int));
     do_copy(output, offset, &tm.nVertices, sizeof(int));
-    do_copy(output, offset, tm.vertexIndices.data(),
-            sizeof(int) * tm.nTriangles * 3);
+    do_copy(output, offset, tm.vertexIndices, sizeof(int) * tm.nTriangles * 3);
 
-    do_copy(output, offset, tm.p.get(), sizeof(tm.p[0]) * tm.nVertices);
+    do_copy(output, offset, tm.p, sizeof(tm.p[0]) * tm.nVertices);
 
     do_copy(output, offset, &has_n, sizeof(bool));
 
     if (has_n) {
-        do_copy(output, offset, tm.n.get(), sizeof(tm.n[0]) * tm.nVertices);
+        do_copy(output, offset, tm.n, sizeof(tm.n[0]) * tm.nVertices);
     }
 
     do_copy(output, offset, &has_s, sizeof(bool));
 
     if (has_s) {
-        do_copy(output, offset, tm.s.get(), sizeof(tm.s[0]) * tm.nVertices);
+        do_copy(output, offset, tm.s, sizeof(tm.s[0]) * tm.nVertices);
     }
 
     do_copy(output, offset, &has_uv, sizeof(bool));
 
     if (has_uv) {
-        do_copy(output, offset, tm.uv.get(), sizeof(tm.uv[0]) * tm.nVertices);
+        do_copy(output, offset, tm.uv, sizeof(tm.uv[0]) * tm.nVertices);
     }
 
     if (offset != output_len) {
@@ -72,52 +71,7 @@ string serialize(const TriangleMesh& tm) {
 }
 
 TriangleMesh deserialize(const char* data, const size_t len) {
-    size_t offset = 0;
-
-    const int nTriangles = *reinterpret_cast<const int*>(data + offset);
-    offset += sizeof(int);
-
-    const int nVertices = *reinterpret_cast<const int*>(data + offset);
-    offset += sizeof(int);
-
-    const int* vertex_indices = reinterpret_cast<const int*>(data + offset);
-    offset += sizeof(int) * nTriangles * 3;
-
-    const Point3f* p = reinterpret_cast<const Point3f*>(data + offset);
-    offset += sizeof(Point3f) * nVertices;
-
-    // n
-    const bool has_n = *reinterpret_cast<const bool*>(data + offset);
-    offset += sizeof(bool);
-
-    const Normal3f* n =
-        has_n ? reinterpret_cast<const Normal3f*>(data + offset) : nullptr;
-    offset += has_n ? sizeof(Normal3f) * nVertices : 0;
-
-    // s
-    const bool has_s = *reinterpret_cast<const bool*>(data + offset);
-    offset += sizeof(bool);
-
-    const Vector3f* s =
-        has_s ? reinterpret_cast<const Vector3f*>(data + offset) : nullptr;
-    offset += has_s ? sizeof(Vector3f) * nVertices : 0;
-
-    // uv
-    const bool has_uv = *reinterpret_cast<const bool*>(data + offset);
-    offset += sizeof(bool);
-
-    const Point2f* uv =
-        has_uv ? reinterpret_cast<const Point2f*>(data + offset) : nullptr;
-    offset += has_uv ? sizeof(Point2f) * nVertices : 0;
-
-    Transform identity;
-
-    if (offset != len) {
-        throw runtime_error("invalid buffer size");
-    }
-
-    return TriangleMesh(identity, nTriangles, vertex_indices, nVertices, p, s,
-                        n, uv, nullptr, nullptr, nullptr);
+    return {data, len};
 }
 
 }  // namespace triangle_mesh
