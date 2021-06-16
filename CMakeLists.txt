@@ -614,7 +614,8 @@ ADD_SANITIZERS ( convert_treelet )
 
 SET_TARGET_PROPERTIES ( convert_treelet PROPERTIES OUTPUT_NAME "convert-treelet" )
 TARGET_COMPILE_FEATURES ( convert_treelet PRIVATE ${PBRT_CXX11_FEATURES} )
-TARGET_LINK_LIBRARIES ( convert_treelet ${ALL_PBRT_LIBS} )
+TARGET_LINK_LIBRARIES ( convert_treelet ${ALL_PBRT_LIBS} -fno-builtin-malloc
+  -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -ljemalloc )
 
 # gen-static0
 ADD_EXECUTABLE ( gen_static0 src/cloud/gen-static0.cpp )
