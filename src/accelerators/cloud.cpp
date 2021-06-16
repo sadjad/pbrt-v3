@@ -217,16 +217,20 @@ void CloudBVH::finializeTreeletLoad(const uint32_t root_id) const {
 }
 
 void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
-                               const size_t length) const {
+                               size_t length) const {
     ProfilePhase _(Prof::LoadTreelet);
 
-    vector<TreeletNode> nodes;
-    LiteRecordReader reader;
+    treelets_[root_id] = make_unique<Treelet>();
+
+    auto &treelet = *treelets_[root_id];
+    auto &nodes = treelet.nodes;
+    auto &tree_meshes = treelet.meshes;
+    auto &tree_primitives = treelet.primitives;
+    auto &tree_transforms = treelet.transforms;
+    auto &tree_instances = treelet.instances;
 
     vector<char> treelet_buffer;
-    if (buffer) {
-        reader = {buffer, length};
-    } else {
+    if (!buffer) {
         const string treelet_path =
             global::manager.getScenePath() + "/" +
             global::manager.getFileName(ObjectType::Treelet, root_id);
@@ -237,16 +241,12 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
 
         treelet_buffer.resize(size);
         fin.read(treelet_buffer.data(), size);
-        reader = {treelet_buffer.data(), treelet_buffer.size()};
+
+        buffer = treelet_buffer.data();
+        length = treelet_buffer.size();
     }
 
-    treelets_[root_id] = make_unique<Treelet>();
-
-    auto &treelet = *treelets_[root_id];
-    auto &tree_meshes = treelet.meshes;
-    auto &tree_primitives = treelet.primitives;
-    auto &tree_transforms = treelet.transforms;
-    auto &tree_instances = treelet.instances;
+    LiteRecordReader reader{buffer, length};
 
     map<uint32_t, uint32_t> mesh_material_ids;
 
@@ -254,25 +254,49 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
     uint32_t num_triangle_meshes = 0;
     reader.read(&num_triangle_meshes);
 
+    const char *tm_buff_start = buffer + sizeof(uint32_t) * 2;
+    const char *tm_buff_end = tm_buff_start;
+
+    size_t l = 0;
+
+    // find the start and the end of the buffer for meshes
     for (int i = 0; i < num_triangle_meshes; ++i) {
-        /* load the TriangleMesh if necessary */
         uint64_t tm_id;
         uint64_t material_id;
-
+ 
         reader.read(&tm_id);
         reader.read(&material_id);
-
+ 
         const char *tm_buffer;
         size_t tm_buffer_len;
         reader.read(&tm_buffer, &tm_buffer_len);
+        tm_buff_end = tm_buffer + tm_buffer_len;
+    }
 
-        auto p = tree_meshes.emplace(
-            tm_id,
-            make_shared<TriangleMesh>(move(
-                serdes::triangle_mesh::deserialize(tm_buffer, tm_buffer_len))));
+    {
+        const size_t len = static_cast<size_t>(tm_buff_end - tm_buff_start);
+        treelet.mesh_storage = make_unique<char[]>(len);
+        memcpy(treelet.mesh_storage.get(), tm_buff_start, len);
 
-        CHECK_EQ(p.second, true);
-        mesh_material_ids[tm_id] = material_id;
+        LiteRecordReader tm_reader{treelet.mesh_storage.get(), len};
+
+        for (int i = 0; i < num_triangle_meshes; i++) {
+            uint64_t tm_id;
+            uint64_t material_id;
+
+            tm_reader.read(&tm_id);
+            tm_reader.read(&material_id);
+
+            const char *tm_buffer;
+            size_t tm_buffer_len;
+            tm_reader.read(&tm_buffer, &tm_buffer_len);
+
+            auto p = tree_meshes.emplace(
+                tm_id, std::make_shared<TriangleMesh>(tm_buffer));
+
+            CHECK_EQ(p.second, true);
+            mesh_material_ids[tm_id] = material_id;
+        }
     }
 
     uint32_t node_count;
@@ -284,7 +308,7 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
     nodes.resize(node_count);
     tree_primitives.reserve(primitive_count);
 
-    const char * nodes_buffer;
+    const char *nodes_buffer;
     size_t nodes_buf_len;
 
     reader.read(&nodes_buffer, &nodes_buf_len);
@@ -366,8 +390,6 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
 
         nNodes++;
     }
-
-    treelet.nodes = move(nodes);
 }
 
 void CloudBVH::Trace(RayState &rayState) const {

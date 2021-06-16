@@ -72,25 +72,29 @@ TriangleMesh::TriangleMesh(
     ++nMeshes;
     nTris += nTriangles;
 
-    storage = std::make_unique<char[]>(storageSize);
+    internal_storage = std::make_unique<char[]>(storageSize);
+    storage = const_cast<char *>(internal_storage.get());
+
+    char *ptr = const_cast<char *>(storage);
+
     size_t offset = sizeof(int) * 2;
 
-    vertexIndices = (int *)(storage.get() + offset);
+    vertexIndices = (int *)(ptr + offset);
     offset += sizeof(int) * nTriangles * 3;
 
-    p = (Point3f *)(storage.get() + offset);
+    p = (Point3f *)(ptr + offset);
     offset += sizeof(Point3f) * nVertices;
 
-    storage[offset] = (N != nullptr);
-    n = (Normal3f *)(N ? storage.get() + offset + 1 : nullptr);
+    ptr[offset] = (N != nullptr);
+    n = (Normal3f *)(N ? ptr + offset + 1 : nullptr);
     offset += (N ? nVertices * sizeof(Normal3f) : 0) + 1 /* presence flag */;
 
-    storage[offset] = (S != nullptr);
-    s = (Vector3f *)(S ? storage.get() + offset + 1 : nullptr);
+    ptr[offset] = (S != nullptr);
+    s = (Vector3f *)(S ? ptr + offset + 1 : nullptr);
     offset += (S ? nVertices * sizeof(Vector3f) : 0) + 1 /* presence flag */;
 
-    storage[offset] = (UV != nullptr);
-    uv = (Point2f *)(UV ? storage.get() + offset + 1 : nullptr);
+    ptr[offset] = (UV != nullptr);
+    uv = (Point2f *)(UV ? ptr + offset + 1 : nullptr);
     offset += (UV ? nVertices * sizeof(Point2f) : 0) + 1 /* presence flag */;
 
     memcpy(vertexIndices, vertexIndices_, nTriangles * 3 * sizeof(int));
@@ -113,29 +117,29 @@ TriangleMesh::TriangleMesh(
         faceIndices = std::vector<int>(fIndices, fIndices + nTriangles);
 }
 
-TriangleMesh::TriangleMesh(const char *buffer, const size_t len)
-    : storage(std::make_unique<char[]>(len)),
-      nTriangles(*reinterpret_cast<const int *>(buffer)),
-      nVertices(*reinterpret_cast<const int *>(buffer + sizeof(int))),
+TriangleMesh::TriangleMesh(const char *data)
+    : storage(data),
+      nTriangles(*reinterpret_cast<const int *>(storage)),
+      nVertices(*reinterpret_cast<const int *>(storage + sizeof(int))),
       alphaMask(),
       shadowAlphaMask(),
       faceIndices() {
-    memcpy(storage.get(), buffer, len);
+    char *ptr = const_cast<char *>(storage);
     size_t offset = sizeof(int) * 2;
 
-    vertexIndices = (int *)(storage.get() + offset);
+    vertexIndices = (int *)(ptr + offset);
     offset += sizeof(int) * nTriangles * 3;
 
-    p = (Point3f *)(storage.get() + offset);
+    p = (Point3f *)(ptr + offset);
     offset += sizeof(Point3f) * nVertices;
 
-    n = (Normal3f *)(storage[offset] ? storage.get() + offset + 1 : nullptr);
+    n = (Normal3f *)(storage[offset] ? ptr + offset + 1 : nullptr);
     offset += (n ? nVertices * sizeof(Normal3f) : 0) + 1;
 
-    s = (Vector3f *)(storage[offset] ? storage.get() + offset + 1 : nullptr);
+    s = (Vector3f *)(storage[offset] ? ptr + offset + 1 : nullptr);
     offset += (s ? nVertices * sizeof(Vector3f) : 0) + 1;
 
-    uv = (Point2f *)(storage[offset] ? storage.get() + offset + 1 : nullptr);
+    uv = (Point2f *)(storage[offset] ? ptr + offset + 1 : nullptr);
     offset += (uv ? nVertices * sizeof(Point2f) : 0) + 1;
 }
 

@@ -70,10 +70,6 @@ string serialize(const TriangleMesh& tm) {
     return output;
 }
 
-TriangleMesh deserialize(const char* data, const size_t len) {
-    return {data, len};
-}
-
 }  // namespace triangle_mesh
 
 }  // namespace pbrt::serdes

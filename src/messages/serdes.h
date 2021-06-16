@@ -13,8 +13,6 @@ namespace triangle_mesh {
 
 std::string serialize(const TriangleMesh& tm);
 
-TriangleMesh deserialize(const char* data, const size_t len);
-
 }  // namespace triangle_mesh
 
 namespace cloudbvh {
