@@ -263,10 +263,10 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
     for (int i = 0; i < num_triangle_meshes; ++i) {
         uint64_t tm_id;
         uint64_t material_id;
- 
+
         reader.read(&tm_id);
         reader.read(&material_id);
- 
+
         const char *tm_buffer;
         size_t tm_buffer_len;
         reader.read(&tm_buffer, &tm_buffer_len);
@@ -275,8 +275,11 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
 
     {
         const size_t len = static_cast<size_t>(tm_buff_end - tm_buff_start);
-        treelet.mesh_storage = make_unique<char[]>(len);
+        treelet.mesh_storage =
+            shared_ptr<char>(new char[len], default_delete<char[]>());
         memcpy(treelet.mesh_storage.get(), tm_buff_start, len);
+
+        char * mesh_storage_start = treelet.mesh_storage.get();
 
         LiteRecordReader tm_reader{treelet.mesh_storage.get(), len};
 
@@ -292,7 +295,9 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
             tm_reader.read(&tm_buffer, &tm_buffer_len);
 
             auto p = tree_meshes.emplace(
-                tm_id, std::make_shared<TriangleMesh>(tm_buffer));
+                tm_id,
+                std::make_shared<TriangleMesh>(treelet.mesh_storage,
+                                               tm_buffer - mesh_storage_start));
 
             CHECK_EQ(p.second, true);
             mesh_material_ids[tm_id] = material_id;

@@ -53,7 +53,7 @@ class VanillaBVHAccel;
 // Triangle Declarations
 struct TriangleMesh {
   private:
-    std::unique_ptr<char[]> internal_storage {nullptr};
+    std::shared_ptr<char> buffer {nullptr};
     const char * storage;
 
   public:
@@ -65,7 +65,7 @@ struct TriangleMesh {
                  const std::shared_ptr<Texture<Float>> &shadowAlphaMask,
                  const int *faceIndices);
 
-    TriangleMesh(const char *data);
+    TriangleMesh(const std::shared_ptr<char> buffer, const size_t offset);
 
     // TriangleMesh Data
     const int nTriangles, nVertices;

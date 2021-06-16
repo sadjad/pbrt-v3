@@ -72,8 +72,9 @@ TriangleMesh::TriangleMesh(
     ++nMeshes;
     nTris += nTriangles;
 
-    internal_storage = std::make_unique<char[]>(storageSize);
-    storage = const_cast<char *>(internal_storage.get());
+    buffer = std::shared_ptr<char>{new char[storageSize],
+                                   std::default_delete<char[]>()};
+    storage = buffer.get();
 
     char *ptr = const_cast<char *>(storage);
 
@@ -117,30 +118,32 @@ TriangleMesh::TriangleMesh(
         faceIndices = std::vector<int>(fIndices, fIndices + nTriangles);
 }
 
-TriangleMesh::TriangleMesh(const char *data)
-    : storage(data),
+TriangleMesh::TriangleMesh(const std::shared_ptr<char> buffer,
+                           const size_t tm_offset)
+    : buffer(buffer),
+      storage(buffer.get() + tm_offset),
       nTriangles(*reinterpret_cast<const int *>(storage)),
       nVertices(*reinterpret_cast<const int *>(storage + sizeof(int))),
       alphaMask(),
       shadowAlphaMask(),
       faceIndices() {
     char *ptr = const_cast<char *>(storage);
-    size_t offset = sizeof(int) * 2;
+    size_t off = sizeof(int) * 2;
 
-    vertexIndices = (int *)(ptr + offset);
-    offset += sizeof(int) * nTriangles * 3;
+    vertexIndices = (int *)(ptr + off);
+    off += sizeof(int) * nTriangles * 3;
 
-    p = (Point3f *)(ptr + offset);
-    offset += sizeof(Point3f) * nVertices;
+    p = (Point3f *)(ptr + off);
+    off += sizeof(Point3f) * nVertices;
 
-    n = (Normal3f *)(storage[offset] ? ptr + offset + 1 : nullptr);
-    offset += (n ? nVertices * sizeof(Normal3f) : 0) + 1;
+    n = (Normal3f *)(storage[off] ? ptr + off + 1 : nullptr);
+    off += (n ? nVertices * sizeof(Normal3f) : 0) + 1;
 
-    s = (Vector3f *)(storage[offset] ? ptr + offset + 1 : nullptr);
-    offset += (s ? nVertices * sizeof(Vector3f) : 0) + 1;
+    s = (Vector3f *)(storage[off] ? ptr + off + 1 : nullptr);
+    off += (s ? nVertices * sizeof(Vector3f) : 0) + 1;
 
-    uv = (Point2f *)(storage[offset] ? ptr + offset + 1 : nullptr);
-    offset += (uv ? nVertices * sizeof(Point2f) : 0) + 1;
+    uv = (Point2f *)(storage[off] ? ptr + off + 1 : nullptr);
+    off += (uv ? nVertices * sizeof(Point2f) : 0) + 1;
 }
 
 std::vector<std::shared_ptr<Shape>> CreateTriangleMesh(
