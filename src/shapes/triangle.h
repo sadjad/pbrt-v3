@@ -75,9 +75,9 @@ struct TriangleMesh {
     Normal3f *n = nullptr;
     Vector3f *s = nullptr;
     Point2f *uv = nullptr;
+    int *faceIndices = nullptr;
 
     std::shared_ptr<Texture<Float>> alphaMask, shadowAlphaMask;
-    std::vector<int> faceIndices;
 };
 
 class TreeletDumpBVH;
@@ -92,7 +92,7 @@ class Triangle : public Shape {
         : Shape(ObjectToWorld, WorldToObject, reverseOrientation), mesh(mesh) {
         v = &mesh->vertexIndices[3 * triNumber];
         triMeshBytes += sizeof(*this);
-        faceIndex = mesh->faceIndices.size() ? mesh->faceIndices[triNumber] : 0;
+        faceIndex = mesh->faceIndices ? mesh->faceIndices[triNumber] : 0;
     }
     Bounds3f ObjectBound() const;
     Bounds3f WorldBound() const;

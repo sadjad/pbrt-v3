@@ -65,10 +65,9 @@ TriangleMesh::TriangleMesh(
         sizeof(int) * 2 + nTriangles * 3 * sizeof(int) +
         nVertices * (sizeof(*P) + (N ? sizeof(*N) : 0) + (S ? sizeof(*S) : 0) +
                      (UV ? sizeof(*UV) : 0)) +
-        sizeof(bool) * 3 /* presence flags for N, S and UV */;
+        nTriangles * (fIndices ? sizeof(int) : 0) +
+        sizeof(bool) * 4 /* presence flags for N, S, UV, and faceIndices */;
 
-    triMeshBytes += sizeof(*this) + storageSize +
-                    (fIndices ? sizeof(*fIndices) : 0) * nVertices;
     ++nMeshes;
     nTris += nTriangles;
 
@@ -98,6 +97,10 @@ TriangleMesh::TriangleMesh(
     uv = (Point2f *)(UV ? ptr + offset + 1 : nullptr);
     offset += (UV ? nVertices * sizeof(Point2f) : 0) + 1 /* presence flag */;
 
+    ptr[offset] = (fIndices != nullptr);
+    faceIndices = (int *)(fIndices ? ptr + offset + 1 : nullptr);
+    offset += (fIndices ? nTriangles * sizeof(int) : 0) + 1 /* presence flag */;
+
     memcpy(vertexIndices, vertexIndices_, nTriangles * 3 * sizeof(int));
 
     // Transform mesh vertices to world space
@@ -113,9 +116,9 @@ TriangleMesh::TriangleMesh(
     if (S) {
         for (int i = 0; i < nVertices; ++i) s[i] = ObjectToWorld(S[i]);
     }
-
-    if (fIndices)
-        faceIndices = std::vector<int>(fIndices, fIndices + nTriangles);
+    if (fIndices) {
+        memcpy(faceIndices, fIndices, nTriangles * sizeof(int));
+    }
 }
 
 TriangleMesh::TriangleMesh(const std::shared_ptr<char> buffer,
@@ -125,8 +128,7 @@ TriangleMesh::TriangleMesh(const std::shared_ptr<char> buffer,
       nTriangles(*reinterpret_cast<const int *>(storage)),
       nVertices(*reinterpret_cast<const int *>(storage + sizeof(int))),
       alphaMask(),
-      shadowAlphaMask(),
-      faceIndices() {
+      shadowAlphaMask(){
     char *ptr = const_cast<char *>(storage);
     size_t off = sizeof(int) * 2;
 
@@ -144,6 +146,9 @@ TriangleMesh::TriangleMesh(const std::shared_ptr<char> buffer,
 
     uv = (Point2f *)(storage[off] ? ptr + off + 1 : nullptr);
     off += (uv ? nVertices * sizeof(Point2f) : 0) + 1;
+
+    faceIndices = (int *)(storage[off] ? ptr + off + 1 : nullptr);
+    off += (faceIndices ? nTriangles * sizeof(int) : 0) + 1;
 }
 
 std::vector<std::shared_ptr<Shape>> CreateTriangleMesh(

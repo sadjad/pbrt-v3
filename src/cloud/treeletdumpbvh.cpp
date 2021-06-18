@@ -1998,7 +1998,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                     int newIdx = vertexRemap.at(origIdx);
                     vertIdxs[i * 3 + j] = newIdx;
                 }
-                if (mesh->faceIndices.size() > 0) {
+                if (mesh->faceIndices) {
                     faceIdxs[i] = mesh->faceIndices[triNum];
                 }
             }
@@ -2024,7 +2024,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 mesh->n ? N.data() : nullptr,
                 mesh->uv ? uv.data() : nullptr, mesh->alphaMask,
                 mesh->shadowAlphaMask,
-                mesh->faceIndices.size() > 0 ? faceIdxs.data() : nullptr);
+                mesh->faceIndices ? faceIdxs.data() : nullptr);
 
 
             // Give triangle mesh an ID
