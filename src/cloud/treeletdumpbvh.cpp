@@ -2051,22 +2051,127 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
         }
 
         // Write out nodes for treelet
+        /* format:
+            (1) node_count
+            (2) primitive_count
+            (3) all the nodes in the form of a CloudBVH::TreeletNode array
+            (4) all the primitives */
 
-        size_t primitive_count = 0;
-        for_each(treelet.nodes.begin(), treelet.nodes.end(),
-                 [&](const uint64_t idx) {
-                     primitive_count += nodes[idx].nPrimitives;
+        uint32_t node_count = treelet.nodes.size();
+        for_each(treelet.instances.begin(), treelet.instances.end(),
+                 [&](auto inst) { node_count += inst->nodeCount; });
+
+        uint32_t prim_count = 0;
+
+        for_each(
+            treelet.nodes.begin(), treelet.nodes.end(),
+            [&](const uint64_t idx) { prim_count += nodes[idx].nPrimitives; });
+
+        for_each(treelet.instances.begin(), treelet.instances.end(),
+                 [&](const TreeletDumpBVH *inst) {
+                     for (int i = 0; i < inst->nodeCount; i++) {
+                         prim_count += inst->nodes[i].nPrimitives;
+                     }
                  });
 
-        writer->write(static_cast<uint32_t>(treelet.nodes.size()));
-        writer->write(static_cast<uint32_t>(primitive_count));
+        writer->write(static_cast<uint32_t>(node_count));
+        writer->write(static_cast<uint32_t>(prim_count));
+
+        size_t current_primitive_offset = 0;
+        vector<CloudBVH::TreeletNode> output_nodes;
+        enum Child { LEFT = 0, RIGHT = 1 };
+
+        stack<pair<uint32_t, Child>> q;
+
+        for (uint64_t nodeIdx : treelet.nodes) {
+            const LinearBVHNode &node = nodes[nodeIdx];
+            output_nodes.emplace_back(node.bounds, node.axis);
+
+            auto &out_node = output_nodes.back();
+
+            if (not q.empty()) {
+                auto parent = q.top();
+                q.pop();
+
+                output_nodes[parent.first].child_treelet[parent.second] = treeletID;
+                output_nodes[parent.first].child_node[parent.second] = output_nodes.size() - 1;
+            }
+
+            if (node.nPrimitives == 0) { // it's not a leaf
+                uint32_t r_tid = treeletAllocations[treelet.dirIdx][node.secondChildOffset];
+                if (r_tid != treeletID) {
+                    out_node.child_treelet[RIGHT] =
+                        global::manager.getId(&allTreelets[r_tid]);
+                    out_node.child_node[RIGHT] =
+                        treeletNodeLocations[r_tid].at(node.secondChildOffset);
+                } else {
+                    q.emplace(output_nodes.size() - 1, RIGHT);
+                }
+                
+                uint32_t l_tid = treeletAllocations[treelet.dirIdx][nodeIdx + 1];
+                if (l_tid != treeletID) {
+                    out_node.child_treelet[LEFT] =
+                        global::manager.getId(&allTreelets[l_tid]);
+                    out_node.child_node[LEFT] =
+                        treeletNodeLocations[l_tid].at(nodeIdx + 1);
+                } else {
+                    q.emplace(output_nodes.size() - 1, LEFT);
+                }
+            } else {  // it is a leaf
+                out_node.leaf_tag = ~0;
+                out_node.primitive_offset = current_primitive_offset;
+                out_node.primitive_count = node.nPrimitives;
+
+                current_primitive_offset += node.nPrimitives;
+            }
+        }
+
+        for (TreeletDumpBVH *inst : treelet.instances) {
+            for (uint64_t nodeIdx = 0; nodeIdx < inst->nodeCount; nodeIdx++) {
+                const LinearBVHNode &instNode = inst->nodes[nodeIdx];
+                output_nodes.emplace_back(instNode.bounds, instNode.axis);
+
+                auto &out_node = output_nodes.back();
+                
+                out_node.leaf_tag = ~0;
+                out_node.primitive_offset = current_primitive_offset;
+                out_node.primitive_count = instNode.nPrimitives;
+
+                current_primitive_offset += instNode.nPrimitives;
+            }
+        }
+
+        writer->write(reinterpret_cast<const char *>(output_nodes.data()),
+                      sizeof(CloudBVH::TreeletNode) * output_nodes.size());
+        output_nodes.clear();
+
+        // Writing out the primitives
+        /* format:
+            for each node:
+                (1) transformed primtives count
+                (2) triangles count
+                (3) list of primitives */
+
+        serdes::cloudbvh::TransformedPrimitive primitive;
+        serdes::cloudbvh::Triangle triangle;
 
         for (uint64_t nodeIdx : treelet.nodes) {
             const LinearBVHNode &node = nodes[nodeIdx];
 
-            protobuf::BVHNode nodeProto;
-            *nodeProto.mutable_bounds() = to_protobuf(node.bounds);
-            nodeProto.set_axis(node.axis);
+            uint32_t transformed_primitive_count = 0;
+            uint32_t triangle_count = 0;
+
+            for (int i = 0; i < node.nPrimitives; i++) {
+                if (primitives[node.primitivesOffset + i]->GetType() ==
+                    PrimitiveType::Transformed) {
+                    transformed_primitive_count++;
+                } else {
+                    triangle_count++;
+                }
+            }
+
+            writer->write(transformed_primitive_count);
+            writer->write(triangle_count);
 
             for (int primIdx = 0; primIdx < node.nPrimitives; primIdx++) {
                 auto &prim = primitives[node.primitivesOffset + primIdx];
@@ -2095,12 +2200,23 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                         instanceRef <<= 32;
                     }
 
-                    protobuf::TransformedPrimitive tpProto;
-                    tpProto.set_root_ref(instanceRef);
-                    *tpProto.mutable_transform() = to_protobuf(tp->GetTransform());
+                    auto &t = tp->GetTransform();
 
-                    *nodeProto.add_transformed_primitives() = tpProto;
-                } else {
+                    primitive.root_ref = instanceRef;
+                    primitive.start_transform = t.StartTransform()->GetMatrix();
+                    primitive.start_time = t.StartTime();
+                    primitive.end_transform = t.EndTransform()->GetMatrix();
+                    primitive.end_time = t.EndTime();
+
+                    writer->write(reinterpret_cast<const char *>(&primitive),
+                                  sizeof(primitive));
+                } 
+            }
+
+            for (int primIdx = 0; primIdx < node.nPrimitives; primIdx++) {
+                auto &prim = primitives[node.primitivesOffset + primIdx];
+                
+                if (prim->GetType() != PrimitiveType::Transformed) {
                     shared_ptr<GeometricPrimitive> gp =
                         dynamic_pointer_cast<GeometricPrimitive>(prim);
                     const Shape *shape = gp->GetShape();
@@ -2112,45 +2228,25 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                     int origTriNum = (tri->v - mesh->vertexIndices) / 3;
                     int newTriNum = triNumRemap.at(mesh).at(origTriNum);
 
-                    protobuf::Triangle triProto;
-                    triProto.set_mesh_id(sMeshID);
-                    triProto.set_tri_number(newTriNum);
-                    *nodeProto.add_triangles() = triProto;
+                    triangle.mesh_id = sMeshID;
+                    triangle.tri_number = newTriNum;
+
+                    writer->write(reinterpret_cast<const char *>(&triangle),
+                                  sizeof(triangle));
                 }
             }
-
-            if (node.nPrimitives == 0) {
-                uint32_t leftTreeletID = treeletAllocations[treelet.dirIdx][nodeIdx + 1];
-                if (leftTreeletID != treeletID) {
-                    uint32_t sTreeletID = global::manager.getId(&allTreelets[leftTreeletID]);
-                    uint64_t leftRef = sTreeletID;
-                    leftRef <<= 32;
-                    leftRef |=
-                        treeletNodeLocations[leftTreeletID].at(nodeIdx + 1);
-                    nodeProto.set_left_ref(leftRef);
-                }
-
-                uint32_t rightTreeletID = treeletAllocations[treelet.dirIdx][node.secondChildOffset];
-                if (rightTreeletID != treeletID) {
-                    uint32_t sTreeletID = global::manager.getId(&allTreelets[rightTreeletID]);
-                    uint64_t rightRef = sTreeletID;
-                    rightRef <<= 32;
-                    rightRef |=
-                        treeletNodeLocations[rightTreeletID].at(node.secondChildOffset);
-                    nodeProto.set_right_ref(rightRef);
-                }
-            }
-            writer->write(nodeProto);
         }
 
-        // Write out nodes for instances
+        // Write out primitives for instances
         for (TreeletDumpBVH *inst : treelet.instances) {
             for (uint64_t nodeIdx = 0; nodeIdx < inst->nodeCount; nodeIdx++) {
                 const LinearBVHNode &instNode = inst->nodes[nodeIdx];
 
-                protobuf::BVHNode nodeProto;
-                *nodeProto.mutable_bounds() = to_protobuf(instNode.bounds);
-                nodeProto.set_axis(instNode.axis);
+                uint32_t transformed_primitive_count = 0;
+                uint32_t triangle_count = instNode.nPrimitives;
+
+                writer->write(transformed_primitive_count);
+                writer->write(triangle_count);
 
                 for (int primIdx = 0; primIdx < instNode.nPrimitives; primIdx++) {
                     auto &prim = inst->primitives[instNode.primitivesOffset + primIdx];
@@ -2165,13 +2261,12 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                     uint32_t sMeshID = triMeshIDs.at(mesh);
                     int triNum = (tri->v - mesh->vertexIndices) / 3;
 
-                    protobuf::Triangle triProto;
-                    triProto.set_mesh_id(sMeshID);
-                    triProto.set_tri_number(triNum);
-                    *nodeProto.add_triangles() = triProto;
-                }
+                    triangle.mesh_id = sMeshID;
+                    triangle.tri_number = triNum;
 
-                writer->write(nodeProto);
+                    writer->write(reinterpret_cast<const char *>(&triangle),
+                                  sizeof(triangle));
+                }
             }
         }
     }
