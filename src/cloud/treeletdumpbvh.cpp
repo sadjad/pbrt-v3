@@ -1989,7 +1989,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             vector<Vector3f> S(numVerts);
             vector<Normal3f> N(numVerts);
             vector<Point2f> uv(numVerts);
-            vector<int> faceIdxs(numVerts);
+            vector<int> faceIdxs(numTris);
 
             for (size_t i = 0; i < numTris; i++) {
                 size_t triNum = triNums[i];
