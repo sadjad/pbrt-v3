@@ -56,6 +56,8 @@ class MixMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::Mix; }
+
   private:
     // MixMaterial Private Data
     std::shared_ptr<Material> m1, m2;

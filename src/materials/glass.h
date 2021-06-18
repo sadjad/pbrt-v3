@@ -66,6 +66,8 @@ class GlassMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::Glass; }
+
   private:
     // GlassMaterial Private Data
     std::shared_ptr<Texture<Spectrum>> Kr, Kt;

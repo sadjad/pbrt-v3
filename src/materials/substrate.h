@@ -64,6 +64,8 @@ class SubstrateMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::Substrate; }
+
   private:
     // SubstrateMaterial Private Data
     std::shared_ptr<Texture<Spectrum>> Kd, Ks;

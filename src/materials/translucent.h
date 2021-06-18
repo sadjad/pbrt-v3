@@ -67,6 +67,8 @@ class TranslucentMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::Translucent; }
+
   private:
     // TranslucentMaterial Private Data
     std::shared_ptr<Texture<Spectrum>> Kd, Ks;

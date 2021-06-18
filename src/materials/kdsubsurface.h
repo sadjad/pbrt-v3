@@ -77,6 +77,8 @@ class KdSubsurfaceMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::KdSubsurface; }
+
   private:
     // KdSubsurfaceMaterial Private Data
     Float scale;

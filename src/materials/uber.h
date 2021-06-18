@@ -74,6 +74,8 @@ class UberMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::Uber; }
+
   private:
     // UberMaterial Private Data
     std::shared_ptr<Texture<Spectrum>> Kd, Ks, Kr, Kt, opacity;

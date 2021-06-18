@@ -57,6 +57,8 @@ class FourierMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::Fourier; }
+
   private:
     // FourierMaterial Private Data
     FourierBSDFTable *bsdfTable;

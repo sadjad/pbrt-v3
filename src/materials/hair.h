@@ -77,6 +77,8 @@ class HairMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::Hair; }
+
   private:
     // HairMaterial Private Data
     std::shared_ptr<Texture<Spectrum>> sigma_a, color;

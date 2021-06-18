@@ -62,6 +62,8 @@ class PlasticMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::Plastic; }
+
   private:
     // PlasticMaterial Private Data
     std::shared_ptr<Texture<Spectrum>> Kd, Ks;

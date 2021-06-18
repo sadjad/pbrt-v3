@@ -84,6 +84,8 @@ class DisneyMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::Disney; }
+
   private:
     // DisneyMaterial Private Data
     std::shared_ptr<Texture<Spectrum>> color;

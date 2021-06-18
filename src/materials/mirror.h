@@ -57,6 +57,8 @@ class MirrorMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::Mirror; }
+
   private:
     // MirrorMaterial Private Data
     std::shared_ptr<Texture<Spectrum>> Kr;

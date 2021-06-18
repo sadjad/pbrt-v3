@@ -60,6 +60,8 @@ class MetalMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::Metal; }
+
   private:
     // MetalMaterial Private Data
     std::shared_ptr<Texture<Spectrum>> eta, k;

@@ -44,6 +44,23 @@
 
 namespace pbrt {
 
+enum class MaterialType {
+    Disney,
+    Fourier,
+    Glass,
+    Hair,
+    KdSubsurface,
+    Matte,
+    Metal,
+    Mirror,
+    Mix,
+    Plastic,
+    Substrate,
+    Subsurface,
+    Translucent,
+    Uber
+};
+
 // TransportMode Declarations
 enum class TransportMode { Radiance, Importance };
 
@@ -58,6 +75,8 @@ class Material {
     virtual ~Material();
     static void Bump(const std::shared_ptr<Texture<Float>> &d,
                      SurfaceInteraction *si);
+
+    virtual MaterialType GetType() const = 0;
 };
 
 }  // namespace pbrt

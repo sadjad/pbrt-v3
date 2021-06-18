@@ -77,6 +77,8 @@ class SubsurfaceMaterial : public Material {
                                     TransportMode mode,
                                     bool allowMultipleLobes) const;
 
+    MaterialType GetType() const { return MaterialType::Subsurface; }
+
   private:
     // SubsurfaceMaterial Private Data
     const Float scale;
