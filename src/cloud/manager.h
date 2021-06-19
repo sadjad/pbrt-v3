@@ -2,8 +2,10 @@
 #define PBRT_CLOUD_MANAGER_H
 
 #include <string>
+#include <typeinfo>
 #include <unordered_map>
 
+#include "core/paramset.h"
 #include "messages/serialization.h"
 #include "pbrt/common.h"
 #include "util/optional.h"
@@ -41,6 +43,15 @@ class SceneManager {
     void recordDependency(const ObjectKey& from, const ObjectKey& to);
     protobuf::Manifest makeManifest() const;
 
+    template <class T>
+    void recordParams(const T* obj, ParamSet& params);
+
+    template <class T>
+    ParamSet& getParams(const T* obj);
+
+    template <class T>
+    bool hasParams(const T* obj);
+
     static std::string getFileName(const ObjectType type, const uint32_t id);
     const std::string& getScenePath() const { return scenePath; }
 
@@ -63,9 +74,26 @@ class SceneManager {
     std::map<std::string, uint32_t> textureNameToId;
     std::map<ObjectKey, uint64_t> objectSizes{};
     std::map<ObjectKey, std::set<ObjectKey>> dependencies;
+    std::map<std::type_info, std::map<void *, ParamSet>> recordedParams; 
 
     std::map<ObjectID, std::set<ObjectKey>> treeletDependencies;
 };
+
+template <class T>
+void SceneManager::recordParams(const T* obj, ParamSet& params) {
+    recordedParams[typeid(T)][reinterpret_cast<void*>(obj)] = params;
+}
+
+template <class T>
+ParamSet& SceneManager::getParams(const T* obj) {
+    return recordedParams.at(typeid(T)).at(reinterpret_cast<void*>(obj));
+}
+
+template <class T>
+bool SceneManager::hasParams(const T* obj) {
+    return recordedParams.count(typeid(T)) &&
+           recordedParams[typeid(T)].count(reinterpret_cast<void*>(obj));
+}
 
 namespace global {
 extern SceneManager manager;
