@@ -59,6 +59,8 @@ class FBmTexture : public Texture<T> {
         return FBm(P, dpdx, dpdy, omega, octaves);
     }
 
+    TextureType GetType() const { return TextureType::FBm; }
+
   private:
     std::unique_ptr<TextureMapping3D> mapping;
     const Float omega;

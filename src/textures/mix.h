@@ -59,6 +59,8 @@ class MixTexture : public Texture<T> {
         Float amt = amount->Evaluate(si);
         return (1 - amt) * t1 + amt * t2;
     }
+    
+    TextureType GetType() const { return TextureType::Mix; }
 
   private:
     std::shared_ptr<Texture<T>> tex1, tex2;

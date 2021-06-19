@@ -59,6 +59,8 @@ class UVTexture : public Texture<Spectrum> {
         return Spectrum::FromRGB(rgb);
     }
 
+    TextureType GetType() const { return TextureType::UV; }
+
   private:
     std::unique_ptr<TextureMapping2D> mapping;
 };

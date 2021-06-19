@@ -100,6 +100,8 @@ class Checkerboard2DTexture : public Texture<T> {
         }
     }
 
+    TextureType GetType() const { return TextureType::Checkerboard2D; }
+
   private:
     // Checkerboard2DTexture Private Data
     std::unique_ptr<TextureMapping2D> mapping;
@@ -126,6 +128,8 @@ class Checkerboard3DTexture : public Texture<T> {
         else
             return tex2->Evaluate(si);
     }
+
+    TextureType GetType() const { return TextureType::Checkerboard3D; }
 
   private:
     // Checkerboard3DTexture Private Data

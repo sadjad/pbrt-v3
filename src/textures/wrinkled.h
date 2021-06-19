@@ -59,6 +59,8 @@ class WrinkledTexture : public Texture<T> {
         return Turbulence(p, dpdx, dpdy, omega, octaves);
     }
 
+    TextureType GetType() const { return TextureType::Wrinkled; }
+
   private:
     // WrinkledTexture Private Data
     std::unique_ptr<TextureMapping3D> mapping;

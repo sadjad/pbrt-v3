@@ -55,6 +55,8 @@ class PtexTexture : public Texture<T> {
     ~PtexTexture();
     T Evaluate(const SurfaceInteraction &) const;
 
+    TextureType GetType() const { return TextureType::Ptex; }
+
   private:
     bool valid;
     const std::string filename;

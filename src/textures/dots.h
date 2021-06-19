@@ -77,6 +77,8 @@ class DotsTexture : public Texture<T> {
         return outsideDot->Evaluate(si);
     }
 
+    TextureType GetType() const { return TextureType::Dots; }
+
   private:
     // DotsTexture Private Data
     std::unique_ptr<TextureMapping2D> mapping;

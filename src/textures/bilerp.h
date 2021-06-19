@@ -60,6 +60,8 @@ class BilerpTexture : public Texture<T> {
                (st[0]) * (1 - st[1]) * v10 + (st[0]) * (st[1]) * v11;
     }
 
+    TextureType GetType() const { return TextureType::Bilerp; }
+
   private:
     // BilerpTexture Private Data
     std::unique_ptr<TextureMapping2D> mapping;

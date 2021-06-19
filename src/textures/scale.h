@@ -57,6 +57,8 @@ class ScaleTexture : public Texture<T2> {
         return tex1->Evaluate(si) * tex2->Evaluate(si);
     }
 
+    TextureType GetType() const { return TextureType::Scale; }
+
   private:
     // ScaleTexture Private Data
     std::shared_ptr<Texture<T1>> tex1;

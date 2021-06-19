@@ -53,6 +53,8 @@ class ConstantTexture : public Texture<T> {
     ConstantTexture(const T &value) : value(value) {}
     T Evaluate(const SurfaceInteraction &) const { return value; }
 
+    TextureType GetType() const { return TextureType::Constant; }
+
   private:
     T value;
 };

@@ -47,6 +47,24 @@
 
 namespace pbrt {
 
+enum class TextureType {
+    Bilerp,
+    Checkerboard2D,
+    Checkerboard3D,
+    Constant,
+    Dots,
+    FBm,
+    ImageFloat,
+    ImageSpectrum,
+    Marble,
+    Mix,
+    Ptex,
+    Scale,
+    UV,
+    Windy,
+    Wrinkled
+};
+
 // Texture Declarations
 class TextureMapping2D {
   public:
@@ -137,6 +155,9 @@ class Texture {
     // Texture Interface
     virtual T Evaluate(const SurfaceInteraction &) const = 0;
     virtual ~Texture() {}
+
+    virtual TextureType GetType() const = 0;
+    typedef T ValueType; 
 };
 
 Float Lanczos(Float, Float tau = 2);

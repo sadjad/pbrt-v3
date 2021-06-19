@@ -93,6 +93,17 @@ class ImageTexture : public Texture<Treturn> {
         return ret;
     }
 
+    TextureType GetType() const {
+        if (std::is_same<Treturn, Float>::value) {
+          return TextureType::ImageFloat;
+        }
+        else if (std::is_same<Treturn, Spectrum>::value) {
+            return TextureType::ImageSpectrum;
+        }
+
+        throw std::runtime_error("undefined texture type");
+    }
+
   private:
     // ImageTexture Private Methods
     static MIPMap<Tmemory> *GetTexture(const std::string &filename,

@@ -88,6 +88,8 @@ class MarbleTexture : public Texture<Spectrum> {
         return 1.5f * ((1.f - t) * s0 + t * s1);
     }
 
+    TextureType GetType() const { return TextureType::Marble; }
+
   private:
     // MarbleTexture Private Data
     std::unique_ptr<TextureMapping3D> mapping;

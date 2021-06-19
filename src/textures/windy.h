@@ -60,6 +60,8 @@ class WindyTexture : public Texture<T> {
         return std::abs(windStrength) * waveHeight;
     }
 
+    TextureType GetType() const { return TextureType::Windy; }
+
   private:
     std::unique_ptr<TextureMapping3D> mapping;
 };
