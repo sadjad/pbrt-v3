@@ -1906,6 +1906,8 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
     unordered_map<TreeletDumpBVH *, vector<uint32_t>> nonCopyableInstanceTreelets;
 
     for (uint32_t treeletID = 0; treeletID < allTreelets.size(); treeletID++) {
+        unordered_map<TriangleMesh *, const Material *> meshMaterials;
+
         const TreeletInfo &treelet = allTreelets[treeletID];
         // Find which triangles / meshes are in treelet
         unordered_map<TriangleMesh *, vector<size_t>> trianglesInTreelet;
@@ -1925,6 +1927,13 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
                     CHECK_GE(triNum, 0);
                     trianglesInTreelet[mesh].push_back(triNum);
+
+                    if (meshMaterials.count(mesh) &&
+                        meshMaterials[mesh] != gp->GetMaterial()) {
+                        throw runtime_error("only one material per triangle mesh is allowed");
+                    }
+
+                    meshMaterials[mesh] = gp->GetMaterial();
                 }
             }
         }
@@ -1944,14 +1953,23 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                     const Triangle *tri = dynamic_cast<const Triangle *>(shape);
                     CHECK_NOTNULL(tri);
                     instanceMeshes.insert(tri->mesh.get());
+
+                    if (meshMaterials.count(tri->mesh.get()) &&
+                        meshMaterials[tri->mesh.get()] != gp->GetMaterial()) {
+                        throw runtime_error("only one material per triangle mesh is allowed");
+                    }
+
+                    meshMaterials[tri->mesh.get()] = gp->GetMaterial();
                 }
             }
         }
 
         unsigned sTreeletID = global::manager.getId(&treelet);
         auto writer = global::manager.GetWriter(ObjectType::Treelet, sTreeletID);
-        uint32_t numTriMeshes = trianglesInTreelet.size() + instanceMeshes.size();
-
+        
+        // Write out all the materials used by the treelet
+        const uint32_t numTriMeshes =
+            trianglesInTreelet.size() + instanceMeshes.size();
         writer->write(numTriMeshes);
 
         // FIXME add material support
