@@ -1876,22 +1876,6 @@ void TreeletDumpBVH::DumpHeader() const {
     header.close();
 }
 
-void writeMeshMaterial(SceneManager::WriterPtr &writer, const TriangleMesh *tm,
-                       const Material *mtl) {
-    if (mtl == nullptr) {
-        // TODO just write zero and move on
-        return;
-    }
-
-    const TextureParams& mtlParams = global::manager.getParams(mtl);
-    
-    if (mtl->GetType() != MaterialType::Disney) {
-        throw runtime_error("material type not implemented");
-    }
-
-    mtlParams.GetGeomParams().Print(1);
-}
-
 vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
     // Assign IDs to each treelet
     for (const TreeletInfo &treelet : allTreelets) {
@@ -1921,11 +1905,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
     unordered_map<TreeletDumpBVH *, vector<uint32_t>> nonCopyableInstanceTreelets;
 
-    map<const Material *, SceneManager::ObjectID> dumpedMaterials;
-
     for (uint32_t treeletID = 0; treeletID < allTreelets.size(); treeletID++) {
-        unordered_map<TriangleMesh *, const Material *> meshMaterials;
-
         const TreeletInfo &treelet = allTreelets[treeletID];
         // Find which triangles / meshes are in treelet
         unordered_map<TriangleMesh *, vector<size_t>> trianglesInTreelet;
@@ -1945,16 +1925,6 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
                     CHECK_GE(triNum, 0);
                     trianglesInTreelet[mesh].push_back(triNum);
-
-                    if (meshMaterials.count(mesh)) {
-                        if (meshMaterials[mesh] != gp->GetMaterial()) {
-                            throw runtime_error(
-                                "one material per triangle mesh is allowed");
-                        }
-                    } else {
-                        cout << mesh << " -> " << gp->GetMaterial() << endl;
-                        meshMaterials[mesh] = gp->GetMaterial();
-                    }
                 }
             }
         }
@@ -1975,16 +1945,6 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                     CHECK_NOTNULL(tri);
                     TriangleMesh * mesh = tri->mesh.get();
                     instanceMeshes.insert(mesh);
-
-                    if (meshMaterials.count(mesh)) {
-                        if (meshMaterials[mesh] != gp->GetMaterial()) {
-                            throw runtime_error(
-                                "one material per triangle mesh is allowed");
-                        }
-                    } else {
-                        cout << mesh << " -> " << gp->GetMaterial() << endl;
-                        meshMaterials[mesh] = gp->GetMaterial();
-                    }
                 }
             }
         }
@@ -1992,7 +1952,6 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
         unsigned sTreeletID = global::manager.getId(&treelet);
         auto writer = global::manager.GetWriter(ObjectType::Treelet, sTreeletID);
         
-        // Write out all the materials used by the treelet
         const uint32_t numTriMeshes =
             trianglesInTreelet.size() + instanceMeshes.size();
         writer->write(numTriMeshes);
@@ -2069,9 +2028,6 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 mesh->shadowAlphaMask,
                 mesh->faceIndices ? faceIdxs.data() : nullptr);
 
-
-            // dump the material
-            writeMeshMaterial(writer, newMesh.get(), meshMaterials[mesh]);
 
             // Give triangle mesh an ID
             uint32_t sMeshID = global::manager.getNextId(ObjectType::TriangleMesh);

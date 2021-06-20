@@ -1,15 +1,17 @@
 #ifndef PBRT_CLOUD_TREELET_DUMP_BVH_H
 #define PBRT_CLOUD_TREELET_DUMP_BVH_H
 
-#include "accelerators/bvh.h"
-#include "accelerators/cloud.h"
-#include "pbrt.h"
-#include "primitive.h"
 #include <atomic>
 #include <memory>
 #include <set>
 #include <unordered_map>
 #include <vector>
+
+#include "accelerators/bvh.h"
+#include "accelerators/cloud.h"
+#include "cloud/manager.h"
+#include "pbrt.h"
+#include "primitive.h"
 
 namespace pbrt {
 
