@@ -3,6 +3,7 @@
 
 #include <string>
 #include <typeindex>
+#include <type_traits>
 #include <typeinfo>
 #include <unordered_map>
 
@@ -14,6 +15,19 @@
 #include "util/util.h"
 
 namespace pbrt {
+
+class CopiedTextureParams : public TextureParams {
+  private:
+    const ParamSet copiedGeomParams;
+    const ParamSet copiedMaterialParams;
+
+  public:
+    CopiedTextureParams(TextureParams& tp)
+        : copiedGeomParams(tp.GetGeomParams()),
+          copiedMaterialParams(tp.GetMaterialParams()),
+          TextureParams(copiedGeomParams, copiedMaterialParams,
+                        tp.GetFloatTextures(), tp.GetSpectrumTextures()) {}
+};
 
 class SceneManager {
   public:
@@ -45,10 +59,10 @@ class SceneManager {
     protobuf::Manifest makeManifest() const;
 
     template <class T>
-    void recordParams(const T* obj, const TextureParams& params);
+    void recordParams(const T* obj, TextureParams& params);
 
     template <class T>
-    TextureParams& getParams(const T* obj);
+    const CopiedTextureParams& getParams(const T* obj) const;
 
     template <class T>
     bool hasParams(const T* obj);
@@ -75,20 +89,20 @@ class SceneManager {
     std::map<std::string, uint32_t> textureNameToId;
     std::map<ObjectKey, uint64_t> objectSizes{};
     std::map<ObjectKey, std::set<ObjectKey>> dependencies;
-    std::map<std::type_index, std::map<const void*, TextureParams>>
+    std::map<std::type_index, std::map<const void*, CopiedTextureParams>>
         recordedParams;
 
     std::map<ObjectID, std::set<ObjectKey>> treeletDependencies;
 };
 
 template <class T>
-void SceneManager::recordParams(const T* obj, const TextureParams& params) {
+void SceneManager::recordParams(const T* obj, TextureParams& params) {
     recordedParams[typeid(T)].emplace(reinterpret_cast<const void*>(obj),
                                       params);
 }
 
 template <class T>
-TextureParams& SceneManager::getParams(const T* obj) {
+const CopiedTextureParams& SceneManager::getParams(const T* obj) const {
     return recordedParams.at(typeid(T)).at(reinterpret_cast<const void*>(obj));
 }
 

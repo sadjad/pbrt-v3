@@ -552,7 +552,7 @@ std::vector<std::shared_ptr<Shape>> MakeShapes(const std::string &name,
 STAT_COUNTER("Scene/Materials created", nMaterialsCreated);
 
 std::shared_ptr<Material> MakeMaterial(const std::string &name,
-                                       const TextureParams &mp) {
+                                       TextureParams &mp) {
     Material *material = nullptr;
     if (name == "" || name == "none")
         return nullptr;

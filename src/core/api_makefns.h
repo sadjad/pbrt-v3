@@ -12,7 +12,7 @@
 namespace pbrt {
 
 std::shared_ptr<Material> MakeMaterial(const std::string &name,
-                                       const TextureParams &mp);
+                                       TextureParams &mp);
 std::shared_ptr<Texture<Float>> MakeFloatTexture(const std::string &name,
                                                  const Transform &tex2world,
                                                  const TextureParams &tp);
