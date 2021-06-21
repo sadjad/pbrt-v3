@@ -59,7 +59,7 @@ class SceneManager {
     /* used during dumping */
     uint32_t getId(const void* ptr) const { return ptrIds.at(ptr); }
     uint32_t getNextId(const ObjectType type, const void* ptr = nullptr);
-    uint32_t getTextureId(const std::string& path);
+    uint32_t getTextureFileId(const std::string& path);
     bool hasId(const void* ptr) const { return ptrIds.count(ptr) > 0; }
     void recordDependency(const ObjectKey& from, const ObjectKey& to);
     protobuf::Manifest makeManifest() const;

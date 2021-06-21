@@ -162,7 +162,7 @@ uint32_t SceneManager::getNextId(const ObjectType type, const void* ptr) {
     return id;
 }
 
-uint32_t SceneManager::getTextureId(const std::string& path) {
+uint32_t SceneManager::getTextureFileId(const std::string& path) {
     if (textureNameToId.count(path)) {
         return textureNameToId[path];
     }

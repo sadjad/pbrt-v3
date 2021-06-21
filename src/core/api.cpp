@@ -627,33 +627,43 @@ std::shared_ptr<Material> MakeMaterial(const std::string &name,
     return std::shared_ptr<Material>(material);
 }
 
-Optional<uint32_t> storeTexture(const std::string &name, ParamSet &tp) {
-    if (name == "ptex" || name == "imagemap") {
-        std::string currentName = tp.FindOneFilename("filename", "");
-        if (currentName.length() == 0) {
-            return {false};
-        }
+template <class T>
+void dumpTexture(const ObjectType type, const T *tex, const std::string &name,
+                 const Transform &tex2world, const TextureParams &tp) {
+    /* (0) make a copy of texture's paramset */
+    ParamSet params{tp.GetGeomParams()};
 
-        tp.EraseString("filename");
+    /* (1) store potential texture file */
+    const auto filename = tp.FindFilename("filename", "");
+    Optional<uint32_t> textureFileId;
 
-        const uint32_t textureId = global::manager.getTextureId(currentName);
-        const std::string newFilename =
-            SceneManager::getFileName(ObjectType::Texture, textureId);
-        const std::string newPath =
-            global::manager.getScenePath() + "/" + newFilename;
+    if (!filename.empty()) {
+        textureFileId = global::manager.getTextureFileId(filename);
+        const auto newFilename =
+            global::manager.getFileName(ObjectType::Texture, *textureFileId);
 
-        if (!roost::exists(newPath)) {
-            roost::copy_then_rename(currentName, newPath);
-        }
+        roost::copy_then_rename(
+            filename, global::manager.getScenePath() + "/" + newFilename);
 
-        std::unique_ptr<std::string[]> filename(new std::string[1]);
-        filename[0] = std::string(newFilename);
-        tp.AddString("filename", move(filename), 1);
-
-        return {true, textureId};
+        std::unique_ptr<std::string[]> filenameVal(new std::string[1]);
+        filenameVal[0] = std::string(newFilename);
+        params.AddString("filename", move(filenameVal), 1);
     }
 
-    return {false};
+    /* (2) store the texture */
+    const auto textureId = global::manager.getNextId(type, tex);
+    auto writer = global::manager.GetWriter(type, textureId);
+
+    if (type == ObjectType::FloatTexture) {
+        writer->write(float_texture::to_protobuf(name, tex2world, params));
+    } else if (type == ObjectType::SpectrumTexture) {
+        writer->write(spectrum_texture::to_protobuf(name, tex2world, params));
+    }
+
+    if (textureFileId.initialized()) {
+        global::manager.recordDependency({type, textureId},
+                                         {ObjectType::Texture, *textureFileId});
+    }
 }
 
 std::shared_ptr<Texture<Float>> MakeFloatTexture(const std::string &name,
@@ -689,6 +699,10 @@ std::shared_ptr<Texture<Float>> MakeFloatTexture(const std::string &name,
     else
         Warning("Float texture \"%s\" unknown.", name.c_str());
     tp.ReportUnused();
+
+    if (PbrtOptions.dumpScene) {
+        dumpTexture(ObjectType::FloatTexture, tex, name, tex2world, tp);
+    }
 
     return std::shared_ptr<Texture<Float>>(tex);
 }
@@ -726,6 +740,10 @@ std::shared_ptr<Texture<Spectrum>> MakeSpectrumTexture(
     else
         Warning("Spectrum texture \"%s\" unknown.", name.c_str());
     tp.ReportUnused();
+
+    if (PbrtOptions.dumpScene) {
+        dumpTexture(ObjectType::FloatTexture, tex, name, tex2world, tp);
+    }
 
     return std::shared_ptr<Texture<Spectrum>>(tex);
 }

@@ -202,13 +202,13 @@ message Material {
 message FloatTexture {
     string name = 1;
     Matrix tex2world = 2;
-    TextureParams texture_params = 3;
+    ParamSet params = 3;
 }
 
 message SpectrumTexture {
     string name = 1;
     Matrix tex2world = 2;
-    TextureParams texture_params = 3;
+    ParamSet params = 3;
 }
 
 // Manifest

@@ -144,7 +144,7 @@ std::shared_ptr<Texture<Float>> from_protobuf(
 
 protobuf::FloatTexture to_protobuf(const std::string& name,
                                    const Transform& tex2world,
-                                   const TextureParams& tp);
+                                   const ParamSet& tp);
 
 }  // namespace float_texture
 
@@ -155,7 +155,7 @@ std::shared_ptr<Texture<Spectrum>> from_protobuf(
 
 protobuf::SpectrumTexture to_protobuf(const std::string& name,
                                       const Transform& tex2world,
-                                      const TextureParams& tp);
+                                      const ParamSet& tp);
 
 }  // namespace spectrum_texture
 

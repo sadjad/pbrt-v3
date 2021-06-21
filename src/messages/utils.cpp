@@ -668,39 +668,36 @@ protobuf::Material material::to_protobuf(const std::string& name,
     return material;
 }
 
-std::shared_ptr<Texture<Float>> float_texture::from_protobuf(
+shared_ptr<Texture<Float>> float_texture::from_protobuf(
     const protobuf::FloatTexture& texture) {
-    ParamSet geom_params;
-    ParamSet material_params;
-    std::map<std::string, std::shared_ptr<Texture<Float>>> fTex;
-    std::map<std::string, std::shared_ptr<Texture<Spectrum>>> sTex;
-    TextureParams tp = pbrt::from_protobuf(
-        texture.texture_params(), geom_params, material_params, fTex, sTex);
+    ParamSet params = pbrt::from_protobuf(texture.params());
+    map<string, shared_ptr<Texture<Float>>> fTex;
+    map<string, shared_ptr<Texture<Spectrum>>> sTex;
 
+    TextureParams tp{params, params, fTex, sTex};
     return MakeFloatTexture(texture.name(),
                             Transform(pbrt::from_protobuf(texture.tex2world())),
                             tp);
 }
 
-protobuf::FloatTexture float_texture::to_protobuf(const std::string& name,
+protobuf::FloatTexture float_texture::to_protobuf(const string& name,
                                                   const Transform& tex2world,
-                                                  const TextureParams& tp) {
+                                                  const ParamSet& tp) {
     protobuf::FloatTexture texture;
     texture.set_name(name);
     texture.mutable_tex2world()->CopyFrom(
         pbrt::to_protobuf(tex2world.GetMatrix()));
-    texture.mutable_texture_params()->CopyFrom(pbrt::to_protobuf(tp));
+    texture.mutable_params()->CopyFrom(pbrt::to_protobuf(tp));
     return texture;
 }
 
-std::shared_ptr<Texture<Spectrum>> spectrum_texture::from_protobuf(
+shared_ptr<Texture<Spectrum>> spectrum_texture::from_protobuf(
     const protobuf::SpectrumTexture& texture) {
-    ParamSet geom_params;
-    ParamSet material_params;
-    std::map<std::string, std::shared_ptr<Texture<Float>>> fTex;
-    std::map<std::string, std::shared_ptr<Texture<Spectrum>>> sTex;
-    TextureParams tp = pbrt::from_protobuf(
-        texture.texture_params(), geom_params, material_params, fTex, sTex);
+    ParamSet params = pbrt::from_protobuf(texture.params());
+    map<string, shared_ptr<Texture<Float>>> fTex;
+    map<string, shared_ptr<Texture<Spectrum>>> sTex;
+
+    TextureParams tp{params, params, fTex, sTex};
 
     return MakeSpectrumTexture(
         texture.name(), Transform(pbrt::from_protobuf(texture.tex2world())),
@@ -708,13 +705,12 @@ std::shared_ptr<Texture<Spectrum>> spectrum_texture::from_protobuf(
 }
 
 protobuf::SpectrumTexture spectrum_texture::to_protobuf(
-    const std::string& name, const Transform& tex2world,
-    const TextureParams& tp) {
+    const string& name, const Transform& tex2world, const ParamSet& tp) {
     protobuf::SpectrumTexture texture;
     texture.set_name(name);
     texture.mutable_tex2world()->CopyFrom(
         pbrt::to_protobuf(tex2world.GetMatrix()));
-    texture.mutable_texture_params()->CopyFrom(pbrt::to_protobuf(tp));
+    texture.mutable_params()->CopyFrom(pbrt::to_protobuf(tp));
     return texture;
 }
 
