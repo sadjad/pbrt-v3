@@ -18,17 +18,9 @@
 
 namespace pbrt {
 
-class CopiedTextureParams : public TextureParams {
-  private:
-    const ParamSet copiedGeomParams;
-    const ParamSet copiedMaterialParams;
-
-  public:
-    CopiedTextureParams(TextureParams& tp)
-        : copiedGeomParams(tp.GetGeomParams()),
-          copiedMaterialParams(tp.GetMaterialParams()),
-          TextureParams(copiedGeomParams, copiedMaterialParams,
-                        tp.GetFloatTextures(), tp.GetSpectrumTextures()) {}
+struct CopiedTextureParams {
+    const ParamSet shapeParameters;
+    const ParamSet materialParameters;
 };
 
 struct MaterialParameters {
@@ -99,7 +91,7 @@ class SceneManager {
 
     std::set<ObjectKey> getRecursiveDependencies(const ObjectKey& object);
 
-    static std::map<MaterialType, MaterialParameters> materialParameters;
+    static std::map<MaterialType, MaterialParameters> materialBlueprints;
 
     size_t autoIds[to_underlying(ObjectType::COUNT)] = {0};
     std::string scenePath{};
@@ -116,8 +108,10 @@ class SceneManager {
 
 template <class T>
 void SceneManager::recordParams(const T* obj, TextureParams& params) {
-    recordedParams[typeid(T)].emplace(reinterpret_cast<const void*>(obj),
-                                      params);
+    recordedParams[typeid(T)].emplace(
+        reinterpret_cast<const void*>(obj),
+        CopiedTextureParams{params.GetGeomParams(),
+                            params.GetMaterialParams()});
 }
 
 template <class T>
