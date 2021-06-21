@@ -624,13 +624,7 @@ std::shared_ptr<Material> MakeMaterial(const std::string &name,
     if (!material) Error("Unable to create material \"%s\"", name.c_str());
     else ++nMaterialsCreated;
 
-    auto mtl = std::shared_ptr<Material>(material);
-
-    if (PbrtOptions.dumpScene && PbrtOptions.dumpMaterials) {
-        global::manager.recordParams(mtl.get(), mp);
-    }
-
-    return mtl;
+    return std::shared_ptr<Material>(material);
 }
 
 Optional<uint32_t> storeTexture(const std::string &name, ParamSet &tp) {
@@ -1287,8 +1281,6 @@ void pbrtTexture(const std::string &name, const std::string &type,
                 graphicsState.floatTexturesShared = false;
             }
             (*graphicsState.floatTextures)[name] = ft;
-
-            global::manager.recordParams(ft.get(), tp);
         }
     } else if (type == "color" || type == "spectrum") {
         // Create _color_ texture and store in _spectrumTextures_
@@ -1305,8 +1297,6 @@ void pbrtTexture(const std::string &name, const std::string &type,
                 graphicsState.spectrumTexturesShared = false;
             }
             (*graphicsState.spectrumTextures)[name] = st;
-
-            global::manager.recordParams(st.get(), tp);
         }
     } else
         Error("Texture type \"%s\" unknown.", type.c_str());
@@ -1582,13 +1572,7 @@ std::shared_ptr<Material> GraphicsState::GetMaterialForShape(
         TextureParams mp(shapeParams, currentMaterial->params, *floatTextures,
                          *spectrumTextures);
 
-        auto mtl = MakeMaterial(currentMaterial->name, mp);
-        
-        if (PbrtOptions.dumpScene) {
-            global::manager.recordParams(mtl.get(), mp);
-        }
-
-        return mtl;
+        return MakeMaterial(currentMaterial->name, mp);
     } else
         return currentMaterial->material;
 }

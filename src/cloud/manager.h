@@ -18,12 +18,7 @@
 
 namespace pbrt {
 
-struct CopiedTextureParams {
-    const ParamSet shapeParameters;
-    const ParamSet materialParameters;
-};
-
-struct MaterialParameters {
+struct MaterialBlueprint {
   public:
     /* Parameter := <type, name, isTexture> */
     using Parameter = std::tuple<std::type_index, std::string, bool>;
@@ -32,7 +27,7 @@ struct MaterialParameters {
     const std::vector<Parameter> parameters;
 
   public:
-    MaterialParameters(const std::vector<Parameter>& params)
+    MaterialBlueprint(const std::vector<Parameter>& params)
         : parameters(params) {}
 
     ParamSet FilterParamSet(const ParamSet& src);
@@ -48,6 +43,8 @@ class SceneManager {
 
         Object(const size_t id, const off_t size) : id(id), size(size) {}
     };
+
+    static std::map<MaterialType, MaterialBlueprint> MaterialBlueprints;
 
     SceneManager() {}
 
@@ -67,15 +64,6 @@ class SceneManager {
     void recordDependency(const ObjectKey& from, const ObjectKey& to);
     protobuf::Manifest makeManifest() const;
 
-    template <class T>
-    void recordParams(const T* obj, TextureParams& params);
-
-    template <class T>
-    const CopiedTextureParams& getParams(const T* obj) const;
-
-    template <class T>
-    bool hasParams(const T* obj);
-
     static std::string getFileName(const ObjectType type, const uint32_t id);
     const std::string& getScenePath() const { return scenePath; }
 
@@ -91,8 +79,6 @@ class SceneManager {
 
     std::set<ObjectKey> getRecursiveDependencies(const ObjectKey& object);
 
-    static std::map<MaterialType, MaterialParameters> materialBlueprints;
-
     size_t autoIds[to_underlying(ObjectType::COUNT)] = {0};
     std::string scenePath{};
     Optional<FileDescriptor> sceneFD{};
@@ -100,30 +86,9 @@ class SceneManager {
     std::map<std::string, uint32_t> textureNameToId;
     std::map<ObjectKey, uint64_t> objectSizes{};
     std::map<ObjectKey, std::set<ObjectKey>> dependencies;
-    std::map<std::type_index, std::map<const void*, CopiedTextureParams>>
-        recordedParams;
 
     std::map<ObjectID, std::set<ObjectKey>> treeletDependencies;
 };
-
-template <class T>
-void SceneManager::recordParams(const T* obj, TextureParams& params) {
-    recordedParams[typeid(T)].emplace(
-        reinterpret_cast<const void*>(obj),
-        CopiedTextureParams{params.GetGeomParams(),
-                            params.GetMaterialParams()});
-}
-
-template <class T>
-const CopiedTextureParams& SceneManager::getParams(const T* obj) const {
-    return recordedParams.at(typeid(T)).at(reinterpret_cast<const void*>(obj));
-}
-
-template <class T>
-bool SceneManager::hasParams(const T* obj) {
-    return recordedParams.count(typeid(T)) &&
-           recordedParams[typeid(T)].count(reinterpret_cast<const void*>(obj));
-}
 
 namespace global {
 extern SceneManager manager;

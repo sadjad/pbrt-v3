@@ -12,7 +12,7 @@ using namespace std;
 
 namespace pbrt {
 
-map<MaterialType, MaterialParameters> SceneManager::materialBlueprints = {
+map<MaterialType, MaterialBlueprint> SceneManager::MaterialBlueprints = {
     {MaterialType::Matte,
      {{
          {typeid(Spectrum), "Kd", true},
@@ -39,7 +39,7 @@ map<MaterialType, MaterialParameters> SceneManager::materialBlueprints = {
          {typeid(Float), "bumpmap", true},
      }}}};
 
-ParamSet MaterialParameters::FilterParamSet(const ParamSet& src) {
+ParamSet MaterialBlueprint::FilterParamSet(const ParamSet& src) {
     ParamSet result{};
 
     for (auto& param : parameters) {
@@ -96,16 +96,6 @@ static_assert(
     sizeof(TYPE_PREFIXES) / sizeof(string) == to_underlying(ObjectType::COUNT),
     "COUNT enum value for SceneManager Type must be the last entry in "
     "the enum declaration.");
-
-template <>
-void SceneManager::recordParams(const Material* obj, TextureParams& params) {
-    MaterialParameters& mparams = materialBlueprints.at(obj->GetType());
-
-    recordedParams[typeid(Material)].emplace(
-        reinterpret_cast<const void*>(obj),
-        CopiedTextureParams{mparams.FilterParamSet(params.GetGeomParams()),
-                            params.GetMaterialParams()});
-}
 
 void SceneManager::init(const string& scenePath) {
     this->scenePath = scenePath;
