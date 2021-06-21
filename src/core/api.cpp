@@ -624,6 +624,14 @@ std::shared_ptr<Material> MakeMaterial(const std::string &name,
     if (!material) Error("Unable to create material \"%s\"", name.c_str());
     else ++nMaterialsCreated;
 
+    if (PbrtOptions.dumpScene) {
+        const auto materialId =
+            global::manager.getNextId(ObjectType::Material, material);
+        auto writer =
+            global::manager.GetWriter(ObjectType::Material, materialId);
+        writer->write(material::to_protobuf(name, material->GetType(), mp));
+    }
+
     return std::shared_ptr<Material>(material);
 }
 

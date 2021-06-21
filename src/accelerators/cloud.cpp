@@ -75,7 +75,8 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
                 auto r = global::manager.GetReader(ObjectType::Material, mid);
                 protobuf::Material material;
                 r->read(&material);
-                materials_[mid] = material::from_protobuf(material);
+                materials_[mid] =
+                    material::from_protobuf(material, ftex_, stex_);
             }
         }
 
@@ -177,7 +178,7 @@ void CloudBVH::LoadTreelet(const uint32_t root_id, const char *buffer,
             auto reader = global::manager.GetReader(ObjectType::Material, mid);
             protobuf::Material material;
             reader->read(&material);
-            materials_[mid] = material::from_protobuf(material);
+            materials_[mid] = material::from_protobuf(material, ftex_, stex_);
         }
     }
 

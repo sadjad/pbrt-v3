@@ -3,7 +3,6 @@
 
 #include <google/protobuf/util/json_util.h>
 
-#include "integrators/cloud.h"
 #include "cloud/manager.h"
 #include "core/geometry.h"
 #include "core/light.h"
@@ -11,6 +10,7 @@
 #include "core/sampler.h"
 #include "core/spectrum.h"
 #include "core/transform.h"
+#include "integrators/cloud.h"
 #include "pbrt.pb.h"
 #include "shapes/triangle.h"
 
@@ -51,7 +51,7 @@ void from_json(const std::string& data, ProtobufType& dest) {
     }
 }
 
-}  // namespace protoutil
+}  // namespace pbrt::protoutil
 
 namespace pbrt {
 
@@ -130,9 +130,12 @@ protobuf::Camera to_protobuf(const std::string& name, const ParamSet& params,
 
 namespace material {
 
-std::shared_ptr<Material> from_protobuf(const protobuf::Material& material);
+std::shared_ptr<Material> from_protobuf(
+    const protobuf::Material& material,
+    std::map<uint64_t, std::shared_ptr<Texture<Float>>>& ftex,
+    std::map<uint64_t, std::shared_ptr<Texture<Spectrum>>>& stex);
 
-protobuf::Material to_protobuf(const std::string& name,
+protobuf::Material to_protobuf(const std::string& name, const MaterialType type,
                                const TextureParams& tp);
 
 }  // namespace material

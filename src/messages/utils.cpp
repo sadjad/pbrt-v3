@@ -23,6 +23,7 @@
 #include "lights/point.h"
 #include "lights/projection.h"
 #include "lights/spot.h"
+#include "pbrt.pb.h"
 #include "samplers/halton.h"
 #include "samplers/maxmin.h"
 #include "samplers/random.h"
@@ -649,22 +650,88 @@ shared_ptr<Camera> camera::from_protobuf(
     return shared_ptr<Camera>(camera);
 }
 
-std::shared_ptr<Material> material::from_protobuf(
-    const protobuf::Material& material) {
-    ParamSet geom_params;
-    ParamSet material_params;
-    std::map<std::string, std::shared_ptr<Texture<Float>>> fTex;
-    std::map<std::string, std::shared_ptr<Texture<Spectrum>>> sTex;
-    TextureParams tp = pbrt::from_protobuf(
-        material.texture_params(), geom_params, material_params, fTex, sTex);
-    return pbrt::MakeMaterial(material.name(), tp);
+shared_ptr<Material> material::from_protobuf(
+    const protobuf::Material& mtl,
+    map<uint64_t, shared_ptr<Texture<Float>>>& loaded_ftex,
+    map<uint64_t, shared_ptr<Texture<Spectrum>>>& loaded_stex) {
+    ParamSet geom_params = pbrt::from_protobuf(mtl.geom_params());
+    ParamSet material_params = pbrt::from_protobuf(mtl.material_params());
+
+    map<string, shared_ptr<Texture<Float>>> ftex;
+    map<string, shared_ptr<Texture<Spectrum>>> stex;
+
+    for (auto& tex : mtl.float_textures()) {
+        const auto& name = tex.first;
+        const auto id = tex.second;
+
+        // let's load the texture if it's not loaded
+        if (loaded_ftex.count(id)) continue;
+
+        protobuf::FloatTexture ftex_proto;
+        auto reader = global::manager.GetReader(ObjectType::FloatTexture, id);
+        reader->read(&ftex_proto);
+        loaded_ftex.emplace(id, float_texture::from_protobuf(ftex_proto));
+        ftex.emplace(name, loaded_ftex.at(id));
+    }
+
+    for (auto& tex : mtl.spectrum_textures()) {
+        const auto& name = tex.first;
+        const auto id = tex.second;
+
+        // let's load the texture if it's not loaded
+        if (loaded_stex.count(id)) continue;
+
+        protobuf::SpectrumTexture stex_proto;
+        auto reader =
+            global::manager.GetReader(ObjectType::SpectrumTexture, id);
+        reader->read(&stex_proto);
+        loaded_stex.emplace(id, spectrum_texture::from_protobuf(stex_proto));
+        stex.emplace(name, loaded_stex.at(id));
+    }
+
+    TextureParams tp{geom_params, material_params, ftex, stex};
+
+    return pbrt::MakeMaterial(mtl.name(), tp);
 }
 
 protobuf::Material material::to_protobuf(const std::string& name,
+                                         const MaterialType type,
                                          const TextureParams& tp) {
     protobuf::Material material;
     material.set_name(name);
-    material.mutable_texture_params()->CopyFrom(pbrt::to_protobuf(tp));
+
+    auto& blueprint = SceneManager::MaterialBlueprints.at(type);
+
+    ParamSet geom_params = blueprint.FilterParamSet(tp.GetGeomParams());
+    ParamSet material_params = tp.GetMaterialParams();
+
+    vector<string> used_float_textures = tp.GetUsedFloatTextures();
+    vector<string> used_spectrum_textures = tp.GetUsedSpectrumTextures();
+
+    for (auto& tex : used_float_textures) {
+        string tname = geom_params.FindTexture(tex);
+        if (tname.empty()) tname = material_params.FindTexture(tex);
+        if (tname.empty()) throw runtime_error("texture not found for " + tex);
+
+        shared_ptr<Texture<Float>> ptr = tp.GetFloatTextures().at(tname);
+        auto id = global::manager.getId(ptr.get());
+        material.mutable_float_textures()->operator[](tname) = id;
+    }
+
+    for (auto& tex : used_spectrum_textures) {
+        string tname = geom_params.FindTexture(tex);
+        if (tname.empty()) tname = material_params.FindTexture(tex);
+        if (tname.empty()) throw runtime_error("texture not found for " + tex);
+
+        shared_ptr<Texture<Spectrum>> ptr = tp.GetSpectrumTextures().at(tname);
+        auto id = global::manager.getId(ptr.get());
+        material.mutable_spectrum_textures()->operator[](tname) = id;
+    }
+
+    material.mutable_geom_params()->CopyFrom(pbrt::to_protobuf(geom_params));
+    material.mutable_material_params()->CopyFrom(
+        pbrt::to_protobuf(material_params));
+
     return material;
 }
 

@@ -50,7 +50,7 @@ ParamSet MaterialBlueprint::FilterParamSet(const ParamSet& src) {
         if (isTexture) {
             auto textureName = src.FindTexture(name);
 
-            if (textureName.empty()) {
+            if (!textureName.empty()) {
                 result.AddTexture(name, textureName);
             }
         } else {

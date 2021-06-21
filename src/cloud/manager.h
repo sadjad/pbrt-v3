@@ -67,6 +67,10 @@ class SceneManager {
     static std::string getFileName(const ObjectType type, const uint32_t id);
     const std::string& getScenePath() const { return scenePath; }
 
+    std::string getFilePath(const ObjectType type, const uint32_t id) {
+        return getScenePath() + "/" + getFileName(type, id);
+    }
+
     std::vector<double> getTreeletProbs() const;
 
     const std::set<ObjectKey>& getTreeletDependencies(const ObjectID treeletId);

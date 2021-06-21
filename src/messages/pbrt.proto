@@ -194,7 +194,10 @@ message TextureParams {
 
 message Material {
     string name = 1;
-    TextureParams texture_params = 2;
+    ParamSet geom_params = 2;
+    ParamSet material_params = 3;
+    map<string, uint64> float_textures = 4;
+    map<string, uint64> spectrum_textures = 5;
 }
 
 // Textures

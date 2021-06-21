@@ -166,6 +166,8 @@ class CloudBVH : public Aggregate {
     mutable std::vector<std::unique_ptr<Treelet>> treelets_;
     mutable std::map<uint64_t, std::shared_ptr<Primitive>> bvh_instances_;
     mutable std::map<uint32_t, std::shared_ptr<Material>> materials_;
+    mutable std::map<uint64_t, std::shared_ptr<Texture<Float>>> ftex_;
+    mutable std::map<uint64_t, std::shared_ptr<Texture<Spectrum>>> stex_;
 
     mutable std::shared_ptr<Material> default_material;
 
