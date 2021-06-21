@@ -211,6 +211,9 @@ struct MaterialInstance {
     ParamSet params;
 };
 
+std::shared_ptr<Material> MakeMaterial(const std::string &name,
+                                       TextureParams &mp);
+
 struct GraphicsState {
     // Graphics State Methods
     GraphicsState()
@@ -219,7 +222,7 @@ struct GraphicsState {
           namedMaterials(std::make_shared<NamedMaterialMap>()) {
         ParamSet empty;
         TextureParams tp(empty, empty, *floatTextures, *spectrumTextures);
-        std::shared_ptr<Material> mtl(CreateMatteMaterial(tp));
+        std::shared_ptr<Material> mtl = MakeMaterial("matte", tp);
         currentMaterial = std::make_shared<MaterialInstance>("matte", mtl, ParamSet());
     }
     std::shared_ptr<Material> GetMaterialForShape(const ParamSet &geomParams);
