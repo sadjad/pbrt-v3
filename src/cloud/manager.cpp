@@ -1,7 +1,9 @@
 #include "manager.h"
 
 #include <fcntl.h>
+
 #include <fstream>
+#include <functional>
 
 #include "messages/utils.h"
 #include "util/exception.h"
@@ -9,6 +11,82 @@
 using namespace std;
 
 namespace pbrt {
+
+map<MaterialType, MaterialParameters> SceneManager::materialParameters = {
+    {MaterialType::Matte,
+     {{
+         {typeid(Spectrum), "Kd", true},
+         {typeid(Float), "sigma", true},
+         {typeid(Float), "bumpmap", true},
+     }}},
+    {MaterialType::Disney,
+     {{
+         {typeid(Spectrum), "color", true},
+         {typeid(Float), "metallic", true},
+         {typeid(Float), "eta", true},
+         {typeid(Float), "roughness", true},
+         {typeid(Float), "speculartint", true},
+         {typeid(Float), "anisotropic", true},
+         {typeid(Float), "sheen", true},
+         {typeid(Float), "sheentint", true},
+         {typeid(Float), "clearcoat", true},
+         {typeid(Float), "clearcoatgloss", true},
+         {typeid(Float), "spectrans", true},
+         {typeid(Spectrum), "scatterdistance", true},
+         {typeid(bool), "thin", true},
+         {typeid(Float), "flatness", true},
+         {typeid(Float), "difftrans", true},
+         {typeid(Float), "bumpmap", true},
+     }}}};
+
+ParamSet MaterialParameters::FilterParamSet(const ParamSet& src) {
+    ParamSet result{};
+
+    for (auto& param : parameters) {
+        const auto type = get<0>(param);
+        const string& name = get<1>(param);
+        const bool isTexture = get<2>(param);
+
+        if (isTexture) {
+            auto textureName = src.FindTexture(name);
+
+            if (textureName.empty()) {
+                result.AddTexture(name, textureName);
+            }
+        } else {
+            auto copy = [&](auto findFn, auto addFn, const string& name) {
+                int count;
+                auto val = (src.*findFn)(name, &count);
+
+                // If Keith saw this, he would be VERY mad.
+                using BaseType = typename std::remove_cv<
+                    typename std::remove_pointer<decltype(val)>::type>::type;
+
+                auto outValues = make_unique<BaseType[]>(count);
+
+                for (int i = 0; i < count; i++) {
+                    outValues[i] = val[i];
+                }
+
+                (result.*addFn)(name, move(outValues), count);
+            };
+
+            int count;
+
+            if (type == typeid(Float)) {
+                copy(&ParamSet::FindFloat, &ParamSet::AddFloat, name);
+            } else if (type == typeid(Spectrum)) {
+                copy(&ParamSet::FindSpectrum, &ParamSet::AddSpectrum, name);
+            } else if (type == typeid(bool)) {
+                copy(&ParamSet::FindBool, &ParamSet::AddBool, name);
+            } else {
+                throw runtime_error("type not implemented");
+            }
+        }
+    }
+
+    return result;
+}
 
 static const string TYPE_PREFIXES[] = {
     "T",    "TM",   "LIGHTS",   "SAMPLER", "CAMERA", "SCENE", "MAT",

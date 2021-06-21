@@ -2,11 +2,13 @@
 #define PBRT_CLOUD_MANAGER_H
 
 #include <string>
-#include <typeindex>
+#include <tuple>
 #include <type_traits>
+#include <typeindex>
 #include <typeinfo>
 #include <unordered_map>
 
+#include "core/material.h"
 #include "core/paramset.h"
 #include "messages/serialization.h"
 #include "pbrt/common.h"
@@ -27,6 +29,21 @@ class CopiedTextureParams : public TextureParams {
           copiedMaterialParams(tp.GetMaterialParams()),
           TextureParams(copiedGeomParams, copiedMaterialParams,
                         tp.GetFloatTextures(), tp.GetSpectrumTextures()) {}
+};
+
+struct MaterialParameters {
+  public:
+    /* Parameter := <type, name, isTexture> */
+    using Parameter = std::tuple<std::type_index, std::string, bool>;
+
+  private:
+    const std::vector<Parameter> parameters;
+
+  public:
+    MaterialParameters(const std::vector<Parameter>& params)
+        : parameters(params) {}
+
+    ParamSet FilterParamSet(const ParamSet& src);
 };
 
 class SceneManager {
@@ -81,6 +98,8 @@ class SceneManager {
     void loadTreeletDependencies();
 
     std::set<ObjectKey> getRecursiveDependencies(const ObjectKey& object);
+
+    static std::map<MaterialType, MaterialParameters> materialParameters;
 
     size_t autoIds[to_underlying(ObjectType::COUNT)] = {0};
     std::string scenePath{};
