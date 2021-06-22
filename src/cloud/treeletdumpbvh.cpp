@@ -2079,6 +2079,9 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
         size_t current_primitive_offset = 0;
         vector<CloudBVH::TreeletNode> output_nodes;
+        output_nodes.reserve(node_count);
+        memset(&output_nodes[0], 0, sizeof(CloudBVH::TreeletNode) * node_count);
+
         enum Child { LEFT = 0, RIGHT = 1 };
 
         stack<pair<uint32_t, Child>> q;
@@ -2093,7 +2096,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 auto parent = q.top();
                 q.pop();
 
-                output_nodes[parent.first].child_treelet[parent.second] = treeletID;
+                output_nodes[parent.first].child_treelet[parent.second] = sTreeletID;
                 output_nodes[parent.first].child_node[parent.second] = output_nodes.size() - 1;
             }
 
@@ -2125,6 +2128,8 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 current_primitive_offset += node.nPrimitives;
             }
         }
+
+        CHECK(q.empty());
 
         for (TreeletDumpBVH *inst : treelet.instances) {
             for (uint64_t nodeIdx = 0; nodeIdx < inst->nodeCount; nodeIdx++) {
@@ -2173,8 +2178,10 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             writer->write(transformed_primitive_count);
             writer->write(triangle_count);
 
+            // write all transformed primitives for the node
             for (int primIdx = 0; primIdx < node.nPrimitives; primIdx++) {
                 auto &prim = primitives[node.primitivesOffset + primIdx];
+
                 if (prim->GetType() == PrimitiveType::Transformed) {
                     shared_ptr<TransformedPrimitive> tp =
                         dynamic_pointer_cast<TransformedPrimitive>(prim);
@@ -2204,8 +2211,8 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
                     primitive.root_ref = instanceRef;
                     primitive.start_transform = t.StartTransform()->GetMatrix();
-                    primitive.start_time = t.StartTime();
                     primitive.end_transform = t.EndTransform()->GetMatrix();
+                    primitive.start_time = t.StartTime();
                     primitive.end_time = t.EndTime();
 
                     writer->write(reinterpret_cast<const char *>(&primitive),
@@ -2213,6 +2220,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 } 
             }
 
+            // write all triangles for the node
             for (int primIdx = 0; primIdx < node.nPrimitives; primIdx++) {
                 auto &prim = primitives[node.primitivesOffset + primIdx];
                 

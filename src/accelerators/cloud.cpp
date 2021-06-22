@@ -279,7 +279,7 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
             shared_ptr<char>(new char[len], default_delete<char[]>());
         memcpy(treelet.mesh_storage.get(), tm_buff_start, len);
 
-        char * mesh_storage_start = treelet.mesh_storage.get();
+        char *mesh_storage_start = treelet.mesh_storage.get();
 
         LiteRecordReader tm_reader{treelet.mesh_storage.get(), len};
 

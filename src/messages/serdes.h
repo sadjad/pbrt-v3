@@ -17,19 +17,6 @@ std::string serialize(const TriangleMesh& tm);
 
 namespace cloudbvh {
 
-struct Node {
-    Bounds3f bounds;
-
-    struct __attribute__((packed, aligned(1))) {
-        int64_t left_ref;
-        int64_t right_ref;
-        uint8_t axis;
-
-        uint16_t transformed_primitives_count{0};
-        uint16_t triangles_count{0};
-    };
-};
-
 struct TransformedPrimitive {
     Matrix4x4 start_transform;
     Matrix4x4 end_transform;
@@ -37,7 +24,7 @@ struct TransformedPrimitive {
     struct __attribute__((packed, aligned(1))) {
         Float start_time;
         Float end_time;
-        int64_t root_ref;
+        uint64_t root_ref;
     };
 };
 
