@@ -18,6 +18,8 @@
 
 namespace pbrt {
 
+class TriangleMesh;
+
 struct MaterialBlueprint {
   public:
     /* Parameter := <type, name, isTexture> */
@@ -71,6 +73,14 @@ class SceneManager {
         return getScenePath() + "/" + getFileName(type, id);
     }
 
+    void recordMeshMaterialId(const TriangleMesh* tm, const uint32_t mtl) {
+        tmMaterialIds[tm] = mtl;
+    }
+
+    uint32_t getMeshMaterialId(const TriangleMesh* tm) const {
+        return tmMaterialIds.at(tm);
+    }
+
     std::vector<double> getTreeletProbs() const;
 
     const std::set<ObjectKey>& getTreeletDependencies(const ObjectID treeletId);
@@ -90,6 +100,8 @@ class SceneManager {
     std::map<std::string, uint32_t> textureNameToId;
     std::map<ObjectKey, uint64_t> objectSizes{};
     std::map<ObjectKey, std::set<ObjectKey>> dependencies;
+
+    std::map<const TriangleMesh*, uint32_t> tmMaterialIds;
 
     std::map<ObjectID, std::set<ObjectKey>> treeletDependencies;
 };

@@ -33,7 +33,7 @@ map<MaterialType, MaterialBlueprint> SceneManager::MaterialBlueprints = {
          {typeid(Float), "clearcoatgloss", true},
          {typeid(Float), "spectrans", true},
          {typeid(Spectrum), "scatterdistance", true},
-         {typeid(bool), "thin", true},
+         {typeid(bool), "thin", false},
          {typeid(Float), "flatness", true},
          {typeid(Float), "difftrans", true},
          {typeid(Float), "bumpmap", true},
@@ -52,36 +52,41 @@ ParamSet MaterialBlueprint::FilterParamSet(const ParamSet& src) {
 
             if (!textureName.empty()) {
                 result.AddTexture(name, textureName);
+                continue;
             }
-        } else {
-            auto copy = [&](auto findFn, auto addFn, const string& name) {
-                int count;
-                auto val = (src.*findFn)(name, &count);
+        }
 
-                // If Keith saw this, he would be VERY mad.
-                using BaseType = typename std::remove_cv<
-                    typename std::remove_pointer<decltype(val)>::type>::type;
-
-                auto outValues = make_unique<BaseType[]>(count);
-
-                for (int i = 0; i < count; i++) {
-                    outValues[i] = val[i];
-                }
-
-                (result.*addFn)(name, move(outValues), count);
-            };
-
+        auto copy = [&](auto findFn, auto addFn, const string& name) {
             int count;
+            auto val = (src.*findFn)(name, &count);
 
-            if (type == typeid(Float)) {
-                copy(&ParamSet::FindFloat, &ParamSet::AddFloat, name);
-            } else if (type == typeid(Spectrum)) {
-                copy(&ParamSet::FindSpectrum, &ParamSet::AddSpectrum, name);
-            } else if (type == typeid(bool)) {
-                copy(&ParamSet::FindBool, &ParamSet::AddBool, name);
-            } else {
-                throw runtime_error("type not implemented");
+            if (!val || !count) {
+                return;
             }
+
+            // If Keith saw this, he would be VERY mad.
+            using BaseType = typename std::remove_cv<
+                typename std::remove_pointer<decltype(val)>::type>::type;
+
+            auto outValues = make_unique<BaseType[]>(count);
+
+            for (int i = 0; i < count; i++) {
+                outValues[i] = val[i];
+            }
+
+            (result.*addFn)(name, move(outValues), count);
+        };
+
+        int count;
+
+        if (type == typeid(Float)) {
+            copy(&ParamSet::FindFloat, &ParamSet::AddFloat, name);
+        } else if (type == typeid(Spectrum)) {
+            copy(&ParamSet::FindSpectrum, &ParamSet::AddSpectrum, name);
+        } else if (type == typeid(bool)) {
+            copy(&ParamSet::FindBool, &ParamSet::AddBool, name);
+        } else {
+            throw runtime_error("type not implemented");
         }
     }
 

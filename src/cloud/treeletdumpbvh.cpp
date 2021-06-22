@@ -2033,10 +2033,16 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             uint32_t sMeshID = global::manager.getNextId(ObjectType::TriangleMesh);
             triMeshIDs[mesh] = sMeshID;
 
+            const uint32_t mtlID = global::manager.getMeshMaterialId(mesh);
+
             // writing the triangle mesh
             writer->write(static_cast<uint64_t>(sMeshID));
-            writer->write(static_cast<uint64_t>(0));
+            writer->write(static_cast<uint64_t>(mtlID));
             writer->write(serdes::triangle_mesh::serialize(*newMesh));
+
+            global::manager.recordDependency(
+                ObjectKey{ObjectType::Treelet, sTreeletID},
+                ObjectKey{ObjectType::Material, mtlID});
         }
 
         // Write out the full triangle meshes for all the instances referenced by this treelet

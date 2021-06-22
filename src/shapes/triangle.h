@@ -133,6 +133,7 @@ class Triangle : public Shape {
     friend VanillaBVHAccel;
     friend TreeletDumpBVH;
     friend ProxyDumpBVH;
+    friend void pbrtShape(const std::string &name, const ParamSet &params);
 };
 
 std::vector<std::shared_ptr<Shape>> CreateTriangleMesh(

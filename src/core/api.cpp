@@ -1449,6 +1449,16 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
         printf("\n");
     }
 
+    auto recordMaterialIdForMesh = [](auto &shapes, auto &mtl) {
+        if (PbrtOptions.dumpScene &&
+            shapes.front()->GetType() == ShapeType::Triangle) {
+            const auto mtlId = global::manager.getId(mtl.get());
+            global::manager.recordMeshMaterialId(
+                std::dynamic_pointer_cast<Triangle>(shapes.front())->mesh.get(),
+                mtlId);
+        }
+    };
+
     if (!curTransform.IsAnimated()) {
         // Initialize _prims_ and _areaLights_ for static shape
 
@@ -1461,6 +1471,10 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
         if (shapes.empty()) return;
         std::shared_ptr<Material> mtl = graphicsState.GetMaterialForShape(params);
         params.ReportUnused();
+
+        // record the material id, if this is a triangle mesh
+        recordMaterialIdForMesh(shapes, mtl);
+
         MediumInterface mi = graphicsState.CreateMediumInterface();
         prims.reserve(shapes.size());
         for (auto s : shapes) {
@@ -1490,6 +1504,10 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
         // Create _GeometricPrimitive_(s) for animated shape
         std::shared_ptr<Material> mtl = graphicsState.GetMaterialForShape(params);
         params.ReportUnused();
+
+        // record the material id, if this is a triangle mesh
+        recordMaterialIdForMesh(shapes, mtl);
+
         MediumInterface mi = graphicsState.CreateMediumInterface();
         prims.reserve(shapes.size());
         for (auto s : shapes)
