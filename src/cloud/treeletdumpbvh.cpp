@@ -13,6 +13,8 @@ using namespace std;
 
 namespace pbrt {
 
+auto &_manager = global::manager;
+
 STAT_COUNTER("BVH/Total Ray Transfers", totalRayTransfers);
 
 namespace SizeEstimates {
@@ -1863,7 +1865,7 @@ void TreeletDumpBVH::DumpSanityCheck(const vector<unordered_map<uint64_t, uint32
 }
 
 void TreeletDumpBVH::DumpHeader() const {
-    const string dir = global::manager.getScenePath();
+    const string dir = _manager.getScenePath();
     ofstream header(dir + "/HEADER");
     Bounds3f root = nodes[0].bounds;
     header.write(reinterpret_cast<char *>(&root), sizeof(Bounds3f));
@@ -1879,7 +1881,7 @@ void TreeletDumpBVH::DumpHeader() const {
 vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
     // Assign IDs to each treelet
     for (const TreeletInfo &treelet : allTreelets) {
-        global::manager.getNextId(ObjectType::Treelet, &treelet);
+        _manager.getNextId(ObjectType::Treelet, &treelet);
     }
 
     vector<unordered_map<uint64_t, uint32_t>> treeletNodeLocations(allTreelets.size());
@@ -1949,15 +1951,15 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             }
         }
 
-        unsigned sTreeletID = global::manager.getId(&treelet);
-        auto writer = global::manager.GetWriter(ObjectType::Treelet, sTreeletID);
+        unsigned sTreeletID = _manager.getId(&treelet);
+        auto writer = _manager.GetWriter(ObjectType::Treelet, sTreeletID);
         
         const uint32_t numTriMeshes =
             trianglesInTreelet.size() + instanceMeshes.size();
         writer->write(numTriMeshes);
 
         // FIXME add material support
-        global::manager.recordDependency(
+        _manager.recordDependency(
             ObjectKey {ObjectType::Treelet, sTreeletID},
             ObjectKey {ObjectType::Material, 0});
 
@@ -2030,24 +2032,24 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
 
             // Give triangle mesh an ID
-            uint32_t sMeshID = global::manager.getNextId(ObjectType::TriangleMesh);
+            uint32_t sMeshID = _manager.getNextId(ObjectType::TriangleMesh);
             triMeshIDs[mesh] = sMeshID;
 
-            const uint32_t mtlID = global::manager.getMeshMaterialId(mesh);
+            const uint32_t mtlID = _manager.getMeshMaterialId(mesh);
 
             // writing the triangle mesh
             writer->write(static_cast<uint64_t>(sMeshID));
             writer->write(static_cast<uint64_t>(mtlID));
             writer->write(serdes::triangle_mesh::serialize(*newMesh));
 
-            global::manager.recordDependency(
+            _manager.recordDependency(
                 ObjectKey{ObjectType::Treelet, sTreeletID},
                 ObjectKey{ObjectType::Material, mtlID});
         }
 
         // Write out the full triangle meshes for all the instances referenced by this treelet
         for (TriangleMesh *instMesh : instanceMeshes) {
-            uint32_t sMeshID = global::manager.getNextId(ObjectType::TriangleMesh);
+            uint32_t sMeshID = _manager.getNextId(ObjectType::TriangleMesh);
 
             triMeshIDs[instMesh] = sMeshID;
 
@@ -2111,7 +2113,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 uint32_t r_tid = treeletAllocations[treelet.dirIdx][node.secondChildOffset];
                 if (r_tid != treeletID) {
                     out_node.child_treelet[RIGHT] =
-                        global::manager.getId(&allTreelets[r_tid]);
+                        _manager.getId(&allTreelets[r_tid]);
                     out_node.child_node[RIGHT] =
                         treeletNodeLocations[r_tid].at(node.secondChildOffset);
                 } else {
@@ -2121,7 +2123,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 uint32_t l_tid = treeletAllocations[treelet.dirIdx][nodeIdx + 1];
                 if (l_tid != treeletID) {
                     out_node.child_treelet[LEFT] =
-                        global::manager.getId(&allTreelets[l_tid]);
+                        _manager.getId(&allTreelets[l_tid]);
                     out_node.child_node[LEFT] =
                         treeletNodeLocations[l_tid].at(nodeIdx + 1);
                 } else {
@@ -2287,9 +2289,9 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
     }
 
     if (root) {
-        ofstream staticAllocOut(global::manager.getScenePath() + "/STATIC0_pre");
+        ofstream staticAllocOut(_manager.getScenePath() + "/STATIC0_pre");
         for (const TreeletInfo &treelet : allTreelets) {
-            uint32_t sTreeletID = global::manager.getId(&treelet);
+            uint32_t sTreeletID = _manager.getId(&treelet);
             staticAllocOut << sTreeletID << " " << treelet.totalProb << endl;
         }
 
@@ -2298,7 +2300,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             for (const TreeletInfo &treelet : inst->allTreelets) {
                 float instProb = instanceProbabilities[treelet.dirIdx][inst->instanceID];
 
-                uint32_t sTreeletID = global::manager.getId(&treelet);
+                uint32_t sTreeletID = _manager.getId(&treelet);
                 staticAllocOut << sTreeletID << " " << treelet.totalProb * instProb << endl;
             }
         }
@@ -2316,7 +2318,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
     vector<uint32_t> rootTreelets;
     for (int i = 0; i < numRoots; i++) {
-        rootTreelets.push_back(global::manager.getId(&allTreelets[i]));
+        rootTreelets.push_back(_manager.getId(&allTreelets[i]));
     }
 
     return rootTreelets;
