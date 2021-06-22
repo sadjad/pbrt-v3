@@ -750,7 +750,7 @@ std::shared_ptr<Texture<Spectrum>> MakeSpectrumTexture(
     tp.ReportUnused();
 
     if (PbrtOptions.dumpScene) {
-        dumpTexture(ObjectType::FloatTexture, tex, name, tex2world, tp);
+        dumpTexture(ObjectType::SpectrumTexture, tex, name, tex2world, tp);
     }
 
     return std::shared_ptr<Texture<Spectrum>>(tex);
