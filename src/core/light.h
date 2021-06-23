@@ -60,7 +60,7 @@ inline bool IsDeltaLight(int flags) {
 
 enum class LightType {
     Distant,
-    Diffuse,
+    DiffuseArea,
     GonioPhotometric,
     Infinite,
     Point,

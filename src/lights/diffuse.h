@@ -66,7 +66,7 @@ class DiffuseAreaLight : public AreaLight {
     void Pdf_Le(const Ray &, const Normal3f &, Float *pdfPos,
                 Float *pdfDir) const;
 
-    LightType GetType() const { return LightType::Diffuse; }
+    LightType GetType() const { return LightType::DiffuseArea; }
 
   protected:
     // DiffuseAreaLight Protected Data
