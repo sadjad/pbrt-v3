@@ -129,6 +129,8 @@
 
 namespace pbrt {
 
+static auto & _manager = global::manager;
+
 // API Global Variables
 Options PbrtOptions;
 
@@ -626,9 +628,8 @@ std::shared_ptr<Material> MakeMaterial(const std::string &name,
 
     if (PbrtOptions.dumpScene) {
         const auto materialId =
-            global::manager.getNextId(ObjectType::Material, material);
-        auto writer =
-            global::manager.GetWriter(ObjectType::Material, materialId);
+            _manager.getNextId(ObjectType::Material, material);
+        auto writer = _manager.GetWriter(ObjectType::Material, materialId);
         writer->write(material::to_protobuf(name, material->GetType(), mp));
     }
 
@@ -646,12 +647,12 @@ void dumpTexture(const ObjectType type, const T *tex, const std::string &name,
     Optional<uint32_t> textureFileId;
 
     if (!filename.empty()) {
-        textureFileId = global::manager.getTextureFileId(filename);
+        textureFileId = _manager.getTextureFileId(filename);
         const auto newFilename =
-            global::manager.getFileName(ObjectType::Texture, *textureFileId);
+            _manager.getFileName(ObjectType::Texture, *textureFileId);
 
-        roost::copy_then_rename(
-            filename, global::manager.getScenePath() + "/" + newFilename);
+        roost::copy_then_rename(filename,
+                                _manager.getScenePath() + "/" + newFilename);
 
         std::unique_ptr<std::string[]> filenameVal(new std::string[1]);
         filenameVal[0] = std::string(newFilename);
@@ -659,8 +660,8 @@ void dumpTexture(const ObjectType type, const T *tex, const std::string &name,
     }
 
     /* (2) store the texture */
-    const auto textureId = global::manager.getNextId(type, tex);
-    auto writer = global::manager.GetWriter(type, textureId);
+    const auto textureId = _manager.getNextId(type, tex);
+    auto writer = _manager.GetWriter(type, textureId);
 
     if (type == ObjectType::FloatTexture) {
         writer->write(float_texture::to_protobuf(name, tex2world, params));
@@ -669,8 +670,8 @@ void dumpTexture(const ObjectType type, const T *tex, const std::string &name,
     }
 
     if (textureFileId.initialized()) {
-        global::manager.recordDependency({type, textureId},
-                                         {ObjectType::Texture, *textureFileId});
+        _manager.recordDependency({type, textureId},
+                                  {ObjectType::Texture, *textureFileId});
     }
 }
 
@@ -1452,8 +1453,8 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
     auto recordMaterialIdForMesh = [](auto &shapes, auto &mtl) {
         if (PbrtOptions.dumpScene &&
             shapes.front()->GetType() == ShapeType::Triangle) {
-            const auto mtlId = global::manager.getId(mtl.get());
-            global::manager.recordMeshMaterialId(
+            const auto mtlId = _manager.getId(mtl.get());
+            _manager.recordMeshMaterialId(
                 std::dynamic_pointer_cast<Triangle>(shapes.front())->mesh.get(),
                 mtlId);
         }
@@ -1827,13 +1828,12 @@ void pbrtWorldEnd() {
         __timepoints.scene_creation_end = TimePoints::clock::now();
 
         if (PbrtOptions.dumpScene) {
-            auto writer = global::manager.GetWriter(ObjectType::Scene);
+            auto writer = _manager.GetWriter(ObjectType::Scene);
             writer->write(to_protobuf(*scene));
 
             /* dump the manifest file for this render */
-            auto manifestWriter =
-                global::manager.GetWriter(ObjectType::Manifest);
-            manifestWriter->write(global::manager.makeManifest());
+            auto manifestWriter = _manager.GetWriter(ObjectType::Manifest);
+            manifestWriter->write(_manager.makeManifest());
         }
 
         // This is kind of ugly; we directly override the current profiler
@@ -1898,9 +1898,8 @@ void pbrtWorldEndBuildChunk() {
 
     renderOptions->MakeScene();
 
-    auto manifestWriter =
-        global::manager.GetWriter(ObjectType::Manifest);
-    manifestWriter->write(global::manager.makeManifest());
+    auto manifestWriter = _manager.GetWriter(ObjectType::Manifest);
+    manifestWriter->write(_manager.makeManifest());
 
     graphicsState = GraphicsState();
     currentApiState = APIState::OptionsBlock;
@@ -1932,9 +1931,8 @@ void pbrtWorldEndBuildInstance() {
     // be calling MakeScene or something
     CHECK_EQ(renderOptions->primitives.size(), 0);
 
-    auto manifestWriter =
-        global::manager.GetWriter(ObjectType::Manifest);
-    manifestWriter->write(global::manager.makeManifest());
+    auto manifestWriter = _manager.GetWriter(ObjectType::Manifest);
+    manifestWriter->write(_manager.makeManifest());
 
     graphicsState = GraphicsState();
     currentApiState = APIState::OptionsBlock;
@@ -1966,7 +1964,7 @@ Scene *RenderOptions::MakeScene() {
     /* Do we need to dump the lights? */
     if (PbrtOptions.dumpScene) {
         // let's dump the lights
-        auto writer = global::manager.GetWriter(ObjectType::Lights);
+        auto writer = _manager.GetWriter(ObjectType::Lights);
         for (const auto &light : renderOptions->protoLights) {
             writer->write(light);
         }
@@ -2001,7 +1999,7 @@ Integrator *RenderOptions::MakeIntegrator() const {
 
     if (PbrtOptions.dumpScene) {
         // let's dump the sampler
-        auto writer = global::manager.GetWriter(ObjectType::Sampler);
+        auto writer = _manager.GetWriter(ObjectType::Sampler);
         writer->write(sampler::to_protobuf(SamplerName, SamplerParams,
                                           camera->film->GetSampleBounds()));
     }
@@ -2063,7 +2061,7 @@ Camera *RenderOptions::MakeCamera() const {
         AnimatedTransform ac2w{
             &CameraToWorld[0], renderOptions->transformStartTime,
             &CameraToWorld[1], renderOptions->transformEndTime};
-        auto writer = global::manager.GetWriter(ObjectType::Camera);
+        auto writer = _manager.GetWriter(ObjectType::Camera);
         writer->write(camera::to_protobuf(CameraName, CameraParams, ac2w,
                                          FilmName, FilmParams, FilterName,
                                          FilterParams));
@@ -2094,8 +2092,7 @@ void DumpSceneObjects(const std::string &description,
             &renderOptions->CameraToWorld[1], renderOptions->transformEndTime};
 
         protobuf::RecordWriter writer{
-            outputPath + "/" +
-            global::manager.getFileName(ObjectType::Camera, 0)};
+            outputPath + "/" + _manager.getFileName(ObjectType::Camera, 0)};
 
         writer.write(camera::to_protobuf(
             renderOptions->CameraName, renderOptions->CameraParams, ac2w,
@@ -2106,8 +2103,7 @@ void DumpSceneObjects(const std::string &description,
     /* Dumping the lights */
     if (!renderOptions->protoLights.empty()) {
         protobuf::RecordWriter writer{
-            outputPath + "/" +
-            global::manager.getFileName(ObjectType::Lights, 0)};
+            outputPath + "/" + _manager.getFileName(ObjectType::Lights, 0)};
 
         for (const auto &light : renderOptions->protoLights) {
             writer.write(light);

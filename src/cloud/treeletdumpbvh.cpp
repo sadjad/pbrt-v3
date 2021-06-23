@@ -17,7 +17,7 @@ using namespace std;
 
 namespace pbrt {
 
-auto &_manager = global::manager;
+static auto &_manager = global::manager;
 
 STAT_COUNTER("BVH/Total Ray Transfers", totalRayTransfers);
 
