@@ -30,6 +30,7 @@
 #include "samplers/sobol.h"
 #include "samplers/stratified.h"
 #include "samplers/zerotwosequence.h"
+#include "serdes.h"
 #include "shapes/fake.h"
 
 using namespace std;
@@ -499,6 +500,24 @@ shared_ptr<Light> light::from_protobuf(const protobuf::Light& proto_light) {
     }
 
     return light;
+}
+
+protobuf::AreaLight area_light::to_protobuf(const uint32_t id,
+                                            const string& name,
+                                            const ParamSet& pset,
+                                            const Transform& light2world,
+                                            const TriangleMesh* mesh) {
+    protobuf::AreaLight proto_light;
+    proto_light.set_id(id);
+    proto_light.mutable_light()->set_name(name);
+    *proto_light.mutable_light()->mutable_paramset() = pbrt::to_protobuf(pset);
+    *proto_light.mutable_light()->mutable_light_to_world() =
+        pbrt::to_protobuf(light2world.GetMatrix());
+
+    string serialized_mesh = serdes::triangle_mesh::serialize(*mesh);
+    proto_light.set_mesh_data(move(serialized_mesh));
+
+    return proto_light;
 }
 
 protobuf::Sampler sampler::to_protobuf(const string& name,

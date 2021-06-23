@@ -144,6 +144,12 @@ message Light {
     Matrix light_to_world = 3;
 }
 
+message AreaLight {
+    uint32 id = 1;
+    Light light = 2;
+    bytes mesh_data = 3;
+}
+
 // Camera, Film & Filter
 
 message Camera {

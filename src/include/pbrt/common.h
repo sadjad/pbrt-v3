@@ -10,6 +10,8 @@ enum class ObjectType {
     Treelet,
     TriangleMesh,
     Lights,
+    AreaLight,
+    AreaLights,
     Sampler,
     Camera,
     Scene,

@@ -81,6 +81,15 @@ class SceneManager {
         return tmMaterialIds.at(tm);
     }
 
+    void recordMeshAreaLightId(const TriangleMesh* tm, const uint32_t light) {
+        tmAreaLightIds[tm] = light;
+    }
+
+    uint32_t getMeshAreaLightId(const TriangleMesh *tm) {
+        return tmAreaLightIds.count(tm) ? tmAreaLightIds.at(tm)
+                                        : std::numeric_limits<uint32_t>::max();
+    }
+
     std::vector<double> getTreeletProbs() const;
 
     const std::set<ObjectKey>& getTreeletDependencies(const ObjectID treeletId);
@@ -102,6 +111,7 @@ class SceneManager {
     std::map<ObjectKey, std::set<ObjectKey>> dependencies;
 
     std::map<const TriangleMesh*, uint32_t> tmMaterialIds;
+    std::map<const TriangleMesh*, uint32_t> tmAreaLightIds;
 
     std::map<ObjectID, std::set<ObjectKey>> treeletDependencies;
 };

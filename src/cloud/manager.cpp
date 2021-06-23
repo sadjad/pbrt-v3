@@ -94,8 +94,9 @@ ParamSet MaterialBlueprint::FilterParamSet(const ParamSet& src) {
 }
 
 static const string TYPE_PREFIXES[] = {
-    "T",    "TM",   "LIGHTS",   "SAMPLER", "CAMERA", "SCENE", "MAT",
-    "FTEX", "STEX", "MANIFEST", "TEX",     "TINFO",  "STATIC"};
+    "T",       "TM",       "LIGHTS", "AREALIGHT", "AREALIGHTS",
+    "SAMPLER", "CAMERA",   "SCENE",  "MAT",       "FTEX",
+    "STEX",    "MANIFEST", "TEX",    "TINFO",     "STATIC"};
 
 static_assert(
     sizeof(TYPE_PREFIXES) / sizeof(string) == to_underlying(ObjectType::COUNT),
@@ -140,11 +141,13 @@ string SceneManager::getFileName(const ObjectType type, const uint32_t id) {
     case ObjectType::SpectrumTexture:
     case ObjectType::Texture:
     case ObjectType::StaticAssignment:
+    case ObjectType::AreaLight:
         return TYPE_PREFIXES[to_underlying(type)] + to_string(id);
 
     case ObjectType::Sampler:
     case ObjectType::Camera:
     case ObjectType::Lights:
+    case ObjectType::AreaLights:
     case ObjectType::Scene:
     case ObjectType::Manifest:
     case ObjectType::TreeletInfo:
@@ -211,6 +214,8 @@ protobuf::Manifest SceneManager::makeManifest() const {
     add_to_manifest(ObjectType::FloatTexture);
     add_to_manifest(ObjectType::SpectrumTexture);
     add_to_manifest(ObjectType::Texture);
+    add_to_manifest(ObjectType::AreaLight);
+    add_to_manifest(ObjectType::AreaLights);
 
     return manifest;
 }
@@ -244,6 +249,7 @@ void SceneManager::loadManifest() {
     dependencies[ObjectKey{ObjectType::Scene, 0}];
     dependencies[ObjectKey{ObjectType::Camera, 0}];
     dependencies[ObjectKey{ObjectType::Lights, 0}];
+    dependencies[ObjectKey{ObjectType::AreaLights, 0}];
     dependencies[ObjectKey{ObjectType::Sampler, 0}];
 }
 

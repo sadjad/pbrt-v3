@@ -197,6 +197,7 @@ struct RenderOptions {
 
     // Dumping the scene data
     std::vector<protobuf::Light> protoLights;
+    std::vector<protobuf::AreaLight> protoAreaLights;
 };
 
 // MaterialInstance represents both an instance of a material as well as
@@ -1478,6 +1479,21 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
 
         MediumInterface mi = graphicsState.CreateMediumInterface();
         prims.reserve(shapes.size());
+
+        // Dumping area light, if necessary
+        if (PbrtOptions.dumpScene && !graphicsState.areaLight.empty() &&
+            shapes[0]->GetType() == ShapeType::Triangle) {
+            const TriangleMesh *mesh =
+                std::dynamic_pointer_cast<Triangle>(shapes[0])->mesh.get();
+
+            const auto lightId = _manager.getNextId(ObjectType::Lights);
+            renderOptions->protoAreaLights.emplace_back(area_light::to_protobuf(
+                lightId, "diffuse", graphicsState.areaLightParams,
+                curTransform[0], mesh));
+
+            _manager.recordMeshAreaLightId(mesh, lightId);
+        }
+
         for (auto s : shapes) {
             // Possibly create area light for shape
             std::shared_ptr<AreaLight> area;
@@ -1967,6 +1983,11 @@ Scene *RenderOptions::MakeScene() {
         auto writer = _manager.GetWriter(ObjectType::Lights);
         for (const auto &light : renderOptions->protoLights) {
             writer->write(light);
+        }
+
+        writer = _manager.GetWriter(ObjectType::AreaLights);
+        for (const auto &alight : renderOptions->protoAreaLights) {
+            writer->write(alight);
         }
     }
 

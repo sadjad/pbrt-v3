@@ -104,6 +104,16 @@ protobuf::Light to_protobuf(const std::string& name, const ParamSet& params,
 
 }  // namespace light
 
+namespace area_light {
+
+std::shared_ptr<AreaLight> from_protobuf(const protobuf::AreaLight& light);
+protobuf::AreaLight to_protobuf(const uint32_t id, const std::string& name,
+                                const ParamSet& params,
+                                const Transform& light2world,
+                                const TriangleMesh* mesh);
+
+}  // namespace light
+
 namespace sampler {
 
 std::shared_ptr<GlobalSampler> from_protobuf(const protobuf::Sampler& sampler,
