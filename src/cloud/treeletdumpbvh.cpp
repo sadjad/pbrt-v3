@@ -2290,9 +2290,11 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
             triMeshIDs[instMesh] = sMeshID;
 
+            const uint32_t mtlID = _manager.getMeshMaterialId(instMesh);
+
             // writing the triangle mesh
             writer->write(static_cast<uint64_t>(sMeshID));
-            writer->write(static_cast<uint64_t>(0));
+            writer->write(static_cast<uint64_t>(mtlID));
             writer->write(serdes::triangle_mesh::serialize(*instMesh));
         }
 
