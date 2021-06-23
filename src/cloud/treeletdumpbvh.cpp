@@ -1929,16 +1929,16 @@ map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
 
     // now we have to cut this ptex
     Ptex::String error;
-    PtexTexture *src = PtexTexture::open(srcPath.c_str(), error, false);
+    PtexPtr<PtexTexture> src{PtexTexture::open(srcPath.c_str(), error, false)};
 
     if (!src) {
         Error("%s", error.c_str());
         throw runtime_error("failed to open ptex file for reading: " + srcPath);
     }
 
-    PtexWriter *dst = PtexWriter::open(
+    PtexPtr<PtexWriter> dst{PtexWriter::open(
         dstPath.c_str(), src->meshType(), src->dataType(), src->numChannels(),
-        src->alphaChannel(), src->numFaces(), error, src->hasMipMaps());
+        src->alphaChannel(), src->numFaces(), error, src->hasMipMaps())};
 
     if (!dst) {
         Error("%s", error.c_str());
