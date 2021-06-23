@@ -2272,10 +2272,12 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             // (1) the material id for the original mesh... let's load its info
 
             const uint32_t mtlID = getMaterialForMesh(newMesh.get(), mesh);
+            const uint32_t areaLightID = _manager.getMeshAreaLightId(mesh);
 
             // writing the triangle mesh
             writer->write(static_cast<uint64_t>(sMeshID));
             writer->write(static_cast<uint64_t>(mtlID));
+            writer->write(areaLightID);
             writer->write(serdes::triangle_mesh::serialize(*newMesh));
 
             _manager.recordDependency(

@@ -264,9 +264,11 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
     for (int i = 0; i < num_triangle_meshes; ++i) {
         uint64_t tm_id;
         uint64_t material_id;
+        uint32_t area_light_id;
 
         reader.read(&tm_id);
         reader.read(&material_id);
+        reader.read(&area_light_id);
 
         const char *tm_buffer;
         size_t tm_buffer_len;
@@ -287,9 +289,11 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
         for (int i = 0; i < num_triangle_meshes; i++) {
             uint64_t tm_id;
             uint64_t material_id;
+            uint32_t area_light_id;
 
             tm_reader.read(&tm_id);
             tm_reader.read(&material_id);
+            reader.read(&area_light_id);
 
             const char *tm_buffer;
             size_t tm_buffer_len;

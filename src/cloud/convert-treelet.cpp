@@ -47,12 +47,14 @@ int main(int argc, char* argv[]) {
 
             const uint64_t id = tm_proto.id();
             const uint64_t material_id = tm_proto.material_id();
+            const uint32_t area_light_id = 0;
 
             const string serialized_tm =
                 serdes::triangle_mesh::serialize(from_protobuf(tm_proto));
 
             writer.write(id);
             writer.write(material_id);
+            writer.write(area_light_id);
             writer.write(serialized_tm);
         }
 
