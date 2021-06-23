@@ -33,6 +33,10 @@ struct ObjectKey {
         }
         return type < other.type;
     }
+
+    bool operator==(const ObjectKey& other) const {
+        return (id == other.id) && (type == other.type);
+    }
 };
 
 }  // namespace pbrt

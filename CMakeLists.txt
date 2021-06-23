@@ -617,6 +617,14 @@ TARGET_COMPILE_FEATURES ( convert_treelet PRIVATE ${PBRT_CXX11_FEATURES} )
 TARGET_LINK_LIBRARIES ( convert_treelet ${ALL_PBRT_LIBS} -fno-builtin-malloc
   -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -ljemalloc )
 
+# print-manifest
+ADD_EXECUTABLE ( print_manifest src/cloud/print-manifest.cpp )
+ADD_SANITIZERS ( print_manifest )
+
+SET_TARGET_PROPERTIES ( print_manifest PROPERTIES OUTPUT_NAME "print-manifest" )
+TARGET_COMPILE_FEATURES ( print_manifest PRIVATE ${PBRT_CXX11_FEATURES} )
+TARGET_LINK_LIBRARIES ( print_manifest ${ALL_PBRT_LIBS} )
+
 # gen-static0
 ADD_EXECUTABLE ( gen_static0 src/cloud/gen-static0.cpp )
 ADD_SANITIZERS ( gen_static0 )
