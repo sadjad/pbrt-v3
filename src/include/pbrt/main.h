@@ -11,9 +11,11 @@
 #include "common.h"
 #include "geometry.h"
 #include "pbrt.h"
+#include "transform.h"
 
 namespace pbrt {
 
+class TriangleMesh;
 class GlobalSampler;
 class CloudBVH;
 class Sample;
@@ -42,6 +44,7 @@ namespace scene {
 class Base {
   private:
     std::vector<std::set<ObjectKey>> treeletDependencies{};
+    Transform identityTransform;
 
   public:
     std::shared_ptr<Camera> camera{};
@@ -49,6 +52,9 @@ class Base {
     std::vector<std::unique_ptr<Transform>> transformCache{};
     std::unique_ptr<Scene> fakeScene{};
     std::vector<std::shared_ptr<Light>> lights{};
+
+    std::vector<std::shared_ptr<TriangleMesh>> areaLightMeshes{};
+    std::vector<std::shared_ptr<Shape>> areaLightShapes{};
 
     int samplesPerPixel;
     pbrt::Bounds2i sampleBounds{};
@@ -76,7 +82,7 @@ Base LoadBase(const std::string &path, const int samplesPerPixel);
 
 std::shared_ptr<CloudBVH> LoadTreelet(const std::string &path,
                                       const TreeletId treeletId,
-                                      const char * buffer = nullptr,
+                                      const char *buffer = nullptr,
                                       const size_t length = 0);
 
 void DumpSceneObjects(const std::string &description,

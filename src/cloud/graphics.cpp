@@ -5,6 +5,8 @@
 #include "core/sampler.h"
 #include "core/stats.h"
 #include "integrators/cloud.h"
+#include "lights/diffuse.h"
+#include "messages/serdes.h"
 #include "messages/utils.h"
 #include "pbrt/main.h"
 #include "pbrt/raystate.h"
@@ -121,6 +123,35 @@ Base::Base(const std::string &path, const int samplesPerPixel) {
         protobuf::Light proto_light;
         reader->read(&proto_light);
         lights.push_back(move(light::from_protobuf(proto_light)));
+    }
+
+    // loading area lights
+    MediumInterface mediumInterface{};
+    reader = manager.GetReader(ObjectType::AreaLights);
+
+    while (!reader->eof()) {
+        protobuf::AreaLight proto_light;
+        reader->read(&proto_light);
+
+        // let's create the triangle mesh for the light
+        shared_ptr<char> meshStorage{new char[proto_light.mesh_data().size()],
+                                     default_delete<char[]>()};
+        memcpy(meshStorage.get(), &proto_light.mesh_data()[0],
+               proto_light.mesh_data().size());
+        areaLightMeshes.emplace_back(make_shared<TriangleMesh>(meshStorage, 0));
+        auto mesh = areaLightMeshes.back();
+
+        auto lightParams = from_protobuf(proto_light.light().paramset());
+        auto lightTrans = from_protobuf(proto_light.light().light_to_world());
+
+        for (size_t i = 0; i < mesh->nTriangles; i++) {
+            areaLightShapes.emplace_back(make_shared<Triangle>(
+                &identityTransform, &identityTransform, false, mesh, i));
+
+            lights.emplace_back(
+                CreateDiffuseAreaLight(lightTrans, mediumInterface.outside,
+                                       lightParams, areaLightShapes.back()));
+        }
     }
 
     reader = manager.GetReader(ObjectType::Scene);
