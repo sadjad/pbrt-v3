@@ -12,7 +12,6 @@
 
 #include "paramset.h"
 #include "pbrt.h"
-#include "pbrt.pb.h"
 #include "pbrt/raystate.h"
 #include "primitive.h"
 #include "transform.h"
