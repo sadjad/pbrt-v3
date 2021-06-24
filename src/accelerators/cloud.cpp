@@ -112,7 +112,7 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
 
         /* (3) finish loading the treelets */
         ParallelFor(
-            [&](int64_t treelet_id) { finializeTreeletLoad(treelet_id); },
+            [&](int64_t treelet_id) { finalizeTreeletLoad(treelet_id); },
             treelet_count);
 
         preloading_done_ = true;
@@ -205,10 +205,10 @@ void CloudBVH::LoadTreelet(const uint32_t root_id, const char *buffer,
         }
     }
 
-    finializeTreeletLoad(root_id);
+    finalizeTreeletLoad(root_id);
 }
 
-void CloudBVH::finializeTreeletLoad(const uint32_t root_id) const {
+void CloudBVH::finalizeTreeletLoad(const uint32_t root_id) const {
     auto &treelet = *treelets_[root_id];
 
     /* fill in unfinished primitives */

@@ -178,7 +178,7 @@ class CloudBVH : public Aggregate {
 
     mutable std::shared_ptr<Material> default_material;
 
-    void finializeTreeletLoad(const uint32_t root_id) const;
+    void finalizeTreeletLoad(const uint32_t root_id) const;
     void loadTreeletBase(const uint32_t root_id, const char *buffer = nullptr,
                          size_t length = 0) const;
 
