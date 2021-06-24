@@ -10,6 +10,7 @@
 #include <stack>
 #include <vector>
 
+#include "paramset.h"
 #include "pbrt.h"
 #include "pbrt.pb.h"
 #include "pbrt/raystate.h"
@@ -55,8 +56,8 @@ class CloudBVH : public Aggregate {
     }
 
     struct TreeletNode {
-        Bounds3f bounds {};
-        uint8_t axis {};
+        Bounds3f bounds{};
+        uint8_t axis{};
 
         union {
             struct {
@@ -98,13 +99,16 @@ class CloudBVH : public Aggregate {
     struct UnfinishedGeometricPrimitive {
         size_t primitive_index;
         uint32_t material_id;
-        std::unique_ptr<Shape> shape;
+        uint32_t area_light_id;
+        std::shared_ptr<Shape> shape;
 
         UnfinishedGeometricPrimitive(const size_t primitive_index,
                                      const uint32_t material_id,
-                                     std::unique_ptr<Shape> &&shape)
+                                     const uint32_t area_light_id,
+                                     std::shared_ptr<Shape> &&shape)
             : primitive_index(primitive_index),
               material_id(material_id),
+              area_light_id(area_light_id),
               shape(std::move(shape)) {}
     };
 
@@ -169,7 +173,8 @@ class CloudBVH : public Aggregate {
     mutable std::map<uint32_t, std::shared_ptr<Material>> materials_;
     mutable std::map<uint64_t, std::shared_ptr<Texture<Float>>> ftex_;
     mutable std::map<uint64_t, std::shared_ptr<Texture<Spectrum>>> stex_;
-    mutable std::map<uint32_t, protobuf::Light> area_lights_proto_;
+    mutable std::map<uint32_t, std::pair<ParamSet, Transform>>
+        area_light_params_;
 
     mutable std::shared_ptr<Material> default_material;
 

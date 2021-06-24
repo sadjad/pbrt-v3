@@ -10,6 +10,7 @@
 #include "core/parallel.h"
 #include "core/paramset.h"
 #include "core/primitive.h"
+#include "lights/diffuse.h"
 #include "materials/matte.h"
 #include "messages/lite.h"
 #include "messages/serdes.h"
@@ -61,7 +62,10 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
     while (!reader->eof()) {
         protobuf::AreaLight proto;
         reader->read(&proto);
-        area_lights_proto_.emplace(proto.id(), proto.light());
+        area_light_params_.emplace(
+            proto.id(),
+            make_pair(from_protobuf(proto.light().paramset()),
+                      from_protobuf(proto.light().light_to_world())));
     }
 
     if (preload_all) {
@@ -217,8 +221,18 @@ void CloudBVH::finializeTreeletLoad(const uint32_t root_id) const {
     MediumInterface medium_interface{};
 
     for (auto &u : treelet.unfinished_geometric) {
+        /* do we need to make an area light for this guy? */
+        shared_ptr<AreaLight> area_light;
+
+        if (u.area_light_id != numeric_limits<uint32_t>::max()) {
+            auto &light_data = area_light_params_.at(u.area_light_id);
+            area_light = CreateDiffuseAreaLight(light_data.second,
+                                                medium_interface.outside,
+                                                light_data.first, u.shape);
+        }
+
         treelet.primitives[u.primitive_index] = make_unique<GeometricPrimitive>(
-            move(u.shape), materials_[u.material_id], nullptr,
+            move(u.shape), materials_[u.material_id], area_light,
             medium_interface);
     }
 
@@ -261,6 +275,7 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
     LiteRecordReader reader{buffer, length};
 
     map<uint32_t, uint32_t> mesh_material_ids;
+    map<uint32_t, uint32_t> mesh_area_light_id;
 
     /* read in the triangle meshes for this treelet first */
     uint32_t num_triangle_meshes = 0;
@@ -317,6 +332,10 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
 
             CHECK_EQ(p.second, true);
             mesh_material_ids[tm_id] = material_id;
+
+            if (area_light_id != numeric_limits<uint32_t>::max()) {
+                mesh_area_light_id[tm_id] = area_light_id;
+            }
         }
     }
 
@@ -397,14 +416,19 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
             const auto mesh_id = serdes_triangle->mesh_id;
             const auto tri_number = serdes_triangle->tri_number;
             const auto material_id = mesh_material_ids[mesh_id];
+            const auto area_light_id = mesh_area_light_id.count(mesh_id)
+                                           ? mesh_area_light_id.at(mesh_id)
+                                           : numeric_limits<uint32_t>::max();
+
             treelet.required_materials.insert(material_id);
 
-            auto shape = make_unique<Triangle>(
+            auto shape = make_shared<Triangle>(
                 &identity_transform_, &identity_transform_, false,
                 tree_meshes.at(mesh_id), tri_number);
 
-            treelet.unfinished_geometric.emplace_back(tree_primitives.size(),
-                                                      material_id, move(shape));
+            treelet.unfinished_geometric.emplace_back(
+                tree_primitives.size(), material_id, area_light_id,
+                move(shape));
 
             tree_primitives.push_back(nullptr);
         }
