@@ -22,6 +22,8 @@ using namespace std;
 
 namespace pbrt {
 
+static auto &_manager = global::manager;
+
 STAT_COUNTER("BVH/Total nodes", nNodes);
 STAT_COUNTER("BVH/Visited nodes", nNodesVisited);
 STAT_COUNTER("BVH/Visited primitives", nPrimitivesVisited);
@@ -55,7 +57,7 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
 
     if (preload_all) {
         /* (1) load all the treelets in parallel */
-        const auto treelet_count = global::manager.treeletCount();
+        const auto treelet_count = _manager.treeletCount();
 
         treelets_.resize(treelet_count + 1);
 
@@ -72,7 +74,7 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
 
         for (const auto mid : required_materials) {
             if (materials_.count(mid) == 0) {
-                auto r = global::manager.GetReader(ObjectType::Material, mid);
+                auto r = _manager.GetReader(ObjectType::Material, mid);
                 protobuf::Material material;
                 r->read(&material);
                 materials_[mid] =
@@ -175,7 +177,7 @@ void CloudBVH::LoadTreelet(const uint32_t root_id, const char *buffer,
     /* load the materials */
     for (const auto mid : treelet.required_materials) {
         if (materials_.count(mid) == 0) {
-            auto reader = global::manager.GetReader(ObjectType::Material, mid);
+            auto reader = _manager.GetReader(ObjectType::Material, mid);
             protobuf::Material material;
             reader->read(&material);
             materials_[mid] = material::from_protobuf(material, ftex_, stex_);
@@ -233,8 +235,8 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
     vector<char> treelet_buffer;
     if (!buffer) {
         const string treelet_path =
-            global::manager.getScenePath() + "/" +
-            global::manager.getFileName(ObjectType::Treelet, root_id);
+            _manager.getScenePath() + "/" +
+            _manager.getFileName(ObjectType::Treelet, root_id);
 
         ifstream fin{treelet_path, ios::binary | ios::ate};
         streamsize size = fin.tellg();
