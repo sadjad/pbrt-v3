@@ -1925,8 +1925,6 @@ void TreeletDumpBVH::DumpHeader() const {
 
 map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
                              const set<int> &usedFaces) {
-    map<int, int> oldToNew;
-
     // now we have to cut this ptex
     Ptex::String error;
     PtexPtr<PtexTexture> src{PtexTexture::open(srcPath.c_str(), error, false)};
@@ -1949,25 +1947,54 @@ map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
     dst->setEdgeFilterMode(src->edgeFilterMode());
     dst->writeMeta(src->getMetaData());
 
-    vector<char> facebuffer;
-
     size_t outFaceId = 0;
-    for (int i = 0; i < src->numFaces(); i++) {
-        /* do we need to write this face? */
-        if (!usedFaces.count(i)) continue;
+    map<int, int> oldToNew;
 
-        oldToNew[i] = outFaceId;
+    vector<char> facebuffer;
+    set<int> adjFacesToKeep;
+
+    for (int i = 0; i < src->numFaces(); i++) {
+        if (!usedFaces.count(i)) continue;
+        oldToNew[i] = outFaceId++;
 
         const Ptex::FaceInfo &face_info = src->getFaceInfo(i);
+        
+        for (int j = 0; j < 4; j++) {
+            const auto adjFaceId = face_info.adjface(j);
+            if (adjFaceId != -1 && !usedFaces.count(adjFaceId)) {
+                adjFacesToKeep.insert(adjFaceId);
+                oldToNew[adjFaceId] = outFaceId++;
+            }
+        }
+    }
+
+    for (int i = 0; i < src->numFaces(); i++) {
+        /* do we need to write this face? */
+        bool used = usedFaces.count(i) > 0;
+        bool adj = !used && adjFacesToKeep.count(i) > 0;
+
+        if (!used && !adj) continue;
+
+        Ptex::FaceInfo face_info = src->getFaceInfo(i);
         size_t bufferLen = Ptex::DataSize(src->dataType()) *
                            src->numChannels() * face_info.res.size();
+
+        auto getNewId = [&](const int oldId) {
+            return oldId == -1 ? -1 : oldToNew.at(oldId);
+        };
+
+        if (used) {
+            face_info.setadjfaces(
+                getNewId(face_info.adjface(0)), getNewId(face_info.adjface(1)),
+                getNewId(face_info.adjface(2)), getNewId(face_info.adjface(3)));
+        }
 
         if (facebuffer.size() < bufferLen) {
             facebuffer.resize(bufferLen);
         }
 
         src->getData(i, &facebuffer[0], 0);
-        dst->writeFace(outFaceId++, face_info, &facebuffer[0], 0);
+        dst->writeFace(oldToNew.at(i), face_info, &facebuffer[0], 0);
     }
 
     // writing out the new texture file
