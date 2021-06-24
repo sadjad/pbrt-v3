@@ -319,7 +319,7 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
 
             tm_reader.read(&tm_id);
             tm_reader.read(&material_id);
-            reader.read(&area_light_id);
+            tm_reader.read(&area_light_id);
 
             const char *tm_buffer;
             size_t tm_buffer_len;
