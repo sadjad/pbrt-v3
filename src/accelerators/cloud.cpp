@@ -55,6 +55,15 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
     TextureParams textureParams(params, emptyParams, fTex, sTex);
     default_material.reset(CreateMatteMaterial(textureParams));
 
+    // let's load all the area lights in the case that they are used by our
+    // meshes
+    auto reader = _manager.GetReader(ObjectType::AreaLights);
+    while (!reader->eof()) {
+        protobuf::AreaLight proto;
+        reader->read(&proto);
+        area_lights_proto_.emplace(proto.id(), proto.light());
+    }
+
     if (preload_all) {
         /* (1) load all the treelets in parallel */
         const auto treelet_count = _manager.treeletCount();

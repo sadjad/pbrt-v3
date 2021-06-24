@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "pbrt.h"
+#include "pbrt.pb.h"
 #include "pbrt/raystate.h"
 #include "primitive.h"
 #include "transform.h"
@@ -168,6 +169,7 @@ class CloudBVH : public Aggregate {
     mutable std::map<uint32_t, std::shared_ptr<Material>> materials_;
     mutable std::map<uint64_t, std::shared_ptr<Texture<Float>>> ftex_;
     mutable std::map<uint64_t, std::shared_ptr<Texture<Spectrum>>> stex_;
+    mutable std::map<uint32_t, protobuf::Light> area_lights_proto_;
 
     mutable std::shared_ptr<Material> default_material;
 
