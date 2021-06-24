@@ -47,7 +47,7 @@ int main(int argc, char* argv[]) {
 
             const uint64_t id = tm_proto.id();
             const uint64_t material_id = tm_proto.material_id();
-            const uint32_t area_light_id = 0;
+            const uint32_t area_light_id = numeric_limits<uint32_t>::max();
 
             const string serialized_tm =
                 serdes::triangle_mesh::serialize(from_protobuf(tm_proto));
