@@ -10,6 +10,7 @@
 
 #include "common.h"
 #include "geometry.h"
+#include "light.h"
 #include "pbrt.h"
 #include "transform.h"
 
