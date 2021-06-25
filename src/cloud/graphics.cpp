@@ -161,6 +161,9 @@ Base::Base(const std::string &path, const int samplesPerPixel) {
 
     for (auto &light : lights) {
         light->Preprocess(*fakeScene);
+        if (light->flags & (int)LightFlags::Infinite) {
+            infiniteLights.push_back(light);
+        }
     }
 
     const auto treeletCount = manager.treeletCount();

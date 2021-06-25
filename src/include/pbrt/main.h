@@ -52,6 +52,7 @@ class Base {
     std::vector<std::unique_ptr<Transform>> transformCache{};
     std::unique_ptr<Scene> fakeScene{};
     std::vector<std::shared_ptr<Light>> lights{};
+    std::vector<std::shared_ptr<Light>> infiniteLights{};
 
     std::vector<std::shared_ptr<TriangleMesh>> areaLightMeshes{};
     std::vector<std::shared_ptr<Shape>> areaLightShapes{};
