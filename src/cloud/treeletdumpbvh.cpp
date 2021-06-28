@@ -2013,6 +2013,11 @@ uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh,
         *textureSizeOut = 0;
     }
 
+    if (mtlID == numeric_limits<uint32_t>::max()) {
+        // there's no material
+        return mtlID;
+    }
+
     protobuf::Material mtl;
     _manager.GetReader(ObjectType::Material, mtlID)->read(&mtl);
 

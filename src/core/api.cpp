@@ -627,7 +627,7 @@ std::shared_ptr<Material> MakeMaterial(const std::string &name,
     if (!material) Error("Unable to create material \"%s\"", name.c_str());
     else ++nMaterialsCreated;
 
-    if (PbrtOptions.dumpScene) {
+    if (PbrtOptions.dumpScene && material != nullptr) {
         const auto materialId =
             _manager.getNextId(ObjectType::Material, material);
         auto writer = _manager.GetWriter(ObjectType::Material, materialId);
@@ -1454,7 +1454,13 @@ void pbrtShape(const std::string &name, const ParamSet &params) {
     auto recordMaterialIdForMesh = [](auto &shapes, auto &mtl) {
         if (PbrtOptions.dumpScene &&
             shapes.front()->GetType() == ShapeType::Triangle) {
-            const auto mtlId = _manager.getId(mtl.get());
+            uint32_t mtlId;
+            if (mtl) {
+                mtlId = _manager.getId(mtl.get());
+            } else {
+                mtlId = std::numeric_limits<uint32_t>::max();
+            }
+
             _manager.recordMeshMaterialId(
                 std::dynamic_pointer_cast<Triangle>(shapes.front())->mesh.get(),
                 mtlId);

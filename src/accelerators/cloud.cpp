@@ -86,6 +86,11 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
         }
 
         for (const auto mid : required_materials) {
+            if (mid == numeric_limits<uint32_t>::max()) {
+                materials_[mid] = nullptr;
+                continue;
+            }
+
             if (materials_.count(mid) == 0) {
                 auto r = _manager.GetReader(ObjectType::Material, mid);
                 protobuf::Material material;
@@ -189,6 +194,11 @@ void CloudBVH::LoadTreelet(const uint32_t root_id, const char *buffer,
 
     /* load the materials */
     for (const auto mid : treelet.required_materials) {
+        if (mid == numeric_limits<uint32_t>::max()) {
+            materials_[mid] = nullptr;
+            continue;
+        }
+
         if (materials_.count(mid) == 0) {
             auto reader = _manager.GetReader(ObjectType::Material, mid);
             protobuf::Material material;
