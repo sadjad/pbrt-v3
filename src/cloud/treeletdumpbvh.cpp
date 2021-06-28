@@ -1958,7 +1958,7 @@ map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
         oldToNew[i] = outFaceId++;
 
         const Ptex::FaceInfo &face_info = src->getFaceInfo(i);
-        
+
         for (int j = 0; j < 4; j++) {
             const auto adjFaceId = face_info.adjface(j);
             if (adjFaceId != -1 && !usedFaces.count(adjFaceId)) {
@@ -2003,10 +2003,15 @@ map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
     return oldToNew;
 }
 
-uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh) {
+uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh,
+                            size_t *textureSizeOut) {
     enum { FLOAT, SPECTRUM };
 
     const uint32_t mtlID = _manager.getMeshMaterialId(oldMesh);
+
+    if (textureSizeOut) {
+        *textureSizeOut = 0;
+    }
 
     protobuf::Material mtl;
     _manager.GetReader(ObjectType::Material, mtlID)->read(&mtl);
@@ -2084,7 +2089,19 @@ uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh) {
             _manager.getScenePath() + "/" +
             _manager.getFileName(ObjectType::Texture, newtid);
 
+        LOG(INFO) << "Cutting texture " << tname << " (" << filename << "), "
+                  << " size = " << format_bytes(roost::file_size(srcPath));
+
         const auto mapping = cutPtexTexture(srcPath, dstPath, usedFaces);
+
+        const auto outputSize = roost::file_size(dstPath);
+        LOG(INFO) << "Texture " << tname << " is cut into a new one ("
+                  << _manager.getFileName(ObjectType::Texture, newtid)
+                  << "), size = " << format_bytes(outputSize);
+
+        if (textureSizeOut) {
+            *textureSizeOut += outputSize;
+        }
 
         oldToNewFaceMapping.insert(mapping.begin(), mapping.end());
 
@@ -2214,9 +2231,14 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
         unsigned sTreeletID = _manager.getId(&treelet);
         auto writer = _manager.GetWriter(ObjectType::Treelet, sTreeletID);
 
+        size_t treeletTextureSize = 0;
+
         const uint32_t numTriMeshes =
             trianglesInTreelet.size() + instanceMeshes.size();
         writer->write(numTriMeshes);
+
+        LOG(INFO) << "Dumping treelet " << sTreeletID << " (" << treeletID
+                  << ") with " << numTriMeshes << " triangle mesh(es)";
 
         // FIXME add material support
         _manager.recordDependency(ObjectKey{ObjectType::Treelet, sTreeletID},
@@ -2295,17 +2317,32 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             uint32_t sMeshID = _manager.getNextId(ObjectType::TriangleMesh);
             triMeshIDs[mesh] = sMeshID;
 
+            LOG(INFO) << "Dumping triangle mesh " << sMeshID << " for treelet "
+                      << sTreeletID;
+
             /*** Figuring out the material for the mesh ***/
             // (1) the material id for the original mesh... let's load its info
 
-            const uint32_t mtlID = getMaterialForMesh(newMesh.get(), mesh);
+            size_t meshTextureSize = 0;
+
+            const uint32_t mtlID =
+                getMaterialForMesh(newMesh.get(), mesh, &meshTextureSize);
             const uint32_t areaLightID = _manager.getMeshAreaLightId(mesh);
+
+            treeletTextureSize += meshTextureSize;
+
+            const auto newMeshData = serdes::triangle_mesh::serialize(*newMesh);
+
+            LOG(INFO) << "Mesh " << sMeshID << " contains "
+                      << newMesh->nVertices << " vertices and "
+                      << newMesh->nTriangles << " triangles and its size is "
+                      << format_bytes(newMeshData.size());
 
             // writing the triangle mesh
             writer->write(static_cast<uint64_t>(sMeshID));
             writer->write(static_cast<uint64_t>(mtlID));
             writer->write(areaLightID);
-            writer->write(serdes::triangle_mesh::serialize(*newMesh));
+            writer->write(newMeshData);
 
             _manager.recordDependency(
                 ObjectKey{ObjectType::Treelet, sTreeletID},
@@ -2321,10 +2358,20 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
             const uint32_t mtlID = _manager.getMeshMaterialId(instMesh);
 
+            const auto instMeshData =
+                serdes::triangle_mesh::serialize(*instMesh);
+
+            LOG(INFO) << "Dumping instance mesh " << sMeshID << " for treelet "
+                      << sTreeletID << " with material " << mtlID;
+            LOG(INFO) << "Mesh " << sMeshID << " contains "
+                      << instMesh->nVertices << " vertices and "
+                      << instMesh->nTriangles << " triangles and its size is "
+                      << format_bytes(instMeshData.size());
+
             // writing the triangle mesh
             writer->write(static_cast<uint64_t>(sMeshID));
             writer->write(static_cast<uint64_t>(mtlID));
-            writer->write(serdes::triangle_mesh::serialize(*instMesh));
+            writer->write(instMeshData);
         }
 
         // Write out nodes for treelet
@@ -2351,6 +2398,9 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                      }
                  });
 
+        LOG(INFO) << "Treelet " << sTreeletID << " (" << treeletID << ") has "
+                  << node_count << " nodes and " << prim_count << " primitives";
+
         writer->write(static_cast<uint32_t>(node_count));
         writer->write(static_cast<uint32_t>(prim_count));
 
@@ -2358,6 +2408,10 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
         vector<CloudBVH::TreeletNode> output_nodes;
         output_nodes.reserve(node_count);
         memset(&output_nodes[0], 0, sizeof(CloudBVH::TreeletNode) * node_count);
+
+        LOG(INFO) << "Total node size for treelet " << sTreeletID << " ("
+                  << treeletID << ") is "
+                  << format_bytes((sizeof(CloudBVH::TreeletNode) * node_count));
 
         enum Child { LEFT = 0, RIGHT = 1 };
 
@@ -2564,6 +2618,14 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 }
             }
         }
+
+        writer = nullptr;
+
+        LOG(INFO) << "Finished dumping treelet " << sTreeletID << " ("
+                  << treeletID << "), size = "
+                  << format_bytes(roost::file_size(
+                         _manager.getFilePath(ObjectType::Treelet, sTreeletID)))
+                  << ", texture size = " << format_bytes(treeletTextureSize);
     }
 
     if (root) {
