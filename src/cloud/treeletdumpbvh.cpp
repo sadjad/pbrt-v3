@@ -2362,9 +2362,10 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             triMeshIDs[instMesh] = sMeshID;
 
             const uint32_t mtlID = _manager.getMeshMaterialId(instMesh);
-
             const auto instMeshData =
                 serdes::triangle_mesh::serialize(*instMesh);
+
+            const uint32_t areaLightID = _manager.getMeshAreaLightId(instMesh);
 
             LOG(INFO) << "Dumping instance mesh " << sMeshID << " for treelet "
                       << sTreeletID << " with material " << mtlID;
@@ -2376,6 +2377,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             // writing the triangle mesh
             writer->write(static_cast<uint64_t>(sMeshID));
             writer->write(static_cast<uint64_t>(mtlID));
+            writer->write(static_cast<uint32_t>(areaLightID));
             writer->write(instMeshData);
         }
 
@@ -2469,18 +2471,34 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             }
         }
 
-        CHECK(q.empty());
-
         for (TreeletDumpBVH *inst : treelet.instances) {
+            CHECK(q.empty());
+
             for (uint64_t nodeIdx = 0; nodeIdx < inst->nodeCount; nodeIdx++) {
                 const LinearBVHNode &instNode = inst->nodes[nodeIdx];
                 output_nodes.emplace_back(instNode.bounds, instNode.axis);
 
                 auto &out_node = output_nodes.back();
 
-                out_node.leaf_tag = ~0;
-                out_node.primitive_offset = current_primitive_offset;
-                out_node.primitive_count = instNode.nPrimitives;
+                if (!q.empty()) {
+                    auto parent = q.top();
+                    q.pop();
+
+                    output_nodes[parent.first].child_treelet[parent.second] =
+                        sTreeletID;
+                    output_nodes[parent.first].child_node[parent.second] =
+                        output_nodes.size() - 1;
+                }
+
+                if (instNode.nPrimitives == 0) {
+                    // every node from the mesh are in the same treelet
+                    q.emplace(output_nodes.size() - 1, RIGHT);
+                    q.emplace(output_nodes.size() - 1, LEFT);
+                } else {
+                    out_node.leaf_tag = ~0;
+                    out_node.primitive_offset = current_primitive_offset;
+                    out_node.primitive_count = instNode.nPrimitives;
+                }
 
                 current_primitive_offset += instNode.nPrimitives;
             }
