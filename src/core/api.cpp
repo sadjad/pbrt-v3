@@ -628,10 +628,24 @@ std::shared_ptr<Material> MakeMaterial(const std::string &name,
     else ++nMaterialsCreated;
 
     if (PbrtOptions.dumpScene && material != nullptr) {
+        std::vector<uint32_t> ftexDeps;
+        std::vector<uint32_t> stexDeps;
+
         const auto materialId =
             _manager.getNextId(ObjectType::Material, material);
         auto writer = _manager.GetWriter(ObjectType::Material, materialId);
-        writer->write(material::to_protobuf(name, material->GetType(), mp));
+        writer->write(material::to_protobuf(name, material->GetType(), mp,
+                                            ftexDeps, stexDeps));
+
+        for (auto &t : ftexDeps) {
+            _manager.recordDependency({ObjectType::Material, materialId},
+                                      {ObjectType::FloatTexture, t});
+        }
+
+        for (auto &t : stexDeps) {
+            _manager.recordDependency({ObjectType::Material, materialId},
+                                      {ObjectType::SpectrumTexture, t});
+        }
     }
 
     return std::shared_ptr<Material>(material);

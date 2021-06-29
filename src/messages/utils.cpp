@@ -715,7 +715,9 @@ shared_ptr<Material> material::from_protobuf(
 
 protobuf::Material material::to_protobuf(const std::string& name,
                                          const MaterialType type,
-                                         const TextureParams& tp) {
+                                         const TextureParams& tp,
+                                         vector<uint32_t>& ftex_deps,
+                                         vector<uint32_t>& stex_deps) {
     protobuf::Material material;
     material.set_name(name);
 
@@ -735,6 +737,8 @@ protobuf::Material material::to_protobuf(const std::string& name,
         shared_ptr<Texture<Float>> ptr = tp.GetFloatTextures().at(tname);
         auto id = global::manager.getId(ptr.get());
         material.mutable_float_textures()->operator[](tname) = id;
+
+        ftex_deps.push_back(id);
     }
 
     for (auto& tex : used_spectrum_textures) {
@@ -745,6 +749,8 @@ protobuf::Material material::to_protobuf(const std::string& name,
         shared_ptr<Texture<Spectrum>> ptr = tp.GetSpectrumTextures().at(tname);
         auto id = global::manager.getId(ptr.get());
         material.mutable_spectrum_textures()->operator[](tname) = id;
+
+        stex_deps.push_back(id);
     }
 
     material.mutable_geom_params()->CopyFrom(pbrt::to_protobuf(geom_params));

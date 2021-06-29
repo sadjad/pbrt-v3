@@ -2003,15 +2003,48 @@ map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
     return oldToNew;
 }
 
-uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh,
-                            size_t *textureSizeOut) {
+size_t getTotalTextureSize(TriangleMesh *mesh) {
+    static map<TriangleMesh *, size_t> textureSizes = {};
+
+    const uint32_t mtlID = _manager.getMeshMaterialId(mesh);
+
+    if (mtlID == numeric_limits<uint32_t>::max()) {
+        return 0;
+    }
+
+    if (textureSizes.count(mesh)) {
+        return textureSizes.at(mesh);
+    }
+
+    auto &allDeps = _manager.getDependenciesMap();
+
+    if (allDeps.count({ObjectType::Material, mtlID}) == 0) {
+        return 0;
+    }
+
+    size_t output = 0;
+
+    for (const auto &dep : allDeps.at({ObjectType::Material, mtlID})) {
+        if (dep.type == ObjectType::SpectrumTexture ||
+            dep.type == ObjectType::FloatTexture) {
+            if (allDeps.count(dep)) {
+                for (const auto &tdep : allDeps.at(dep)) {
+                    if (tdep.type != ObjectType::Texture) continue;
+                    output += roost::file_size(
+                        _manager.getFilePath(tdep.type, tdep.id));
+                }
+            }
+        }
+    }
+
+    textureSizes[mesh] = output;
+    return output;
+}
+
+uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh) {
     enum { FLOAT, SPECTRUM };
 
     const uint32_t mtlID = _manager.getMeshMaterialId(oldMesh);
-
-    if (textureSizeOut) {
-        *textureSizeOut = 0;
-    }
 
     if (mtlID == numeric_limits<uint32_t>::max()) {
         // there's no material
@@ -2094,8 +2127,9 @@ uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh,
             _manager.getScenePath() + "/" +
             _manager.getFileName(ObjectType::Texture, newtid);
 
+        const auto inputSize = format_bytes(roost::file_size(srcPath));
         LOG(INFO) << "Cutting texture " << tname << " (" << filename << "), "
-                  << " size = " << format_bytes(roost::file_size(srcPath));
+                  << " size = " << inputSize;
 
         const auto mapping = cutPtexTexture(srcPath, dstPath, usedFaces);
 
@@ -2103,10 +2137,6 @@ uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh,
         LOG(INFO) << "Texture " << tname << " is cut into a new one ("
                   << _manager.getFileName(ObjectType::Texture, newtid)
                   << "), size = " << format_bytes(outputSize);
-
-        if (textureSizeOut) {
-            *textureSizeOut += outputSize;
-        }
 
         oldToNewFaceMapping.insert(mapping.begin(), mapping.end());
 
@@ -2330,13 +2360,14 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
             size_t meshTextureSize = 0;
 
-            const uint32_t mtlID =
-                getMaterialForMesh(newMesh.get(), mesh, &meshTextureSize);
+            const uint32_t mtlID = getMaterialForMesh(newMesh.get(), mesh);
+            _manager.recordMeshMaterialId(newMesh.get(), mtlID);
+
             const uint32_t areaLightID = _manager.getMeshAreaLightId(mesh);
 
-            treeletTextureSize += meshTextureSize;
-
             const auto newMeshData = serdes::triangle_mesh::serialize(*newMesh);
+
+            treeletTextureSize += getTotalTextureSize(newMesh.get());
 
             LOG(INFO) << "Mesh " << sMeshID << " contains "
                       << newMesh->nVertices << " vertices and "
@@ -2364,8 +2395,9 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             const uint32_t mtlID = _manager.getMeshMaterialId(instMesh);
             const auto instMeshData =
                 serdes::triangle_mesh::serialize(*instMesh);
-
             const uint32_t areaLightID = _manager.getMeshAreaLightId(instMesh);
+
+            treeletTextureSize += getTotalTextureSize(instMesh);
 
             LOG(INFO) << "Dumping instance mesh " << sMeshID << " for treelet "
                       << sTreeletID << " with material " << mtlID;

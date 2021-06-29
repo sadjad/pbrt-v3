@@ -112,7 +112,7 @@ protobuf::AreaLight to_protobuf(const uint32_t id, const std::string& name,
                                 const Transform& light2world,
                                 const TriangleMesh* mesh);
 
-}  // namespace light
+}  // namespace area_light
 
 namespace sampler {
 
@@ -146,7 +146,9 @@ std::shared_ptr<Material> from_protobuf(
     std::map<uint64_t, std::shared_ptr<Texture<Spectrum>>>& stex);
 
 protobuf::Material to_protobuf(const std::string& name, const MaterialType type,
-                               const TextureParams& tp);
+                               const TextureParams& tp,
+                               std::vector<uint32_t>& ftex_deps,
+                               std::vector<uint32_t>& stex_deps);
 
 }  // namespace material
 
