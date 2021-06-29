@@ -2062,6 +2062,9 @@ uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh) {
     if (newMesh->faceIndices) {
         usedFaces.insert(newMesh->faceIndices,
                          newMesh->faceIndices + newMesh->nTriangles);
+    } else {
+        // we need faceIndices to be able to cut the textures
+        return mtlID;
     }
 
     // (2) are there any ptex textures that we can cut?
@@ -2100,8 +2103,44 @@ uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh) {
         return mtlID;
     }
 
-    auto newMtlId = _manager.getNextId(ObjectType::Material);
+    // (2.5) are the textures worth cutting?
+    bool shouldCut = false;
 
+    for (auto &tex : textures) {
+        const int type = get<0>(tex);
+        const string &tname = get<1>(tex);
+        const uint32_t tid = get<2>(tex);
+
+        auto &ftexProto = get<3>(tex);
+        auto &stexProto = get<4>(tex);
+
+        ParamSet pset = from_protobuf(type == FLOAT ? ftexProto.params()
+                                                    : stexProto.params());
+
+        const string filename = pset.FindOneString("filename", "");
+        if (filename.empty()) {
+            throw runtime_error("ptex texture with no filename");
+        }
+
+        const string fullpath = _manager.getScenePath() + "/" + filename;
+
+        Ptex::String error;
+        PtexPtr<PtexTexture> src{
+            PtexTexture::open(fullpath.c_str(), error, false)};
+
+        if ((1.0 * usedFaces.size() - src->numFaces()) / src->numFaces() <=
+            -0.33) {
+            // only cut if there's at least about ~33% saving in size
+            shouldCut = true;
+            break;
+        }
+    }
+
+    if (!shouldCut) {
+        return mtlID;
+    }
+
+    auto newMtlId = _manager.getNextId(ObjectType::Material);
     map<int, int> oldToNewFaceMapping;
 
     // (3) let's cut them up and create a new material & texture for this mesh.
@@ -2127,16 +2166,14 @@ uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh) {
             _manager.getScenePath() + "/" +
             _manager.getFileName(ObjectType::Texture, newtid);
 
-        const auto inputSize = format_bytes(roost::file_size(srcPath));
         LOG(INFO) << "Cutting texture " << tname << " (" << filename << "), "
-                  << " size = " << inputSize;
+                  << " size = " << format_bytes(roost::file_size(srcPath));
 
         const auto mapping = cutPtexTexture(srcPath, dstPath, usedFaces);
 
-        const auto outputSize = roost::file_size(dstPath);
         LOG(INFO) << "Texture " << tname << " is cut into a new one ("
                   << _manager.getFileName(ObjectType::Texture, newtid)
-                  << "), size = " << format_bytes(outputSize);
+                  << "), size = " << format_bytes(roost::file_size(dstPath));
 
         oldToNewFaceMapping.insert(mapping.begin(), mapping.end());
 
