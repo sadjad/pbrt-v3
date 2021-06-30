@@ -2137,6 +2137,7 @@ uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh) {
     }
 
     if (!shouldCut) {
+        LOG(INFO) << "Decided not to cut textures for material " << mtlID;
         return mtlID;
     }
 
@@ -2448,6 +2449,10 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             writer->write(static_cast<uint64_t>(mtlID));
             writer->write(static_cast<uint32_t>(areaLightID));
             writer->write(instMeshData);
+
+            _manager.recordDependency(
+                ObjectKey{ObjectType::Treelet, sTreeletID},
+                ObjectKey{ObjectType::Material, mtlID});
         }
 
         // Write out nodes for treelet
