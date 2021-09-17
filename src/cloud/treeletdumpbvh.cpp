@@ -1949,12 +1949,12 @@ map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
 
     size_t outFaceId = 0;
     map<int, int> oldToNew;
-
+    vector<int> newToOld;
     vector<char> facebuffer;
-    set<int> adjFacesToKeep;
 
     for (int i = 0; i < src->numFaces(); i++) {
         if (!usedFaces.count(i)) continue;
+        newToOld.push_back(i);
         oldToNew[i] = outFaceId++;
 
         const Ptex::FaceInfo &face_info = src->getFaceInfo(i);
@@ -1962,20 +1962,19 @@ map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
         for (int j = 0; j < 4; j++) {
             const auto adjFaceId = face_info.adjface(j);
             if (adjFaceId != -1 && !usedFaces.count(adjFaceId)) {
-                adjFacesToKeep.insert(adjFaceId);
+                newToOld.push_back(adjFaceId);
                 oldToNew[adjFaceId] = outFaceId++;
             }
         }
     }
 
-    for (int i = 0; i < src->numFaces(); i++) {
+    for (int i = 0; i < outFaceId; i++) {
+        const auto oldIdx = newToOld[i];
+
         /* do we need to write this face? */
-        bool used = usedFaces.count(i) > 0;
-        bool adj = !used && adjFacesToKeep.count(i) > 0;
+        bool used = usedFaces.count(oldIdx) > 0;
 
-        if (!used && !adj) continue;
-
-        Ptex::FaceInfo face_info = src->getFaceInfo(i);
+        Ptex::FaceInfo face_info = src->getFaceInfo(oldIdx);
         size_t bufferLen = Ptex::DataSize(src->dataType()) *
                            src->numChannels() * face_info.res.size();
 
@@ -1993,8 +1992,11 @@ map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
             facebuffer.resize(bufferLen);
         }
 
-        src->getData(i, &facebuffer[0], 0);
-        dst->writeFace(oldToNew.at(i), face_info, &facebuffer[0], 0);
+        src->getData(oldIdx, &facebuffer[0], 0);
+
+        if (!dst->writeFace(i, face_info, &facebuffer[0], 0)) {
+            throw runtime_error("writing face failed");
+        }
     }
 
     // writing out the new texture file
