@@ -1982,10 +1982,21 @@ map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
             return oldId == -1 ? -1 : oldToNew.at(oldId);
         };
 
+        auto getNewIdX = [&](const int oldId) {
+            return (oldId == -1 or !oldToNew.count(oldId)) ? -1
+                                                           : oldToNew.at(oldId);
+        };
+
         if (used) {
             face_info.setadjfaces(
                 getNewId(face_info.adjface(0)), getNewId(face_info.adjface(1)),
                 getNewId(face_info.adjface(2)), getNewId(face_info.adjface(3)));
+        }
+        else {
+            face_info.setadjfaces(getNewIdX(face_info.adjface(0)),
+                                  getNewIdX(face_info.adjface(1)),
+                                  getNewIdX(face_info.adjface(2)),
+                                  getNewIdX(face_info.adjface(3)));
         }
 
         if (facebuffer.size() < bufferLen) {
