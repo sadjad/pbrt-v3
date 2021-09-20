@@ -2054,10 +2054,8 @@ size_t getTotalTextureSize(TriangleMesh *mesh) {
     return output;
 }
 
-uint32_t getMaterialForMesh(TriangleMesh *newMesh, TriangleMesh *oldMesh) {
+uint32_t getMaterialForMesh(TriangleMesh *newMesh, const uint32_t mtlID) {
     enum { FLOAT, SPECTRUM };
-
-    const uint32_t mtlID = _manager.getMeshMaterialId(oldMesh);
 
     if (mtlID == numeric_limits<uint32_t>::max()) {
         // there's no material
@@ -2268,6 +2266,9 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
     unordered_map<TreeletDumpBVH *, vector<uint32_t>>
         nonCopyableInstanceTreelets;
 
+    // keeping a list of instance meshes that are already cut
+    set<TriangleMesh *> meshesWithTexturesAlreadyCut;
+
     for (uint32_t treeletID = 0; treeletID < allTreelets.size(); treeletID++) {
         const TreeletInfo &treelet = allTreelets[treeletID];
         // Find which triangles / meshes are in treelet
@@ -2411,7 +2412,8 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
             size_t meshTextureSize = 0;
 
-            const uint32_t mtlID = getMaterialForMesh(newMesh.get(), mesh);
+            const uint32_t mtlID = getMaterialForMesh(
+                newMesh.get(), _manager.getMeshMaterialId(mesh));
             _manager.recordMeshMaterialId(newMesh.get(), mtlID);
 
             const uint32_t areaLightID = _manager.getMeshAreaLightId(mesh);
@@ -2443,10 +2445,16 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
             triMeshIDs[instMesh] = sMeshID;
 
-            const uint32_t mtlID = _manager.getMeshMaterialId(instMesh);
+            uint32_t mtlID = _manager.getMeshMaterialId(instMesh);
             const auto instMeshData =
                 serdes::triangle_mesh::serialize(*instMesh);
             const uint32_t areaLightID = _manager.getMeshAreaLightId(instMesh);
+
+            if (meshesWithTexturesAlreadyCut.count(instMesh) == 0) {
+                mtlID = getMaterialForMesh(instMesh, mtlID);
+                _manager.recordMeshMaterialId(instMesh, mtlID);
+                meshesWithTexturesAlreadyCut.insert(instMesh);
+            }
 
             treeletTextureSize += getTotalTextureSize(instMesh);
 
