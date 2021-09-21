@@ -144,7 +144,7 @@ int main(int argc, char const *argv[]) {
         map<uint32_t, size_t> treeletSize;
 
         for (uint32_t i = 0; i < treeletCount; i++) {
-            CloudBVH bvh{i};
+            CloudBVH bvh{i, false, true};
             treeletInfo[i] = bvh.GetInfo(i);
             treeletSize[i] = roost::file_size(scenePath / filename(i));
         }

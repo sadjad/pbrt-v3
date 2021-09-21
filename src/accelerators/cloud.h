@@ -8,8 +8,10 @@
 #include <memory>
 #include <set>
 #include <stack>
+#include <stdexcept>
 #include <vector>
 
+#include "material.h"
 #include "paramset.h"
 #include "pbrt.h"
 #include "pbrt/raystate.h"
@@ -21,6 +23,29 @@ namespace pbrt {
 struct TreeletNode;
 class TriangleMesh;
 
+class PlaceholderMaterial : public Material {
+  public:
+    PlaceholderMaterial(const uint32_t material_id)
+        : material_id(material_id) {}
+
+    void ComputeScatteringFunctions(SurfaceInteraction *si, MemoryArena &arena,
+                                    TransportMode mode,
+                                    bool allowMultipleLobes) const {
+        throw std::runtime_error(
+            "PlaceholderMaterial::ComputeScatteringFunctions: not implemented");
+    }
+
+    static void Bump(const std::shared_ptr<Texture<Float>> &d,
+                     SurfaceInteraction *si);
+
+    MaterialType GetType() const { return MaterialType::Placeholder; }
+
+    uint32_t GetMaterialId() const { return material_id; }
+
+  private:
+    uint32_t material_id;
+};
+
 class CloudBVH : public Aggregate {
   public:
     struct TreeletInfo {
@@ -28,7 +53,9 @@ class CloudBVH : public Aggregate {
         std::map<uint32_t, uint64_t> instances{};
     };
 
-    CloudBVH(const uint32_t bvh_root = 0, const bool preload_all = false);
+    CloudBVH(const uint32_t bvh_root, const bool preload_all,
+             const bool load_materials);
+
     ~CloudBVH();
 
     CloudBVH(const CloudBVH &) = delete;
@@ -60,13 +87,13 @@ class CloudBVH : public Aggregate {
 
         union {
             struct {
-                uint16_t child_treelet[2] = {0};
-                uint32_t child_node[2] = {0};
+                uint16_t child_treelet[2];
+                uint32_t child_node[2];
             };
             struct {
-                uint32_t leaf_tag;
-                uint32_t primitive_offset;
-                uint32_t primitive_count;
+                uint32_t leaf_tag{0};
+                uint32_t primitive_offset{0};
+                uint32_t primitive_count{0};
             };
         };
 
@@ -166,6 +193,7 @@ class CloudBVH : public Aggregate {
     const std::string bvh_path_;
     const uint32_t bvh_root_;
     bool preloading_done_{false};
+    bool load_materials_{false};
 
     mutable std::vector<std::unique_ptr<Treelet>> treelets_;
     mutable std::map<uint64_t, std::shared_ptr<Primitive>> bvh_instances_;

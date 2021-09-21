@@ -33,8 +33,9 @@ struct membuf : streambuf {
     membuf(char *begin, char *end) { this->setg(begin, begin, end); }
 };
 
-CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
-    : bvh_root_(bvh_root) {
+CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all,
+                   const bool load_materials)
+    : bvh_root_(bvh_root), load_materials_(load_materials) {
     ProfilePhase _(Prof::AccelConstruction);
 
     if (MaxThreadIndex() > 1 && !preload_all) {
@@ -66,6 +67,10 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all)
             proto.id(),
             make_pair(from_protobuf(proto.light().paramset()),
                       from_protobuf(proto.light().light_to_world())));
+    }
+
+    if (preload_all && !load_materials_) {
+        Error("CloudBVH: load_materials is always active when preloading");
     }
 
     if (preload_all) {
@@ -200,10 +205,15 @@ void CloudBVH::LoadTreelet(const uint32_t root_id, const char *buffer,
         }
 
         if (materials_.count(mid) == 0) {
-            auto reader = _manager.GetReader(ObjectType::Material, mid);
-            protobuf::Material material;
-            reader->read(&material);
-            materials_[mid] = material::from_protobuf(material, ftex_, stex_);
+            if (load_materials_) {
+                auto reader = _manager.GetReader(ObjectType::Material, mid);
+                protobuf::Material material;
+                reader->read(&material);
+                materials_[mid] =
+                    material::from_protobuf(material, ftex_, stex_);
+            } else {
+                materials_[mid] = make_shared<PlaceholderMaterial>(mid);
+            }
         }
     }
 
@@ -796,7 +806,7 @@ void CloudBVH::clear() const {
 
 shared_ptr<CloudBVH> CreateCloudBVH(const ParamSet &ps) {
     const bool preload = ps.FindOneBool("preload", false);
-    return make_shared<CloudBVH>(0, preload);
+    return make_shared<CloudBVH>(0, preload, true);
 }
 
 Bounds3f CloudBVH::IncludedInstance::WorldBound() const {

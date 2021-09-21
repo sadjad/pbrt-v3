@@ -109,7 +109,7 @@ int main(int argc, char const *argv[]) {
 
         /* let's load all the treelets */
         for (size_t i = 0; i < treelets.size(); i++) {
-            treelets[i] = make_unique<CloudBVH>(i);
+            treelets[i] = make_unique<CloudBVH>(i, false, true);
         }
 
         for (auto &light : lights) {

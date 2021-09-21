@@ -58,7 +58,8 @@ enum class MaterialType {
     Substrate,
     Subsurface,
     Translucent,
-    Uber
+    Uber,
+    Placeholder
 };
 
 // TransportMode Declarations

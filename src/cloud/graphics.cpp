@@ -187,7 +187,8 @@ shared_ptr<CloudBVH> LoadTreelet(const string &path, const TreeletId treeletId,
                                  const char *buffer, const size_t length) {
     using namespace pbrt::global;
     manager.init(path);
-    shared_ptr<CloudBVH> treelet = make_shared<CloudBVH>(treeletId);
+    shared_ptr<CloudBVH> treelet =
+        make_shared<CloudBVH>(treeletId, false, true);
     treelet->LoadTreelet(treeletId, buffer, length);
     return treelet;
 }
