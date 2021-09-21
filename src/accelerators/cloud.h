@@ -203,8 +203,6 @@ class CloudBVH : public Aggregate {
     mutable std::map<uint32_t, std::pair<ParamSet, Transform>>
         area_light_params_;
 
-    mutable std::shared_ptr<Material> default_material;
-
     void finalizeTreeletLoad(const uint32_t root_id) const;
     void loadTreeletBase(const uint32_t root_id, const char *buffer = nullptr,
                          size_t length = 0) const;

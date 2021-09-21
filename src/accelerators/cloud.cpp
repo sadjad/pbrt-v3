@@ -43,20 +43,6 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all,
             "Cannot use lazy-loading CloudBVH with multiple threads");
     }
 
-    unique_ptr<Float[]> color(new Float[3]);
-    color[0] = 0.f;
-    color[1] = 0.5;
-    color[2] = 0.f;
-
-    ParamSet emptyParams;
-    ParamSet params;
-    params.AddRGBSpectrum("Kd", move(color), 3);
-
-    map<string, shared_ptr<Texture<Float>>> fTex;
-    map<string, shared_ptr<Texture<Spectrum>>> sTex;
-    TextureParams textureParams(params, emptyParams, fTex, sTex);
-    default_material.reset(CreateMatteMaterial(textureParams));
-
     // let's load all the area lights in the case that they are used by our
     // meshes
     auto reader = _manager.GetReader(ObjectType::AreaLights);
