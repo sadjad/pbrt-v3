@@ -533,13 +533,35 @@ void CloudBVH::Trace(RayState &rayState) const {
                                 tp->GetPrimitive());
                         if (included) {
                             if (tp->Intersect(ray, &isect)) {
+                                if (isect.primitive->GetMaterial()->GetType() !=
+                                    MaterialType::Placeholder) {
+                                    throw runtime_error(
+                                        "Trace() only works with placeholder "
+                                        "material");
+                                }
+
                                 rayState.ray.tMax = ray.tMax;
-                                rayState.SetHit(current, isect);
+                                rayState.SetHit(
+                                    current, isect,
+                                    dynamic_cast<const PlaceholderMaterial *>(
+                                        isect.primitive->GetMaterial())
+                                        ->GetMaterialId());
                             }
                         }
                     } else if (primitives[i]->Intersect(ray, &isect)) {
+                        if (isect.primitive->GetMaterial()->GetType() !=
+                            MaterialType::Placeholder) {
+                            throw runtime_error(
+                                "Trace() only works with placeholder "
+                                "material");
+                        }
+
                         rayState.ray.tMax = ray.tMax;
-                        rayState.SetHit(current, isect);
+                        rayState.SetHit(
+                            current, isect,
+                            dynamic_cast<const PlaceholderMaterial *>(
+                                isect.primitive->GetMaterial())
+                                ->GetMaterialId());
                     }
 
                     current.primitive++;

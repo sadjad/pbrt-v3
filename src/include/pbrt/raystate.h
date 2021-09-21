@@ -49,7 +49,8 @@ class RayState {
 
     bool hit{false};
     TreeletNode hitNode{};
-    SurfaceInteraction surfaceInteraction{};
+    uint32_t hitMaterialId{0};
+    SurfaceInteraction hitSurfaceInteraction{};
 
     Transform hitTransform{};
     Transform rayTransform{};
@@ -70,7 +71,9 @@ class RayState {
     void toVisitPush(TreeletNode &&t) { toVisit[toVisitHead++] = std::move(t); }
     void toVisitPop() { toVisitHead--; }
 
-    void SetHit(const TreeletNode &node, const pbrt::SurfaceInteraction &isect);
+    void SetHit(const TreeletNode &node, const pbrt::SurfaceInteraction &isect,
+                const uint32_t materialId);
+
     void StartTrace();
     uint32_t CurrentTreelet() const;
 
