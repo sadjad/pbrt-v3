@@ -48,6 +48,8 @@ class CloudIntegrator : public Integrator {
     std::shared_ptr<CloudBVH> bvh;
     const Bounds2i pixelBounds;
 
+    static std::shared_ptr<Material> default_material;
+
     MemoryArena arena;
 };
 

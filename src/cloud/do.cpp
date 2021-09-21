@@ -5,10 +5,10 @@
 
 #include "accelerators/cloud.h"
 #include "cloud/manager.h"
-#include "pbrt/main.h"
-#include "pbrt/raystate.h"
 #include "messages/serialization.h"
 #include "messages/utils.h"
+#include "pbrt/main.h"
+#include "pbrt/raystate.h"
 #include "util/exception.h"
 
 using namespace std;
@@ -37,7 +37,7 @@ int main(int argc, char const *argv[]) {
         const string scenePath{argv[1]};
         const string raysPath{argv[2]};
 
-        pbrt::scene::Base sceneBase = pbrt::scene::LoadBase(scenePath, 1);
+        pbrt::scene::Base sceneBase = pbrt::scene::LoadBase(scenePath, 0);
 
         queue<RayStatePtr> rayList;
         vector<Sample> samples;
@@ -64,7 +64,6 @@ int main(int argc, char const *argv[]) {
 
         /* prepare the scene */
         MemoryArena arena;
-        vector<unique_ptr<Transform>> transformCache;
         auto &camera = sceneBase.camera;
         auto &sampler = sceneBase.sampler;
         auto &lights = sceneBase.lights;
@@ -111,13 +110,18 @@ int main(int argc, char const *argv[]) {
                     rayList.push(move(newRayPtr));
                 } else if (emptyVisit) {
                     newRay.Ld = 0.f;
+                    if (newRay.remainingBounces == maxDepth - 1) {
+                        for (const auto &light : sceneBase.infiniteLights) {
+                            newRay.Ld += light->Le(newRay.ray);
+                        }
+                    }
                     samples.emplace_back(*newRayPtr);
                 }
             } else if (theRay.HasHit()) {
                 RayStatePtr bounceRay, shadowRay;
-                tie(bounceRay, shadowRay) =
-                    graphics::ShadeRay(move(theRayPtr), *treelets[rayTreeletId],
-                                       lights, sampleExtent, sampler, maxDepth, arena);
+                tie(bounceRay, shadowRay) = graphics::ShadeRay(
+                    move(theRayPtr), *treelets[rayTreeletId], lights,
+                    sampleExtent, sampler, maxDepth, arena);
 
                 if (bounceRay != nullptr) {
                     rayList.push(move(bounceRay));
