@@ -538,12 +538,12 @@ void CloudBVH::Trace(RayState &rayState) const {
                         if (included) {
                             if (tp->Intersect(ray, &isect)) {
                                 rayState.ray.tMax = ray.tMax;
-                                rayState.SetHit(current);
+                                rayState.SetHit(current, isect);
                             }
                         }
                     } else if (primitives[i]->Intersect(ray, &isect)) {
                         rayState.ray.tMax = ray.tMax;
-                        rayState.SetHit(current);
+                        rayState.SetHit(current, isect);
                     }
 
                     current.primitive++;

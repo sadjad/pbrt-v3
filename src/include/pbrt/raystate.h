@@ -4,8 +4,8 @@
 #include <memory>
 
 #include "geometry.h"
-#include "transform.h"
 #include "spectrum.h"
+#include "transform.h"
 
 namespace pbrt {
 
@@ -19,6 +19,32 @@ class RayState {
         uint32_t node{0};
         uint8_t primitive{0};
         bool transformed{false};
+    };
+
+    struct SurfaceInteraction {
+        struct {
+            uint16_t packId;
+            uint16_t materialId;
+        } material;
+
+        Point3f p;
+        Float time;
+        Vector3f pError;
+        Vector3f wo;
+        Normal3f n;
+        Point2f uv;
+        Vector3f dpdu, dpdv;
+        Normal3f dndu, dndv;
+
+        struct {
+            Normal3f n;
+            Vector3f dpdu, dpdv;
+            Normal3f dndu, dndv;
+        } shading;
+
+        Vector3f dpdx, dpdy;
+        Float dudx, dvdx, dudy, dvdy;
+        int faceIndex;
     };
 
     struct Sample {
@@ -48,6 +74,7 @@ class RayState {
 
     bool hit{false};
     TreeletNode hitNode{};
+    SurfaceInteraction surfaceInteraction{};
 
     Transform hitTransform{};
     Transform rayTransform{};
@@ -68,7 +95,7 @@ class RayState {
     void toVisitPush(TreeletNode &&t) { toVisit[toVisitHead++] = std::move(t); }
     void toVisitPop() { toVisitHead--; }
 
-    void SetHit(const TreeletNode &node);
+    void SetHit(const TreeletNode &node, const pbrt::SurfaceInteraction &isect);
     void StartTrace();
     uint32_t CurrentTreelet() const;
 

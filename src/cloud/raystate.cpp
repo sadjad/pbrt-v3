@@ -20,17 +20,22 @@ constexpr int offset_of(T const &t, U T::*a) {
 
 RayStatePtr RayState::Create() { return make_unique<RayState>(); }
 
-int64_t SampleNum(const uint64_t sampleId, const uint32_t spp) { return sampleId % spp; }
+int64_t SampleNum(const uint64_t sampleId, const uint32_t spp) {
+    return sampleId % spp;
+}
 
 Point2i SamplePixel(const uint64_t sampleId, const Vector2i &extent,
-                              const uint32_t spp) {
+                    const uint32_t spp) {
     const int point = static_cast<int>(sampleId / spp);
     return Point2i{point % extent.x, point / extent.x};
 }
 
-int64_t RayState::SampleNum(const uint32_t spp) const { return ::SampleNum(sample.id, spp); }
+int64_t RayState::SampleNum(const uint32_t spp) const {
+    return ::SampleNum(sample.id, spp);
+}
 
-Point2i RayState::SamplePixel(const Vector2i &extent, const uint32_t spp) const {
+Point2i RayState::SamplePixel(const Vector2i &extent,
+                              const uint32_t spp) const {
     return ::SamplePixel(sample.id, extent, spp);
 }
 
@@ -52,9 +57,35 @@ uint32_t RayState::CurrentTreelet() const {
     return 0;
 }
 
-void RayState::SetHit(const TreeletNode &node) {
+void RayState::SetHit(const TreeletNode &node,
+                      const pbrt::SurfaceInteraction &isect) {
     hit = true;
     hitNode = node;
+
+    // setting surface interaction data
+    surfaceInteraction.p = isect.p;
+    surfaceInteraction.time = isect.time;
+    surfaceInteraction.pError = isect.pError;
+    surfaceInteraction.wo = isect.wo;
+    surfaceInteraction.n = isect.n;
+    surfaceInteraction.uv = isect.uv;
+    surfaceInteraction.dpdu = isect.dpdu;
+    surfaceInteraction.dpdv = isect.dpdv;
+    surfaceInteraction.dndu = isect.dndu;
+    surfaceInteraction.dndv = isect.dndv;
+    surfaceInteraction.shading.n = isect.shading.n;
+    surfaceInteraction.shading.dpdu = isect.shading.dpdu;
+    surfaceInteraction.shading.dpdv = isect.shading.dpdv;
+    surfaceInteraction.shading.dndu = isect.shading.dndu;
+    surfaceInteraction.shading.dndv = isect.shading.dndv;
+    surfaceInteraction.dpdx = isect.dpdx;
+    surfaceInteraction.dpdy = isect.dpdy;
+    surfaceInteraction.dudx = isect.dudx;
+    surfaceInteraction.dvdx = isect.dvdx;
+    surfaceInteraction.dudy = isect.dudy;
+    surfaceInteraction.dvdx = isect.dvdx;
+    surfaceInteraction.faceIndex = isect.faceIndex;
+
     if (node.transformed) {
         memcpy(&hitTransform, &rayTransform, sizeof(Transform));
     }
@@ -376,7 +407,9 @@ Sample::Sample(const RayState &rayState)
     }
 }
 
-int64_t Sample::SampleNum(const uint32_t spp) const { return ::SampleNum(sampleId, spp); }
+int64_t Sample::SampleNum(const uint32_t spp) const {
+    return ::SampleNum(sampleId, spp);
+}
 
 Point2i Sample::SamplePixel(const Vector2i &extent, const uint32_t spp) const {
     return ::SamplePixel(sampleId, extent, spp);
