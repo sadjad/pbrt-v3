@@ -18,40 +18,6 @@ void usage(const char *argv0) {
     cerr << argv0 << " SCENE-DATA CAMERA-RAYS" << endl;
 }
 
-vector<shared_ptr<Light>> loadLights() {
-    vector<shared_ptr<Light>> lights;
-    auto reader = global::manager.GetReader(ObjectType::Lights);
-
-    while (!reader->eof()) {
-        protobuf::Light proto_light;
-        reader->read(&proto_light);
-        lights.push_back(move(light::from_protobuf(proto_light)));
-    }
-
-    return lights;
-}
-
-shared_ptr<Camera> loadCamera(vector<unique_ptr<Transform>> &transformCache) {
-    auto reader = global::manager.GetReader(ObjectType::Camera);
-    protobuf::Camera proto_camera;
-    reader->read(&proto_camera);
-    return camera::from_protobuf(proto_camera, transformCache);
-}
-
-shared_ptr<GlobalSampler> loadSampler() {
-    auto reader = global::manager.GetReader(ObjectType::Sampler);
-    protobuf::Sampler proto_sampler;
-    reader->read(&proto_sampler);
-    return sampler::from_protobuf(proto_sampler);
-}
-
-Scene loadFakeScene() {
-    auto reader = global::manager.GetReader(ObjectType::Scene);
-    protobuf::Scene proto_scene;
-    reader->read(&proto_scene);
-    return from_protobuf(proto_scene);
-}
-
 enum class Operation { Trace, Shade };
 
 int main(int argc, char const *argv[]) {
@@ -71,7 +37,7 @@ int main(int argc, char const *argv[]) {
         const string scenePath{argv[1]};
         const string raysPath{argv[2]};
 
-        global::manager.init(scenePath);
+        pbrt::scene::Base sceneBase = pbrt::scene::LoadBase(scenePath, 1);
 
         queue<RayStatePtr> rayList;
         vector<Sample> samples;
@@ -99,21 +65,21 @@ int main(int argc, char const *argv[]) {
         /* prepare the scene */
         MemoryArena arena;
         vector<unique_ptr<Transform>> transformCache;
-        auto camera = loadCamera(transformCache);
-        auto sampler = loadSampler();
-        auto lights = loadLights();
-        auto fakeScene = loadFakeScene();
+        auto &camera = sceneBase.camera;
+        auto &sampler = sceneBase.sampler;
+        auto &lights = sceneBase.lights;
+        auto &fakeScene = sceneBase.fakeScene;
 
         vector<unique_ptr<CloudBVH>> treelets;
-        treelets.resize(global::manager.treeletCount());
+        treelets.resize(sceneBase.GetTreeletCount());
 
         /* let's load all the treelets */
         for (size_t i = 0; i < treelets.size(); i++) {
-            treelets[i] = make_unique<CloudBVH>(i, false, true);
+            treelets[i] = make_unique<CloudBVH>(i, false, false);
         }
 
         for (auto &light : lights) {
-            light->Preprocess(fakeScene);
+            light->Preprocess(*fakeScene);
         }
 
         const auto sampleExtent = camera->film->GetSampleBounds().Diagonal();
