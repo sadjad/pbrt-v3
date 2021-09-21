@@ -61,30 +61,7 @@ void RayState::SetHit(const TreeletNode &node,
                       const pbrt::SurfaceInteraction &isect) {
     hit = true;
     hitNode = node;
-
-    // setting surface interaction data
-    surfaceInteraction.p = isect.p;
-    surfaceInteraction.time = isect.time;
-    surfaceInteraction.pError = isect.pError;
-    surfaceInteraction.wo = isect.wo;
-    surfaceInteraction.n = isect.n;
-    surfaceInteraction.uv = isect.uv;
-    surfaceInteraction.dpdu = isect.dpdu;
-    surfaceInteraction.dpdv = isect.dpdv;
-    surfaceInteraction.dndu = isect.dndu;
-    surfaceInteraction.dndv = isect.dndv;
-    surfaceInteraction.shading.n = isect.shading.n;
-    surfaceInteraction.shading.dpdu = isect.shading.dpdu;
-    surfaceInteraction.shading.dpdv = isect.shading.dpdv;
-    surfaceInteraction.shading.dndu = isect.shading.dndu;
-    surfaceInteraction.shading.dndv = isect.shading.dndv;
-    surfaceInteraction.dpdx = isect.dpdx;
-    surfaceInteraction.dpdy = isect.dpdy;
-    surfaceInteraction.dudx = isect.dudx;
-    surfaceInteraction.dvdx = isect.dvdx;
-    surfaceInteraction.dudy = isect.dudy;
-    surfaceInteraction.dvdx = isect.dvdx;
-    surfaceInteraction.faceIndex = isect.faceIndex;
+    surfaceInteraction = isect;
 
     if (node.transformed) {
         memcpy(&hitTransform, &rayTransform, sizeof(Transform));
@@ -94,6 +71,17 @@ void RayState::SetHit(const TreeletNode &node,
 /*******************************************************************************
  * SERIALIZATION                                                               *
  ******************************************************************************/
+
+struct __attribute__((packed, aligned(1))) Packed2f {
+    Float values[2];
+
+    Packed2f(const Point2f &p) {
+        values[0] = p.x;
+        values[1] = p.y;
+    }
+
+    Point2f ToPoint2f() const { return Point2f(values[0], values[1]); }
+};
 
 struct __attribute__((packed, aligned(1))) Packed3f {
     Float values[3];
@@ -113,6 +101,12 @@ struct __attribute__((packed, aligned(1))) Packed3f {
         values[2] = v.z;
     }
 
+    Packed3f(const Normal3f &n) {
+        values[0] = n.x;
+        values[1] = n.y;
+        values[2] = n.z;
+    }
+
     Spectrum ToSpectrum() const {
         Spectrum s;
         memcpy(s.data(), values, 3 * sizeof(Float));
@@ -125,6 +119,10 @@ struct __attribute__((packed, aligned(1))) Packed3f {
 
     Vector3f ToVector3f() const {
         return Vector3f(values[0], values[1], values[2]);
+    }
+
+    Normal3f ToNormal3f() const {
+        return Normal3f(values[0], values[1], values[2]);
     }
 };
 
@@ -227,6 +225,75 @@ struct __attribute__((packed, aligned(1))) PackedDifferentials {
           ryDirection(r.ray.ryDirection) {}
 };
 
+struct __attribute__((packed, aligned(1))) PackedSurfaceInteraction {
+    Packed3f p;
+    Float time;
+    Packed3f pError;
+    Packed3f wo;
+    Packed3f n;
+    Packed2f uv;
+    Packed3f dpdu, dpdv;
+    Packed3f dndu, dndv;
+
+    Packed3f shading_n;
+    Packed3f shading_dpdu, shading_dpdv;
+    Packed3f shading_dndu, shading_dndv;
+
+    Packed3f dpdx, dpdy;
+    Float dudx, dvdx, dudy, dvdy;
+
+    int faceIndex;
+
+    PackedSurfaceInteraction(const SurfaceInteraction &isect)
+        : p(isect.p),
+          time(isect.time),
+          pError(isect.pError),
+          wo(isect.wo),
+          n(isect.n),
+          uv(isect.uv),
+          dpdu(isect.dpdu),
+          dpdv(isect.dpdv),
+          dndu(isect.dndu),
+          dndv(isect.dndv),
+          shading_n(isect.shading.n),
+          shading_dpdu(isect.shading.dpdu),
+          shading_dpdv(isect.shading.dpdv),
+          shading_dndu(isect.shading.dndu),
+          shading_dndv(isect.shading.dndv),
+          dpdx(isect.dpdx),
+          dpdy(isect.dpdy),
+          dudx(isect.dudx),
+          dvdx(isect.dvdx),
+          dudy(isect.dudy),
+          dvdy(isect.dvdy),
+          faceIndex(isect.faceIndex) {}
+
+    void ToSurfaceInteraction(SurfaceInteraction *isect) {
+        isect->p = p.ToPoint3f();
+        isect->time = time;
+        isect->pError = pError.ToVector3f();
+        isect->wo = wo.ToVector3f();
+        isect->n = n.ToNormal3f();
+        isect->uv = uv.ToPoint2f();
+        isect->dpdu = dpdu.ToVector3f();
+        isect->dpdv = dpdv.ToVector3f();
+        isect->dndu = dndu.ToNormal3f();
+        isect->dndv = dndv.ToNormal3f();
+        isect->shading.n = shading_n.ToNormal3f();
+        isect->shading.dpdu = shading_dpdu.ToVector3f();
+        isect->shading.dpdv = shading_dpdv.ToVector3f();
+        isect->shading.dndu = shading_dndu.ToNormal3f();
+        isect->shading.dndv = shading_dndv.ToNormal3f();
+        isect->dpdx = dpdx.ToVector3f();
+        isect->dpdy = dpdy.ToVector3f();
+        isect->dudx = dudx;
+        isect->dvdx = dvdx;
+        isect->dudy = dudy;
+        isect->dvdy = dvdy;
+        isect->faceIndex = faceIndex;
+    }
+};
+
 size_t PackRay(char *bufferStart, const RayState &state) {
     char *buffer = bufferStart;
     PackedRayFixedHdr *hdr = new (buffer) PackedRayFixedHdr(state);
@@ -243,6 +310,9 @@ size_t PackRay(char *bufferStart, const RayState &state) {
             new (buffer) PackedTransform(state.hitTransform);
             buffer += sizeof(PackedTransform);
         }
+
+        new (buffer) PackedSurfaceInteraction(state.surfaceInteraction);
+        buffer += sizeof(PackedSurfaceInteraction);
     }
 
     for (int i = 0; i < state.toVisitHead; i++) {
@@ -306,6 +376,12 @@ void UnPackRay(char *buffer, RayState &state) {
 
             state.hitTransform = txfm->ToTransform();
         }
+
+        PackedSurfaceInteraction *packedIsect =
+            reinterpret_cast<PackedSurfaceInteraction *>(buffer);
+        buffer += sizeof(PackedSurfaceInteraction);
+
+        packedIsect->ToSurfaceInteraction(&state.surfaceInteraction);
     }
 
     for (int i = 0; i < state.toVisitHead; i++) {
@@ -326,7 +402,7 @@ void UnPackRay(char *buffer, RayState &state) {
 const size_t RayState::MaxPackedSize =
     sizeof(PackedRayFixedHdr) + 64 * sizeof(PackedTreeletNode) +
     sizeof(PackedTreeletNode) + sizeof(PackedDifferentials) +
-    2 * sizeof(PackedTransform) + 4;
+    2 * sizeof(PackedTransform) + sizeof(PackedSurfaceInteraction) + 4;
 
 size_t RayState::Serialize(char *data) {
     static thread_local char packedBuffer[RayState::MaxPackedSize];
@@ -373,7 +449,8 @@ size_t RayState::MaxSize() const {
         4 + sizeof(PackedRayFixedHdr) + toVisitHead * sizeof(PackedTreeletNode);
 
     if (hit) {
-        size += sizeof(PackedTreeletNode) + sizeof(PackedTransform);
+        size += sizeof(PackedTreeletNode) + sizeof(PackedTransform) +
+                sizeof(PackedSurfaceInteraction);
     }
 
     if (!toVisitEmpty() && toVisitTop().transformed) {
