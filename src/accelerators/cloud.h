@@ -72,7 +72,6 @@ class CloudBVH : public Aggregate {
     bool IntersectP(const Ray &ray, uint32_t) const;
 
     void Trace(RayState &rayState) const;
-    bool Intersect(RayState &rayState, SurfaceInteraction *isect) const;
 
     void LoadTreelet(const uint32_t root_id, const char *buffer = nullptr,
                      const size_t length = 0) const;

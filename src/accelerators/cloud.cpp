@@ -590,38 +590,6 @@ void CloudBVH::Trace(RayState &rayState) const {
     }
 }
 
-bool CloudBVH::Intersect(RayState &rayState, SurfaceInteraction *isect) const {
-    if (!rayState.hit) {
-        return false;
-    }
-
-    auto &hit = rayState.hitNode;
-    LoadTreelet(hit.treelet);
-
-    auto &treelet = *treelets_[hit.treelet];
-    auto &node = treelet.nodes[hit.node];
-    auto &primitives = treelet.primitives;
-
-    if (!node.is_leaf()) {
-        return false;
-    }
-
-    Ray ray = rayState.ray;
-
-    if (hit.transformed) {
-        ray = Inverse(rayState.hitTransform)(ray);
-    }
-
-    primitives[node.primitive_offset + hit.primitive]->Intersect(ray, isect);
-    rayState.ray.tMax = ray.tMax;
-
-    if (hit.transformed && !rayState.hitTransform.IsIdentity()) {
-        *isect = (rayState.hitTransform)(*isect);
-    }
-
-    return true;
-}
-
 bool CloudBVH::Intersect(const Ray &ray, SurfaceInteraction *isect) const {
     return Intersect(ray, isect, bvh_root_);
 }
