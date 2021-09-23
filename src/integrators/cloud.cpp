@@ -58,7 +58,7 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
 
     auto &rayState = *rayStatePtr;
 
-    SurfaceInteraction &it = rayState.hitSurfaceInteraction;
+    SurfaceInteraction &it = rayState.hitInfo.isect;
 
     // the next two lines are basically:
     // it.ComputeScatteringFunctions(rayState.ray, arena, true);

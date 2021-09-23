@@ -51,7 +51,7 @@ uint32_t RayState::CurrentTreelet() const {
     if (!toVisitEmpty()) {
         return toVisitTop().treelet;
     } else if (hit) {
-        return hitNode.treelet;
+        return hitInfo.materialTreelet;
     }
 
     return 0;
@@ -59,11 +59,12 @@ uint32_t RayState::CurrentTreelet() const {
 
 void RayState::SetHit(const TreeletNode &node,
                       const pbrt::SurfaceInteraction &isect,
+                      const uint32_t materialTreeletId,
                       const uint32_t materialId) {
     hit = true;
-    hitNode = node;
-    hitSurfaceInteraction = isect;
-    hitMaterialId = materialId;
+    hitInfo.materialTreelet = materialTreeletId;
+    hitInfo.materialId = materialId;
+    hitInfo.isect = isect;
 
     if (node.transformed) {
         memcpy(&hitTransform, &rayTransform, sizeof(Transform));
@@ -296,6 +297,22 @@ struct __attribute__((packed, aligned(1))) PackedSurfaceInteraction {
     }
 };
 
+struct __attribute__((packed, aligned(1))) PackedHitInfo {
+    uint32_t materialTreelet;
+    uint32_t materialId;
+    PackedSurfaceInteraction isect;
+
+    PackedHitInfo(const uint32_t tid, const uint32_t mid,
+                  const SurfaceInteraction &isect)
+        : materialTreelet(tid), materialId(mid), isect(isect) {}
+
+    void ToHitInfo(RayState::HitInfo &hitInfo) {
+        hitInfo.materialTreelet = materialTreelet;
+        hitInfo.materialId = materialId;
+        isect.ToSurfaceInteraction(&hitInfo.isect);
+    }
+};
+
 size_t PackRay(char *bufferStart, const RayState &state) {
     char *buffer = bufferStart;
     PackedRayFixedHdr *hdr = new (buffer) PackedRayFixedHdr(state);
@@ -306,18 +323,11 @@ size_t PackRay(char *bufferStart, const RayState &state) {
     }
 
     if (hdr->hit) {
-        new (buffer) PackedTreeletNode(state.hitNode);
-        buffer += sizeof(PackedTreeletNode);
-        if (state.hitNode.transformed) {
-            new (buffer) PackedTransform(state.hitTransform);
-            buffer += sizeof(PackedTransform);
-        }
+        new (buffer)
+            PackedHitInfo(state.hitInfo.materialTreelet,
+                          state.hitInfo.materialId, state.hitInfo.isect);
 
-        new (buffer) uint32_t(state.hitMaterialId);
-        buffer += sizeof(uint32_t);
-
-        new (buffer) PackedSurfaceInteraction(state.hitSurfaceInteraction);
-        buffer += sizeof(PackedSurfaceInteraction);
+        buffer += sizeof(PackedHitInfo);
     }
 
     for (int i = 0; i < state.toVisitHead; i++) {
@@ -370,28 +380,10 @@ void UnPackRay(char *buffer, RayState &state) {
     }
 
     if (state.hit) {
-        PackedTreeletNode *hitNode =
-            reinterpret_cast<PackedTreeletNode *>(buffer);
-        buffer += sizeof(PackedTreeletNode);
+        PackedHitInfo *hitInfo = reinterpret_cast<PackedHitInfo *>(buffer);
+        buffer += sizeof(PackedHitInfo);
 
-        state.hitNode = hitNode->ToTreeletNode();
-        if (state.hitNode.transformed) {
-            PackedTransform *txfm = reinterpret_cast<PackedTransform *>(buffer);
-            buffer += sizeof(PackedTransform);
-
-            state.hitTransform = txfm->ToTransform();
-        }
-
-        uint32_t *packedMaterialId = reinterpret_cast<uint32_t *>(buffer);
-        buffer += sizeof(uint32_t);
-
-        state.hitMaterialId = *packedMaterialId;
-
-        PackedSurfaceInteraction *packedIsect =
-            reinterpret_cast<PackedSurfaceInteraction *>(buffer);
-        buffer += sizeof(PackedSurfaceInteraction);
-
-        packedIsect->ToSurfaceInteraction(&state.hitSurfaceInteraction);
+        hitInfo->ToHitInfo(state.hitInfo);
     }
 
     for (int i = 0; i < state.toVisitHead; i++) {
@@ -412,8 +404,7 @@ void UnPackRay(char *buffer, RayState &state) {
 const size_t RayState::MaxPackedSize =
     sizeof(PackedRayFixedHdr) + 64 * sizeof(PackedTreeletNode) +
     sizeof(PackedTreeletNode) + sizeof(PackedDifferentials) +
-    2 * sizeof(PackedTransform) + sizeof(PackedSurfaceInteraction) +
-    sizeof(uint32_t) /* material id */ + 4;
+    sizeof(PackedTransform) + sizeof(PackedHitInfo) + 4;
 
 size_t RayState::Serialize(char *data) {
     static thread_local char packedBuffer[RayState::MaxPackedSize];
@@ -460,8 +451,7 @@ size_t RayState::MaxSize() const {
         4 + sizeof(PackedRayFixedHdr) + toVisitHead * sizeof(PackedTreeletNode);
 
     if (hit) {
-        size += sizeof(PackedTreeletNode) + sizeof(PackedTransform) +
-                sizeof(PackedSurfaceInteraction) + sizeof(uint32_t);
+        size += sizeof(HitInfo);
     }
 
     if (!toVisitEmpty() && toVisitTop().transformed) {

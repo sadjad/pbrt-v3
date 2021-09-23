@@ -198,7 +198,7 @@ void CloudBVH::LoadTreelet(const uint32_t root_id, const char *buffer,
                 materials_[mid] =
                     material::from_protobuf(material, ftex_, stex_);
             } else {
-                materials_[mid] = make_shared<PlaceholderMaterial>(mid);
+                materials_[mid] = make_shared<PlaceholderMaterial>(mid, mid);
             }
         }
     }
@@ -540,12 +540,14 @@ void CloudBVH::Trace(RayState &rayState) const {
                                         "material");
                                 }
 
-                                rayState.ray.tMax = ray.tMax;
-                                rayState.SetHit(
-                                    current, isect,
+                                auto mat =
                                     dynamic_cast<const PlaceholderMaterial *>(
-                                        isect.primitive->GetMaterial())
-                                        ->GetMaterialId());
+                                        isect.primitive->GetMaterial());
+
+                                rayState.ray.tMax = ray.tMax;
+                                rayState.SetHit(current, isect,
+                                                mat->GetMaterialTreeletId(),
+                                                mat->GetMaterialId());
                             }
                         }
                     } else if (primitives[i]->Intersect(ray, &isect)) {
@@ -556,12 +558,13 @@ void CloudBVH::Trace(RayState &rayState) const {
                                 "material");
                         }
 
+                        auto mat = dynamic_cast<const PlaceholderMaterial *>(
+                            isect.primitive->GetMaterial());
+
                         rayState.ray.tMax = ray.tMax;
-                        rayState.SetHit(
-                            current, isect,
-                            dynamic_cast<const PlaceholderMaterial *>(
-                                isect.primitive->GetMaterial())
-                                ->GetMaterialId());
+                        rayState.SetHit(current, isect,
+                                        mat->GetMaterialTreeletId(),
+                                        mat->GetMaterialId());
                     }
 
                     current.primitive++;

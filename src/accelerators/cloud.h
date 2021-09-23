@@ -25,8 +25,9 @@ class TriangleMesh;
 
 class PlaceholderMaterial : public Material {
   public:
-    PlaceholderMaterial(const uint32_t material_id)
-        : material_id(material_id) {}
+    PlaceholderMaterial(const uint32_t material_treelet_id,
+                        const uint32_t material_id)
+        : material_treelet_id(material_treelet_id), material_id(material_id) {}
 
     void ComputeScatteringFunctions(SurfaceInteraction *si, MemoryArena &arena,
                                     TransportMode mode,
@@ -40,9 +41,11 @@ class PlaceholderMaterial : public Material {
 
     MaterialType GetType() const { return MaterialType::Placeholder; }
 
+    uint32_t GetMaterialTreeletId() const { return material_treelet_id; }
     uint32_t GetMaterialId() const { return material_id; }
 
   private:
+    uint32_t material_treelet_id;
     uint32_t material_id;
 };
 

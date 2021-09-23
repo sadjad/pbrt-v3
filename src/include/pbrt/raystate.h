@@ -22,6 +22,12 @@ class RayState {
         bool transformed{false};
     };
 
+    struct HitInfo {
+        uint32_t materialTreelet{0};
+        uint32_t materialId{0};
+        SurfaceInteraction isect{};
+    };
+
     struct Sample {
         uint64_t id;
         Point2f pFilm;
@@ -48,9 +54,7 @@ class RayState {
     bool isShadowRay{false};
 
     bool hit{false};
-    TreeletNode hitNode{};
-    uint32_t hitMaterialId{0};
-    SurfaceInteraction hitSurfaceInteraction{};
+    HitInfo hitInfo{};
 
     Transform hitTransform{};
     Transform rayTransform{};
@@ -72,7 +76,7 @@ class RayState {
     void toVisitPop() { toVisitHead--; }
 
     void SetHit(const TreeletNode &node, const pbrt::SurfaceInteraction &isect,
-                const uint32_t materialId);
+                const uint32_t materialTreeletId, const uint32_t materialId);
 
     void StartTrace();
     uint32_t CurrentTreelet() const;
