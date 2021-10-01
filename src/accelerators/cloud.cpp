@@ -117,6 +117,20 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all,
 
 CloudBVH::~CloudBVH() {}
 
+shared_ptr<Material> CloudBVH::GetMaterial(const uint32_t material_id) {
+    auto &treelet = *treelets_[bvh_root_];
+    auto &mat = treelet.included_material.at(material_id);
+
+    if (mat == nullptr) {
+        auto reader = _manager.GetReader(ObjectType::Material, material_id);
+        protobuf::Material material;
+        reader->read(&material);
+        mat = material::from_protobuf(material, ftex_, stex_);
+    }
+
+    return mat;
+}
+
 Bounds3f CloudBVH::WorldBound() const {
     // The correctness of this function is only guaranteed for the root treelet
     CHECK_EQ(bvh_root_, 0);
@@ -280,10 +294,21 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
 
     LiteRecordReader reader{buffer, length};
 
+    /* read in and load the materials included in this treelet */
+    uint32_t included_material_count = 0;
+    reader.read(&included_material_count);
+
+    for (size_t i = 0; i < included_material_count; i++) {
+        uint32_t material_id;
+        reader.read(&material_id);
+
+        treelet.included_material.emplace(material_id, nullptr);
+    }
+
     map<uint32_t, uint32_t> mesh_material_ids;
     map<uint32_t, uint32_t> mesh_area_light_id;
 
-    /* read in the triangle meshes for this treelet first */
+    /* read in the triangle meshes for this treelet */
     uint32_t num_triangle_meshes = 0;
     reader.read(&num_triangle_meshes);
 
