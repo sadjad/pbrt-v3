@@ -24,8 +24,6 @@ STAT_INT_DISTRIBUTION("Integrator/Unused bounces per path", nRemainingBounces);
 STAT_COUNTER("Integrator/Calls to Shade", nShadeCalls);
 STAT_COUNTER("Integrator/Calls to Trace", nTraceCalls);
 
-shared_ptr<Material> CloudIntegrator::default_material = nullptr;
-
 RayStatePtr CloudIntegrator::Trace(RayStatePtr &&rayState,
                                    const CloudBVH &treelet) {
     nTraceCalls++;
@@ -39,19 +37,10 @@ RayStatePtr CloudIntegrator::Trace(RayStatePtr &&rayState,
 }
 
 pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
-    RayStatePtr &&rayStatePtr, const CloudBVH &,
+    RayStatePtr &&rayStatePtr, const CloudBVH &treelet,
     const vector<shared_ptr<Light>> &lights, const Vector2i &sampleExtent,
     shared_ptr<GlobalSampler> &sampler, int maxPathDepth, MemoryArena &arena) {
     nShadeCalls++;
-
-    if (default_material == nullptr) {
-        ParamSet emptyParams;
-
-        map<string, shared_ptr<Texture<Float>>> fTex;
-        map<string, shared_ptr<Texture<Spectrum>>> sTex;
-        TextureParams textureParams(emptyParams, emptyParams, fTex, sTex);
-        default_material.reset(CreateMatteMaterial(textureParams));
-    }
 
     RayStatePtr bouncePtr = nullptr;
     RayStatePtr shadowRayPtr = nullptr;
@@ -60,11 +49,13 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
 
     SurfaceInteraction &it = rayState.hitInfo.isect;
 
+    auto material = treelet.GetMaterial(rayState.hitInfo.material.id);
+
     // the next two lines are basically:
     // it.ComputeScatteringFunctions(rayState.ray, arena, true);
     it.ComputeDifferentials(rayState.ray);
-    default_material->ComputeScatteringFunctions(
-        &it, arena, pbrt::TransportMode::Radiance, true);
+    material->ComputeScatteringFunctions(&it, arena,
+                                         pbrt::TransportMode::Radiance, true);
 
     if (!it.bsdf) {
         throw runtime_error("!it.bsdf");

@@ -51,7 +51,7 @@ uint32_t RayState::CurrentTreelet() const {
     if (!toVisitEmpty()) {
         return toVisitTop().treelet;
     } else if (hit) {
-        return hitInfo.materialTreelet;
+        return hitInfo.material.treelet;
     }
 
     return 0;
@@ -59,11 +59,9 @@ uint32_t RayState::CurrentTreelet() const {
 
 void RayState::SetHit(const TreeletNode &node,
                       const pbrt::SurfaceInteraction &isect,
-                      const uint32_t materialTreeletId,
-                      const uint32_t materialId) {
+                      const MaterialKey &material) {
     hit = true;
-    hitInfo.materialTreelet = materialTreeletId;
-    hitInfo.materialId = materialId;
+    hitInfo.material = material;
     hitInfo.isect = isect;
 
     if (node.transformed) {
@@ -298,17 +296,14 @@ struct __attribute__((packed, aligned(1))) PackedSurfaceInteraction {
 };
 
 struct __attribute__((packed, aligned(1))) PackedHitInfo {
-    uint32_t materialTreelet;
-    uint32_t materialId;
+    MaterialKey material;
     PackedSurfaceInteraction isect;
 
-    PackedHitInfo(const uint32_t tid, const uint32_t mid,
-                  const SurfaceInteraction &isect)
-        : materialTreelet(tid), materialId(mid), isect(isect) {}
+    PackedHitInfo(const MaterialKey &material, const SurfaceInteraction &isect)
+        : material(material), isect(isect) {}
 
     void ToHitInfo(RayState::HitInfo &hitInfo) {
-        hitInfo.materialTreelet = materialTreelet;
-        hitInfo.materialId = materialId;
+        hitInfo.material = material;
         isect.ToSurfaceInteraction(&hitInfo.isect);
     }
 };
@@ -323,10 +318,7 @@ size_t PackRay(char *bufferStart, const RayState &state) {
     }
 
     if (hdr->hit) {
-        new (buffer)
-            PackedHitInfo(state.hitInfo.materialTreelet,
-                          state.hitInfo.materialId, state.hitInfo.isect);
-
+        new (buffer) PackedHitInfo(state.hitInfo.material, state.hitInfo.isect);
         buffer += sizeof(PackedHitInfo);
     }
 

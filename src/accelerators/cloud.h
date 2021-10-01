@@ -25,9 +25,7 @@ class TriangleMesh;
 
 class PlaceholderMaterial : public Material {
   public:
-    PlaceholderMaterial(const uint32_t material_treelet_id,
-                        const uint32_t material_id)
-        : material_treelet_id(material_treelet_id), material_id(material_id) {}
+    PlaceholderMaterial(const MaterialKey &material) : material_key(material) {}
 
     void ComputeScatteringFunctions(SurfaceInteraction *si, MemoryArena &arena,
                                     TransportMode mode,
@@ -41,12 +39,10 @@ class PlaceholderMaterial : public Material {
 
     MaterialType GetType() const { return MaterialType::Placeholder; }
 
-    uint32_t GetMaterialTreeletId() const { return material_treelet_id; }
-    uint32_t GetMaterialId() const { return material_id; }
+    MaterialKey GetMaterialKey() const { return material_key; }
 
   private:
-    uint32_t material_treelet_id;
-    uint32_t material_id;
+    MaterialKey material_key;
 };
 
 class CloudBVH : public Aggregate {
@@ -79,7 +75,7 @@ class CloudBVH : public Aggregate {
     void LoadTreelet(const uint32_t root_id, const char *buffer = nullptr,
                      const size_t length = 0) const;
 
-    std::shared_ptr<Material> GetMaterial(const uint32_t material_id);
+    std::shared_ptr<Material> GetMaterial(const uint32_t material_id) const;
 
     const TreeletInfo &GetInfo(const uint32_t treelet_id) {
         throw std::runtime_error("not implemented");
@@ -143,7 +139,7 @@ class CloudBVH : public Aggregate {
     };
 
     struct Treelet {
-        std::map<uint32_t, std::shared_ptr<Material>> included_material;
+        mutable std::map<uint32_t, std::shared_ptr<Material>> included_material;
 
         std::vector<TreeletNode> nodes{};
         std::vector<std::unique_ptr<Primitive>> primitives{};

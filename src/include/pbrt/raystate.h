@@ -10,6 +10,11 @@
 
 namespace pbrt {
 
+struct __attribute__((packed, aligned(1))) MaterialKey {
+    uint32_t treelet{0};
+    uint32_t id{0};
+};
+
 struct RayState;
 using RayStatePtr = std::unique_ptr<RayState>;
 
@@ -23,8 +28,7 @@ class RayState {
     };
 
     struct HitInfo {
-        uint32_t materialTreelet{0};
-        uint32_t materialId{0};
+        MaterialKey material{};
         SurfaceInteraction isect{};
     };
 
@@ -76,7 +80,7 @@ class RayState {
     void toVisitPop() { toVisitHead--; }
 
     void SetHit(const TreeletNode &node, const pbrt::SurfaceInteraction &isect,
-                const uint32_t materialTreeletId, const uint32_t materialId);
+                const MaterialKey &material);
 
     void StartTrace();
     uint32_t CurrentTreelet() const;

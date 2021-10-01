@@ -117,7 +117,7 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all,
 
 CloudBVH::~CloudBVH() {}
 
-shared_ptr<Material> CloudBVH::GetMaterial(const uint32_t material_id) {
+shared_ptr<Material> CloudBVH::GetMaterial(const uint32_t material_id) const {
     auto &treelet = *treelets_[bvh_root_];
     auto &mat = treelet.included_material.at(material_id);
 
@@ -212,7 +212,8 @@ void CloudBVH::LoadTreelet(const uint32_t root_id, const char *buffer,
                 materials_[mid] =
                     material::from_protobuf(material, ftex_, stex_);
             } else {
-                materials_[mid] = make_shared<PlaceholderMaterial>(mid, mid);
+                materials_[mid] =
+                    make_shared<PlaceholderMaterial>(MaterialKey{mid, mid});
             }
         }
     }
@@ -565,14 +566,13 @@ void CloudBVH::Trace(RayState &rayState) const {
                                         "material");
                                 }
 
-                                auto mat =
+                                auto mat_key =
                                     dynamic_cast<const PlaceholderMaterial *>(
-                                        isect.primitive->GetMaterial());
+                                        isect.primitive->GetMaterial())
+                                        ->GetMaterialKey();
 
                                 rayState.ray.tMax = ray.tMax;
-                                rayState.SetHit(current, isect,
-                                                mat->GetMaterialTreeletId(),
-                                                mat->GetMaterialId());
+                                rayState.SetHit(current, isect, mat_key);
                             }
                         }
                     } else if (primitives[i]->Intersect(ray, &isect)) {
@@ -583,13 +583,13 @@ void CloudBVH::Trace(RayState &rayState) const {
                                 "material");
                         }
 
-                        auto mat = dynamic_cast<const PlaceholderMaterial *>(
-                            isect.primitive->GetMaterial());
+                        auto mat_key =
+                            dynamic_cast<const PlaceholderMaterial *>(
+                                isect.primitive->GetMaterial())
+                                ->GetMaterialKey();
 
                         rayState.ray.tMax = ray.tMax;
-                        rayState.SetHit(current, isect,
-                                        mat->GetMaterialTreeletId(),
-                                        mat->GetMaterialId());
+                        rayState.SetHit(current, isect, mat_key);
                     }
 
                     current.primitive++;
