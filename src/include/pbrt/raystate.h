@@ -13,6 +13,10 @@ namespace pbrt {
 struct __attribute__((packed, aligned(1))) MaterialKey {
     uint32_t treelet{0};
     uint32_t id{0};
+
+    bool operator<(const MaterialKey &o) const {
+        return (treelet == o.treelet) ? (id < o.id) : (treelet < o.treelet);
+    }
 };
 
 struct RayState;

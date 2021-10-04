@@ -124,16 +124,16 @@ class CloudBVH : public Aggregate {
 
     struct UnfinishedGeometricPrimitive {
         size_t primitive_index;
-        uint32_t material_id;
+        MaterialKey material_key;
         uint32_t area_light_id;
         std::shared_ptr<Shape> shape;
 
         UnfinishedGeometricPrimitive(const size_t primitive_index,
-                                     const uint32_t material_id,
+                                     const MaterialKey &material_key,
                                      const uint32_t area_light_id,
                                      std::shared_ptr<Shape> &&shape)
             : primitive_index(primitive_index),
-              material_id(material_id),
+              material_key(material_key),
               area_light_id(area_light_id),
               shape(std::move(shape)) {}
     };
@@ -149,7 +149,7 @@ class CloudBVH : public Aggregate {
         std::shared_ptr<char> mesh_storage{};
         std::map<uint32_t, std::shared_ptr<TriangleMesh>> meshes{};
 
-        std::set<uint32_t> required_materials{};
+        std::set<MaterialKey> required_materials{};
         std::set<uint64_t> required_instances{};
 
         std::vector<UnfinishedTransformedPrimitive> unfinished_transformed{};

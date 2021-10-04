@@ -69,24 +69,24 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all,
                     treelet_count);
 
         /* (2.A) load all the necessary materials */
-        set<uint32_t> required_materials;
+        set<MaterialKey> required_materials;
 
         for (size_t i = 0; i < treelet_count; i++) {
             required_materials.insert(treelets_[i]->required_materials.begin(),
                                       treelets_[i]->required_materials.end());
         }
 
-        for (const auto mid : required_materials) {
-            if (mid == numeric_limits<uint32_t>::max()) {
-                materials_[mid] = nullptr;
+        for (const auto mkey : required_materials) {
+            if (mkey.id == numeric_limits<uint32_t>::max()) {
+                materials_[mkey.id] = nullptr;
                 continue;
             }
 
-            if (materials_.count(mid) == 0) {
-                auto r = _manager.GetReader(ObjectType::Material, mid);
+            if (materials_.count(mkey.id) == 0) {
+                auto r = _manager.GetReader(ObjectType::Material, mkey.id);
                 protobuf::Material material;
                 r->read(&material);
-                materials_[mid] =
+                materials_[mkey.id] =
                     material::from_protobuf(material, ftex_, stex_);
             }
         }
@@ -198,22 +198,21 @@ void CloudBVH::LoadTreelet(const uint32_t root_id, const char *buffer,
     auto &treelet = *treelets_[root_id];
 
     /* load the materials */
-    for (const auto mid : treelet.required_materials) {
-        if (mid == numeric_limits<uint32_t>::max()) {
-            materials_[mid] = nullptr;
+    for (const auto mkey : treelet.required_materials) {
+        if (mkey.id == numeric_limits<uint32_t>::max()) {
+            materials_[mkey.id] = nullptr;
             continue;
         }
 
-        if (materials_.count(mid) == 0) {
+        if (materials_.count(mkey.id) == 0) {
             if (load_materials_) {
-                auto reader = _manager.GetReader(ObjectType::Material, mid);
+                auto reader = _manager.GetReader(ObjectType::Material, mkey.id);
                 protobuf::Material material;
                 reader->read(&material);
-                materials_[mid] =
+                materials_[mkey.id] =
                     material::from_protobuf(material, ftex_, stex_);
             } else {
-                materials_[mid] =
-                    make_shared<PlaceholderMaterial>(MaterialKey{mid, mid});
+                materials_[mkey.id] = make_shared<PlaceholderMaterial>(mkey);
             }
         }
     }
@@ -253,7 +252,7 @@ void CloudBVH::finalizeTreeletLoad(const uint32_t root_id) const {
         }
 
         treelet.primitives[u.primitive_index] = make_unique<GeometricPrimitive>(
-            move(u.shape), materials_[u.material_id], area_light,
+            move(u.shape), materials_[u.material_key.id], area_light,
             medium_interface);
     }
 
@@ -306,26 +305,24 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
         treelet.included_material.emplace(material_id, nullptr);
     }
 
-    map<uint32_t, uint32_t> mesh_material_ids;
+    map<uint32_t, MaterialKey> mesh_material_ids;
     map<uint32_t, uint32_t> mesh_area_light_id;
 
     /* read in the triangle meshes for this treelet */
     uint32_t num_triangle_meshes = 0;
     reader.read(&num_triangle_meshes);
 
-    const char *tm_buff_start = buffer + sizeof(uint32_t) * 2;
+    const char *tm_buff_start = reader.cur();
     const char *tm_buff_end = tm_buff_start;
-
-    size_t l = 0;
 
     // find the start and the end of the buffer for meshes
     for (int i = 0; i < num_triangle_meshes; ++i) {
         uint64_t tm_id;
-        uint64_t material_id;
+        MaterialKey material_key;
         uint32_t area_light_id;
 
         reader.read(&tm_id);
-        reader.read(&material_id);
+        reader.read(&material_key);
         reader.read(&area_light_id);
 
         const char *tm_buffer;
@@ -346,11 +343,11 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
 
         for (int i = 0; i < num_triangle_meshes; i++) {
             uint64_t tm_id;
-            uint64_t material_id;
+            MaterialKey material_key;
             uint32_t area_light_id;
 
             tm_reader.read(&tm_id);
-            tm_reader.read(&material_id);
+            tm_reader.read(&material_key);
             tm_reader.read(&area_light_id);
 
             const char *tm_buffer;
@@ -363,7 +360,7 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
                                                tm_buffer - mesh_storage_start));
 
             CHECK_EQ(p.second, true);
-            mesh_material_ids[tm_id] = material_id;
+            mesh_material_ids[tm_id] = material_key;
 
             if (area_light_id != numeric_limits<uint32_t>::max()) {
                 mesh_area_light_id[tm_id] = area_light_id;
@@ -447,19 +444,19 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
 
             const auto mesh_id = serdes_triangle->mesh_id;
             const auto tri_number = serdes_triangle->tri_number;
-            const auto material_id = mesh_material_ids[mesh_id];
+            const auto material_key = mesh_material_ids[mesh_id];
             const auto area_light_id = mesh_area_light_id.count(mesh_id)
                                            ? mesh_area_light_id.at(mesh_id)
                                            : numeric_limits<uint32_t>::max();
 
-            treelet.required_materials.insert(material_id);
+            treelet.required_materials.insert(material_key);
 
             auto shape = make_shared<Triangle>(
                 &identity_transform_, &identity_transform_, false,
                 tree_meshes.at(mesh_id), tri_number);
 
             treelet.unfinished_geometric.emplace_back(
-                tree_primitives.size(), material_id, area_light_id,
+                tree_primitives.size(), material_key, area_light_id,
                 move(shape));
 
             tree_primitives.push_back(nullptr);

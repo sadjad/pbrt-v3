@@ -15,6 +15,7 @@ class LiteRecordReader {
     template <class T>
     bool read(T* t);
 
+    const char* cur() const { return buffer_; }
     bool eof() const { return buffer_ == end_; }
 
   private:

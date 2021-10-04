@@ -74,7 +74,10 @@ int main(int argc, char const *argv[]) {
 
         /* let's load all the treelets */
         for (size_t i = 0; i < treelets.size(); i++) {
+            cout << "Loading treelet " << i << "... ";
             treelets[i] = make_unique<CloudBVH>(i, false, false);
+            treelets[i]->LoadTreelet(i);
+            cout << "done." << endl;
         }
 
         for (auto &light : lights) {
