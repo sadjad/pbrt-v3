@@ -208,6 +208,8 @@ class TreeletDumpBVH : public BVHAccel {
     std::vector<uint64_t> nodeSizes;
     std::vector<uint64_t> subtreeSizes;
 
+    const size_t maxTreeletBytes;
+
     std::vector<TreeletInfo> allTreelets;
 
     uint64_t totalBytes {0};
