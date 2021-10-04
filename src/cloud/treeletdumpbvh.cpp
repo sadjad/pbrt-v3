@@ -2331,8 +2331,6 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
         unsigned sTreeletID = _manager.getId(&treelet);
         auto writer = _manager.GetWriter(ObjectType::Treelet, sTreeletID);
 
-        size_t treeletTextureSize = 0;
-
         const uint32_t numIncludedMaterials = 0;
         writer->write(numIncludedMaterials);
 
@@ -2426,17 +2424,23 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             /*** Figuring out the material for the mesh ***/
             // (1) the material id for the original mesh... let's load its info
 
-            size_t meshTextureSize = 0;
-
             const uint32_t mtlID = getMaterialForMesh(
                 newMesh.get(), _manager.getMeshMaterialId(mesh));
             _manager.recordMeshMaterialId(newMesh.get(), mtlID);
 
+            const auto materialTextureSize = getTotalTextureSize(newMesh.get());
+
+            if (materialTreelets[currentMaterialTreelet].footprint +
+                    materialTextureSize >
+                maxTreeletBytes) {
+                currentMaterialTreelet =
+                    _manager.getNextId(ObjectType::Treelet);
+                materialTreelets[currentMaterialTreelet];
+            }
+
             const uint32_t areaLightID = _manager.getMeshAreaLightId(mesh);
 
             const auto newMeshData = serdes::triangle_mesh::serialize(*newMesh);
-
-            treeletTextureSize += getTotalTextureSize(newMesh.get());
 
             LOG(INFO) << "Mesh " << sMeshID << " contains "
                       << newMesh->nVertices << " vertices and "
@@ -2481,11 +2485,19 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 meshesWithTexturesAlreadyCut.insert(instMesh);
             }
 
+            const auto materialTextureSize = getTotalTextureSize(instMesh);
+
+            if (materialTreelets[currentMaterialTreelet].footprint +
+                    materialTextureSize >
+                maxTreeletBytes) {
+                currentMaterialTreelet =
+                    _manager.getNextId(ObjectType::Treelet);
+                materialTreelets[currentMaterialTreelet];
+            }
+
             MaterialKey mtlKey;
             mtlKey.treelet = currentMaterialTreelet;
             mtlKey.id = mtlID;
-
-            treeletTextureSize += getTotalTextureSize(instMesh);
 
             LOG(INFO) << "Dumping instance mesh " << sMeshID << " for treelet "
                       << sTreeletID << " with material " << mtlID;
@@ -2507,7 +2519,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
             materialTreelets[currentMaterialTreelet].materials.insert(mtlID);
             materialTreelets[currentMaterialTreelet].footprint +=
-                getTotalTextureSize(instMesh);
+                materialTextureSize;
         }
 
         // Write out nodes for treelet
@@ -2775,9 +2787,8 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
         LOG(INFO) << "Finished dumping treelet " << sTreeletID << " ("
                   << treeletID << "), size = "
-                  << format_bytes(roost::file_size(
-                         _manager.getFilePath(ObjectType::Treelet, sTreeletID)))
-                  << ", texture size = " << format_bytes(treeletTextureSize);
+                  << format_bytes(roost::file_size(_manager.getFilePath(
+                         ObjectType::Treelet, sTreeletID)));
     }
 
     // let's dump the material treelets
