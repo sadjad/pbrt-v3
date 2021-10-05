@@ -2016,28 +2016,26 @@ map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
     return oldToNew;
 }
 
-size_t getTotalTextureSize(TriangleMesh *mesh) {
-    static map<TriangleMesh *, size_t> textureSizes = {};
+size_t getTotalTextureSize(const uint32_t materialId) {
+    static map<uint32_t, size_t> textureSizes = {};
 
-    const uint32_t mtlID = _manager.getMeshMaterialId(mesh);
-
-    if (mtlID == numeric_limits<uint32_t>::max()) {
+    if (materialId == numeric_limits<uint32_t>::max()) {
         return 0;
     }
 
-    if (textureSizes.count(mesh)) {
-        return textureSizes.at(mesh);
+    if (textureSizes.count(materialId)) {
+        return textureSizes.at(materialId);
     }
 
     auto &allDeps = _manager.getDependenciesMap();
 
-    if (allDeps.count({ObjectType::Material, mtlID}) == 0) {
+    if (allDeps.count({ObjectType::Material, materialId}) == 0) {
         return 0;
     }
 
     size_t output = 0;
 
-    for (const auto &dep : allDeps.at({ObjectType::Material, mtlID})) {
+    for (const auto &dep : allDeps.at({ObjectType::Material, materialId})) {
         if (dep.type == ObjectType::SpectrumTexture ||
             dep.type == ObjectType::FloatTexture) {
             if (allDeps.count(dep)) {
@@ -2050,7 +2048,7 @@ size_t getTotalTextureSize(TriangleMesh *mesh) {
         }
     }
 
-    textureSizes[mesh] = output;
+    textureSizes[materialId] = output;
     return output;
 }
 
@@ -2416,10 +2414,6 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
         LOG(INFO) << "Dumping treelet " << sTreeletID << " (" << treeletID
                   << ") with " << numTriMeshes << " triangle mesh(es)";
 
-        // FIXME add material support
-        _manager.recordDependency(ObjectKey{ObjectType::Treelet, sTreeletID},
-                                  ObjectKey{ObjectType::Material, 0});
-
         unordered_map<TriangleMesh *, unordered_map<size_t, size_t>>
             triNumRemap;
         unordered_map<TriangleMesh *, uint32_t> triMeshIDs;
@@ -2498,7 +2492,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 newMesh.get(), _manager.getMeshMaterialId(mesh));
             _manager.recordMeshMaterialId(newMesh.get(), mtlID);
 
-            const auto materialTextureSize = getTotalTextureSize(newMesh.get());
+            const auto materialTextureSize = getTotalTextureSize(mtlID);
 
             if (materialTreelets[currentMaterialTreelet].footprint +
                     materialTextureSize >
@@ -2534,7 +2528,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
             materialTreelets[currentMaterialTreelet].materials.insert(mtlID);
             materialTreelets[currentMaterialTreelet].footprint +=
-                getTotalTextureSize(newMesh.get());
+                materialTextureSize;
         }
 
         // Write out the full triangle meshes for all the instances referenced
@@ -2555,7 +2549,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 meshesWithTexturesAlreadyCut.insert(instMesh);
             }
 
-            const auto materialTextureSize = getTotalTextureSize(instMesh);
+            const auto materialTextureSize = getTotalTextureSize(mtlID);
 
             if (materialTreelets[currentMaterialTreelet].footprint +
                     materialTextureSize >
