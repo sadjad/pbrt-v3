@@ -2234,6 +2234,81 @@ uint32_t getMaterialForMesh(TriangleMesh *newMesh, const uint32_t mtlID) {
     return newMtlId;
 }
 
+vector<shared_ptr<TriangleMesh>> cutTriangleMeshIntoParts(
+    const TriangleMesh *mesh, const size_t nParts) {
+    vector<shared_ptr<TriangleMesh>> output;
+
+    const size_t trianglesPerPart =
+        static_cast<size_t>(ceil(1.0 * mesh->nTriangles / nParts));
+
+    for (size_t i = 0; i < nParts; i++) {
+        const size_t triStartIdx = i * trianglesPerPart;
+        const size_t triEndIdx = min(static_cast<size_t>(mesh->nTriangles),
+                                     (i + 1) * trianglesPerPart);
+
+        size_t numTris = triEndIdx - triStartIdx;
+        map<int, size_t> vertexRemap;
+        map<size_t, size_t> triNumRemap;
+        size_t newIdx = 0;
+        size_t newTriNum = 0;
+
+        for (size_t triNum = triStartIdx; triNum < triEndIdx; triNum++) {
+            for (int i = 0; i < 3; i++) {
+                int idx = mesh->vertexIndices[triNum * 3 + i];
+                if (vertexRemap.count(idx) == 0) {
+                    vertexRemap.emplace(idx, newIdx++);
+                }
+            }
+            triNumRemap.emplace(triNum, newTriNum++);
+        }
+
+        size_t numVerts = newIdx;
+
+        vector<int> vertIdxs(numTris * 3);
+        vector<Point3f> P(numVerts);
+        vector<Vector3f> S(numVerts);
+        vector<Normal3f> N(numVerts);
+        vector<Point2f> uv(numVerts);
+        vector<int> faceIdxs(numTris);
+
+        for (size_t triNum = triStartIdx; triNum < triEndIdx; triNum++) {
+            for (int j = 0; j < 3; j++) {
+                int origIdx = mesh->vertexIndices[triNum * 3 + j];
+                int newIdx = vertexRemap.at(origIdx);
+                vertIdxs[i * 3 + j] = newIdx;
+            }
+
+            if (mesh->faceIndices) {
+                faceIdxs[i] = mesh->faceIndices[triNum];
+            }
+        }
+
+        for (auto &kv : vertexRemap) {
+            int origIdx = kv.first;
+            int newIdx = kv.second;
+            P[newIdx] = mesh->p[origIdx];
+            if (mesh->s) {
+                S[newIdx] = mesh->s[origIdx];
+            }
+            if (mesh->n) {
+                N[newIdx] = mesh->n[origIdx];
+            }
+            if (mesh->uv) {
+                uv[newIdx] = mesh->uv[origIdx];
+            }
+        }
+
+        output.emplace_back(make_shared<TriangleMesh>(
+            Transform(), numTris, vertIdxs.data(), numVerts, P.data(),
+            mesh->s ? S.data() : nullptr, mesh->n ? N.data() : nullptr,
+            mesh->uv ? uv.data() : nullptr, mesh->alphaMask,
+            mesh->shadowAlphaMask,
+            mesh->faceIndices ? faceIdxs.data() : nullptr));
+    }
+
+    return output;
+}
+
 vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
     // Assign IDs to each treelet
     for (const TreeletInfo &treelet : allTreelets) {
@@ -2405,8 +2480,6 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 }
             }
 
-            set<int> usedFaces{faceIdxs.begin(), faceIdxs.end()};
-
             shared_ptr<TriangleMesh> newMesh = make_shared<TriangleMesh>(
                 Transform(), numTris, vertIdxs.data(), numVerts, P.data(),
                 mesh->s ? S.data() : nullptr, mesh->n ? N.data() : nullptr,
@@ -2420,9 +2493,6 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
             LOG(INFO) << "Dumping triangle mesh " << sMeshID << " for treelet "
                       << sTreeletID;
-
-            /*** Figuring out the material for the mesh ***/
-            // (1) the material id for the original mesh... let's load its info
 
             const uint32_t mtlID = getMaterialForMesh(
                 newMesh.get(), _manager.getMeshMaterialId(mesh));
