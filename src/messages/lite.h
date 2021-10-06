@@ -35,6 +35,9 @@ class LiteRecordWriter {
     template <class T>
     void write(const T& t);
 
+    template <class T>
+    void write_at(const size_t offset, const T& t);
+
   private:
     std::ofstream fout_{};
 };
@@ -60,6 +63,14 @@ template <class T>
 void LiteRecordWriter::write(const T& t) {
     const uint32_t len = sizeof(T);
     write(reinterpret_cast<const char*>(&t), len);
+}
+
+template <class T>
+void LiteRecordWriter::write_at(const size_t offset, const T& t) {
+    const auto cur = fout_.tellp();
+    fout_.seekp(offset);
+    write(t);
+    fout_.seekp(max(cur, fout_.tellp()));
 }
 
 #endif /* PBRT_MESSAGES_LITE_H */
