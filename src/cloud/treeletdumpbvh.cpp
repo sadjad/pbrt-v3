@@ -2417,6 +2417,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
         unordered_map<TriangleMesh *, unordered_map<size_t, size_t>>
             triNumRemap;
         unordered_map<TriangleMesh *, uint32_t> triMeshIDs;
+        unordered_map<TriangleMesh *, uint32_t> compoundMeshes;
 
         // Write out rewritten meshes with only triangles in treelet
         for (auto &kv : trianglesInTreelet) {
@@ -2474,6 +2475,8 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 }
             }
 
+            vector<shared_ptr<TriangleMesh>> meshesToWrite;
+
             shared_ptr<TriangleMesh> newMesh = make_shared<TriangleMesh>(
                 Transform(), numTris, vertIdxs.data(), numVerts, P.data(),
                 mesh->s ? S.data() : nullptr, mesh->n ? N.data() : nullptr,
@@ -2481,54 +2484,71 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 mesh->shadowAlphaMask,
                 mesh->faceIndices ? faceIdxs.data() : nullptr);
 
-            // Give triangle mesh an ID
-            uint32_t sMeshID = _manager.getNextId(ObjectType::TriangleMesh);
-            triMeshIDs[mesh] = sMeshID;
+            meshesToWrite.push_back(newMesh);
 
-            LOG(INFO) << "Dumping triangle mesh " << sMeshID << " for treelet "
-                      << sTreeletID;
-
+            // Getting the material for mesh
             const uint32_t mtlID = getMaterialForMesh(
                 newMesh.get(), _manager.getMeshMaterialId(mesh));
             _manager.recordMeshMaterialId(newMesh.get(), mtlID);
 
+            /* if the material/textures for this mesh don't fit within one
+            treelet, we need to cut this mesh into multiple parts */
             const auto materialTextureSize = getTotalTextureSize(mtlID);
 
-            if (materialTreelets[currentMaterialTreelet].footprint +
-                    materialTextureSize >
-                maxTreeletBytes) {
-                currentMaterialTreelet =
-                    _manager.getNextId(ObjectType::Treelet);
-                materialTreelets[currentMaterialTreelet];
+            if (materialTextureSize > maxTreeletBytes) {
+                const size_t nParts =
+                    ceil(1.0 * materialTextureSize / maxTreeletBytes);
+
+                meshesToWrite = cutTriangleMeshIntoParts(newMesh.get(), nParts);
+                compoundMeshes.emplace(mesh, meshesToWrite[0]->nTriangles);
             }
 
+            // Give triangle mesh an ID
+            triMeshIDs[mesh] = _manager.getNextId(ObjectType::TriangleMesh);
             const uint32_t areaLightID = _manager.getMeshAreaLightId(mesh);
 
-            const auto newMeshData = serdes::triangle_mesh::serialize(*newMesh);
+            for (auto &m : meshesToWrite) {
+                const auto sMeshID =
+                    _manager.getNextId(ObjectType::TriangleMesh);
 
-            LOG(INFO) << "Mesh " << sMeshID << " contains "
-                      << newMesh->nVertices << " vertices and "
-                      << newMesh->nTriangles << " triangles and its size is "
-                      << format_bytes(newMeshData.size());
+                const uint32_t mtlID = getMaterialForMesh(
+                    m.get(), _manager.getMeshMaterialId(newMesh.get()));
+                _manager.recordMeshMaterialId(m.get(), mtlID);
 
-            MaterialKey mtlKey;
-            mtlKey.treelet = currentMaterialTreelet;
-            mtlKey.id = mtlID;
+                LOG(INFO) << "Dumping triangle mesh " << sMeshID
+                          << " for treelet " << sTreeletID;
 
-            // writing the triangle mesh
-            writer->write(static_cast<uint64_t>(sMeshID));
-            writer->write(reinterpret_cast<const char *>(&mtlKey),
-                          sizeof(MaterialKey));
-            writer->write(areaLightID);
-            writer->write(newMeshData);
+                const auto mData = serdes::triangle_mesh::serialize(*m);
 
-            /* _manager.recordDependency(
-                ObjectKey{ObjectType::Treelet, sTreeletID},
-                ObjectKey{ObjectType::Material, mtlID}); */
+                LOG(INFO) << "Mesh " << sMeshID << " contains " << m->nVertices
+                          << " vertices and " << m->nTriangles
+                          << " triangles and its size is "
+                          << format_bytes(mData.size());
 
-            materialTreelets[currentMaterialTreelet].materials.insert(mtlID);
-            materialTreelets[currentMaterialTreelet].footprint +=
-                materialTextureSize;
+                if (materialTreelets[currentMaterialTreelet].footprint +
+                        materialTextureSize >
+                    maxTreeletBytes) {
+                    currentMaterialTreelet =
+                        _manager.getNextId(ObjectType::Treelet);
+                    materialTreelets[currentMaterialTreelet];
+                }
+
+                MaterialKey mtlKey;
+                mtlKey.treelet = currentMaterialTreelet;
+                mtlKey.id = mtlID;
+
+                // writing the triangle mesh
+                writer->write(static_cast<uint64_t>(sMeshID));
+                writer->write(reinterpret_cast<const char *>(&mtlKey),
+                              sizeof(MaterialKey));
+                writer->write(areaLightID);
+                writer->write(mData);
+
+                materialTreelets[currentMaterialTreelet].materials.insert(
+                    mtlID);
+                materialTreelets[currentMaterialTreelet].footprint +=
+                    materialTextureSize;
+            }
         }
 
         // Write out the full triangle meshes for all the instances referenced
@@ -2801,7 +2821,21 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
                     uint32_t sMeshID = triMeshIDs.at(mesh);
                     int origTriNum = (tri->v - mesh->vertexIndices) / 3;
-                    int newTriNum = triNumRemap.at(mesh).at(origTriNum);
+
+                    int newTriNum;
+
+                    // is it a compound mesh?
+                    const bool isCompound = compoundMeshes.count(mesh);
+
+                    if (!isCompound) {
+                        newTriNum = triNumRemap.at(mesh).at(origTriNum);
+                    } else {
+                        const auto partSize = compoundMeshes.at(mesh);
+                        newTriNum = triNumRemap.at(mesh).at(origTriNum);
+                        newTriNum =
+                            newTriNum - (newTriNum / partSize) * partSize;
+                        sMeshID += newTriNum / partSize + 1;
+                    }
 
                     triangle.mesh_id = sMeshID;
                     triangle.tri_number = newTriNum;
