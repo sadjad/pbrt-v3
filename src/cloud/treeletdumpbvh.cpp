@@ -2495,21 +2495,28 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             treelet, we need to cut this mesh into multiple parts */
             const auto materialTextureSize = getTotalTextureSize(mtlID);
 
+            bool isCompound = false;
+
             if (materialTextureSize > maxTreeletBytes) {
                 const size_t nParts =
                     ceil(1.0 * materialTextureSize / maxTreeletBytes);
 
                 meshesToWrite = cutTriangleMeshIntoParts(newMesh.get(), nParts);
                 compoundMeshes.emplace(mesh, meshesToWrite[0]->nTriangles);
+
+                triMeshIDs[mesh] = _manager.getNextId(ObjectType::TriangleMesh);
+                isCompound = true;
             }
 
-            // Give triangle mesh an ID
-            triMeshIDs[mesh] = _manager.getNextId(ObjectType::TriangleMesh);
             const uint32_t areaLightID = _manager.getMeshAreaLightId(mesh);
 
             for (auto &m : meshesToWrite) {
                 const auto sMeshID =
                     _manager.getNextId(ObjectType::TriangleMesh);
+
+                if (!isCompound) {
+                    triMeshIDs[mesh] = sMeshID;
+                }
 
                 const uint32_t mtlID = getMaterialForMesh(
                     m.get(), _manager.getMeshMaterialId(newMesh.get()));
