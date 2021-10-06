@@ -7,6 +7,7 @@
 #include <iomanip>
 
 #include "accelerators/cloud.h"
+#include "messages/lite.h"
 #include "messages/serdes.h"
 #include "messages/utils.h"
 #include "paramset.h"
@@ -2236,8 +2237,17 @@ vector<shared_ptr<TriangleMesh>> cutTriangleMeshIntoParts(
     const TriangleMesh *mesh, const size_t nParts) {
     vector<shared_ptr<TriangleMesh>> output;
 
+    LOG(INFO) << "-> Cutting triangle mesh into " << nParts << " parts...";
+
     const size_t trianglesPerPart =
         static_cast<size_t>(ceil(1.0 * mesh->nTriangles / nParts));
+
+    LOG(INFO) << "Total triangles = " << mesh->nTriangles
+              << ", per part = " << trianglesPerPart;
+
+    LOG(INFO) << "Total texture size for this mesh is "
+              << format_bytes(
+                     getTotalTextureSize(_manager.getMeshMaterialId(mesh)));
 
     for (size_t i = 0; i < nParts; i++) {
         const size_t triStartIdx = i * trianglesPerPart;
@@ -2402,13 +2412,13 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
         }
 
         unsigned sTreeletID = _manager.getId(&treelet);
-        auto writer = _manager.GetWriter(ObjectType::Treelet, sTreeletID);
+        auto writer = make_unique<LiteRecordWriter>(
+            _manager.getFilePath(ObjectType::Treelet, sTreeletID));
 
         const uint32_t numIncludedMaterials = 0;
         writer->write(numIncludedMaterials);
 
-        const uint32_t numTriMeshes =
-            trianglesInTreelet.size() + instanceMeshes.size();
+        uint32_t numTriMeshes = instanceMeshes.size();
         writer->write(numTriMeshes);
 
         LOG(INFO) << "Dumping treelet " << sTreeletID << " (" << treeletID
@@ -2511,6 +2521,8 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             const uint32_t areaLightID = _manager.getMeshAreaLightId(mesh);
 
             for (auto &m : meshesToWrite) {
+                numTriMeshes++;
+
                 const auto sMeshID =
                     _manager.getNextId(ObjectType::TriangleMesh);
 
@@ -2532,8 +2544,10 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                           << " triangles and its size is "
                           << format_bytes(mData.size());
 
+                const auto newMatSize = getTotalTextureSize(mtlID);
+
                 if (materialTreelets[currentMaterialTreelet].footprint +
-                        materialTextureSize >
+                        newMatSize >
                     maxTreeletBytes) {
                     currentMaterialTreelet =
                         _manager.getNextId(ObjectType::Treelet);
@@ -2554,9 +2568,11 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 materialTreelets[currentMaterialTreelet].materials.insert(
                     mtlID);
                 materialTreelets[currentMaterialTreelet].footprint +=
-                    materialTextureSize;
+                    newMatSize;
             }
         }
+
+        writer->write_at(sizeof(uint32_t) * 2, numTriMeshes);
 
         // Write out the full triangle meshes for all the instances referenced
         // by this treelet
