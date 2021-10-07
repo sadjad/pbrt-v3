@@ -2249,12 +2249,12 @@ vector<shared_ptr<TriangleMesh>> cutTriangleMeshIntoParts(
               << format_bytes(
                      getTotalTextureSize(_manager.getMeshMaterialId(mesh)));
 
-    for (size_t i = 0; i < nParts; i++) {
-        const size_t triStartIdx = i * trianglesPerPart;
+    for (size_t partNum = 0; partNum < nParts; partNum++) {
+        const size_t triStartIdx = partNum * trianglesPerPart;
         const size_t triEndIdx = min(static_cast<size_t>(mesh->nTriangles),
-                                     (i + 1) * trianglesPerPart);
+                                     (partNum + 1) * trianglesPerPart);
 
-        size_t numTris = triEndIdx - triStartIdx;
+        const size_t numTris = triEndIdx - triStartIdx;
         map<int, size_t> vertexRemap;
         map<size_t, size_t> triNumRemap;
         size_t newIdx = 0;
@@ -2279,7 +2279,9 @@ vector<shared_ptr<TriangleMesh>> cutTriangleMeshIntoParts(
         vector<Point2f> uv(numVerts);
         vector<int> faceIdxs(numTris);
 
-        for (size_t triNum = triStartIdx; triNum < triEndIdx; triNum++) {
+        for (size_t i = 0; i < numTris; i++) {
+            size_t triNum = i + triStartIdx;
+
             for (int j = 0; j < 3; j++) {
                 int origIdx = mesh->vertexIndices[triNum * 3 + j];
                 int newIdx = vertexRemap.at(origIdx);
@@ -2315,6 +2317,67 @@ vector<shared_ptr<TriangleMesh>> cutTriangleMeshIntoParts(
     }
 
     return output;
+}
+
+shared_ptr<TriangleMesh> cutMesh(
+    TriangleMesh *mesh, const vector<size_t> &triNums,
+    unordered_map<TriangleMesh *, unordered_map<size_t, size_t>> &triNumRemap) {
+    size_t numTris = triNums.size();
+    unordered_map<int, size_t> vertexRemap;
+    size_t newIdx = 0;
+    size_t newTriNum = 0;
+
+    for (auto triNum : triNums) {
+        for (int i = 0; i < 3; i++) {
+            int idx = mesh->vertexIndices[triNum * 3 + i];
+            if (vertexRemap.count(idx) == 0) {
+                vertexRemap.emplace(idx, newIdx++);
+            }
+        }
+        triNumRemap[mesh].emplace(triNum, newTriNum++);
+    }
+    size_t numVerts = newIdx;
+    CHECK_EQ(numVerts, vertexRemap.size());
+
+    vector<int> vertIdxs(numTris * 3);
+    vector<Point3f> P(numVerts);
+    vector<Vector3f> S(numVerts);
+    vector<Normal3f> N(numVerts);
+    vector<Point2f> uv(numVerts);
+    vector<int> faceIdxs(numTris);
+
+    for (size_t i = 0; i < numTris; i++) {
+        size_t triNum = triNums[i];
+        for (int j = 0; j < 3; j++) {
+            int origIdx = mesh->vertexIndices[triNum * 3 + j];
+            int newIdx = vertexRemap.at(origIdx);
+            vertIdxs[i * 3 + j] = newIdx;
+        }
+        if (mesh->faceIndices) {
+            faceIdxs[i] = mesh->faceIndices[triNum];
+        }
+    }
+
+    for (auto &kv : vertexRemap) {
+        int origIdx = kv.first;
+        int newIdx = kv.second;
+        P[newIdx] = mesh->p[origIdx];
+        if (mesh->s) {
+            S[newIdx] = mesh->s[origIdx];
+        }
+        if (mesh->n) {
+            N[newIdx] = mesh->n[origIdx];
+        }
+        if (mesh->uv) {
+            uv[newIdx] = mesh->uv[origIdx];
+        }
+    }
+
+    return make_shared<TriangleMesh>(
+        Transform(), numTris, vertIdxs.data(), numVerts, P.data(),
+        mesh->s ? S.data() : nullptr, mesh->n ? N.data() : nullptr,
+        mesh->uv ? uv.data() : nullptr, mesh->alphaMask, mesh->shadowAlphaMask,
+        mesh->faceIndices ? faceIdxs.data() : nullptr);
 }
 
 vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
@@ -2434,66 +2497,9 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             TriangleMesh *mesh = kv.first;
             vector<size_t> &triNums = kv.second;
 
-            size_t numTris = triNums.size();
-            unordered_map<int, size_t> vertexRemap;
-            size_t newIdx = 0;
-            size_t newTriNum = 0;
-
-            for (auto triNum : triNums) {
-                for (int i = 0; i < 3; i++) {
-                    int idx = mesh->vertexIndices[triNum * 3 + i];
-                    if (vertexRemap.count(idx) == 0) {
-                        vertexRemap.emplace(idx, newIdx++);
-                    }
-                }
-                triNumRemap[mesh].emplace(triNum, newTriNum++);
-            }
-            size_t numVerts = newIdx;
-            CHECK_EQ(numVerts, vertexRemap.size());
-
-            vector<int> vertIdxs(numTris * 3);
-            vector<Point3f> P(numVerts);
-            vector<Vector3f> S(numVerts);
-            vector<Normal3f> N(numVerts);
-            vector<Point2f> uv(numVerts);
-            vector<int> faceIdxs(numTris);
-
-            for (size_t i = 0; i < numTris; i++) {
-                size_t triNum = triNums[i];
-                for (int j = 0; j < 3; j++) {
-                    int origIdx = mesh->vertexIndices[triNum * 3 + j];
-                    int newIdx = vertexRemap.at(origIdx);
-                    vertIdxs[i * 3 + j] = newIdx;
-                }
-                if (mesh->faceIndices) {
-                    faceIdxs[i] = mesh->faceIndices[triNum];
-                }
-            }
-
-            for (auto &kv : vertexRemap) {
-                int origIdx = kv.first;
-                int newIdx = kv.second;
-                P[newIdx] = mesh->p[origIdx];
-                if (mesh->s) {
-                    S[newIdx] = mesh->s[origIdx];
-                }
-                if (mesh->n) {
-                    N[newIdx] = mesh->n[origIdx];
-                }
-                if (mesh->uv) {
-                    uv[newIdx] = mesh->uv[origIdx];
-                }
-            }
+            auto newMesh = cutMesh(mesh, triNums, triNumRemap);
 
             vector<shared_ptr<TriangleMesh>> meshesToWrite;
-
-            shared_ptr<TriangleMesh> newMesh = make_shared<TriangleMesh>(
-                Transform(), numTris, vertIdxs.data(), numVerts, P.data(),
-                mesh->s ? S.data() : nullptr, mesh->n ? N.data() : nullptr,
-                mesh->uv ? uv.data() : nullptr, mesh->alphaMask,
-                mesh->shadowAlphaMask,
-                mesh->faceIndices ? faceIdxs.data() : nullptr);
-
             meshesToWrite.push_back(newMesh);
 
             // Getting the material for mesh
@@ -2531,7 +2537,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                 }
 
                 const uint32_t mtlID = getMaterialForMesh(
-                    m.get(), _manager.getMeshMaterialId(newMesh.get()));
+                    m.get(), _manager.getMeshMaterialId(mesh));
                 _manager.recordMeshMaterialId(m.get(), mtlID);
 
                 LOG(INFO) << "Dumping triangle mesh " << sMeshID
@@ -2848,16 +2854,16 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                     int newTriNum;
 
                     // is it a compound mesh?
-                    const bool isCompound = compoundMeshes.count(mesh);
+                    const bool isCompound = compoundMeshes.count(mesh) > 0;
 
                     if (!isCompound) {
                         newTriNum = triNumRemap.at(mesh).at(origTriNum);
                     } else {
                         const auto partSize = compoundMeshes.at(mesh);
                         newTriNum = triNumRemap.at(mesh).at(origTriNum);
+                        sMeshID += newTriNum / partSize + 1;
                         newTriNum =
                             newTriNum - (newTriNum / partSize) * partSize;
-                        sMeshID += newTriNum / partSize + 1;
                     }
 
                     triangle.mesh_id = sMeshID;
