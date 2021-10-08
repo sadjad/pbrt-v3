@@ -2053,31 +2053,14 @@ size_t getTotalTextureSize(const uint32_t materialId) {
     return output;
 }
 
-uint32_t getMaterialForMesh(TriangleMesh *newMesh, const uint32_t mtlID) {
-    enum { FLOAT, SPECTRUM };
+using TextureList = vector<tuple<int, string, uint32_t, protobuf::FloatTexture,
+                                 protobuf::SpectrumTexture>>;
 
-    if (mtlID == numeric_limits<uint32_t>::max()) {
-        // there's no material
-        return mtlID;
-    }
+enum { FLOAT, SPECTRUM };
 
-    protobuf::Material mtl;
-    _manager.GetReader(ObjectType::Material, mtlID)->read(&mtl);
+TextureList getTextureList(const protobuf::Material &mtl) {
+    TextureList textures;
 
-    vector<tuple<int, string, uint32_t, protobuf::FloatTexture,
-                 protobuf::SpectrumTexture>>
-        textures;
-
-    set<int> usedFaces;
-    if (newMesh->faceIndices) {
-        usedFaces.insert(newMesh->faceIndices,
-                         newMesh->faceIndices + newMesh->nTriangles);
-    } else {
-        // we need faceIndices to be able to cut the textures
-        return mtlID;
-    }
-
-    // (2) are there any ptex textures that we can cut?
     for (auto &tex : mtl.float_textures()) {
         const auto &name = tex.first;
         const auto id = tex.second;
@@ -2086,7 +2069,7 @@ uint32_t getMaterialForMesh(TriangleMesh *newMesh, const uint32_t mtlID) {
         _manager.GetReader(ObjectType::FloatTexture, id)->read(&ftex);
 
         if (ftex.name() == "imagemap") {
-            throw runtime_error("cutting imagemap textures is not supported");
+            throw runtime_error("imagemap textures are not supported");
         } else if (ftex.name() == "ptex") {
             textures.emplace_back(FLOAT, name, id, ftex,
                                   protobuf::SpectrumTexture{});
@@ -2101,12 +2084,36 @@ uint32_t getMaterialForMesh(TriangleMesh *newMesh, const uint32_t mtlID) {
         _manager.GetReader(ObjectType::SpectrumTexture, id)->read(&stex);
 
         if (stex.name() == "imagemap") {
-            throw runtime_error("cutting imagemap textures is not supported");
+            throw runtime_error("imagemap textures are not supported");
         } else if (stex.name() == "ptex") {
             textures.emplace_back(SPECTRUM, name, id, protobuf::FloatTexture{},
                                   stex);
         }
     }
+
+    return textures;
+}
+
+uint32_t getMaterialForMesh(TriangleMesh *newMesh, const uint32_t mtlID) {
+    if (mtlID == numeric_limits<uint32_t>::max()) {
+        // there's no material
+        return mtlID;
+    }
+
+    set<int> usedFaces;
+    if (newMesh->faceIndices) {
+        usedFaces.insert(newMesh->faceIndices,
+                         newMesh->faceIndices + newMesh->nTriangles);
+    } else {
+        // we need faceIndices to be able to cut the textures
+        return mtlID;
+    }
+
+    protobuf::Material mtl;
+    _manager.GetReader(ObjectType::Material, mtlID)->read(&mtl);
+
+    // are there any ptex textures that we can cut?
+    TextureList textures{getTextureList(mtl)};
 
     // our work is done here
     if (textures.empty()) {
