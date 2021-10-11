@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
+#include <queue>
 
 #include "accelerators/cloud.h"
 #include "messages/lite.h"
@@ -2385,6 +2386,140 @@ shared_ptr<TriangleMesh> cutMesh(
         mesh->s ? S.data() : nullptr, mesh->n ? N.data() : nullptr,
         mesh->uv ? uv.data() : nullptr, mesh->alphaMask, mesh->shadowAlphaMask,
         mesh->faceIndices ? faceIdxs.data() : nullptr);
+}
+
+vector<pair<set<size_t>, size_t>> generateTexturePartitions(
+    const uint32_t mtlID, const size_t maxTreeletBytes) {
+    protobuf::Material mtl;
+    _manager.GetReader(ObjectType::Material, mtlID)->read(&mtl);
+    TextureList textures{getTextureList(mtl)};
+
+    if (textures.empty()) {
+        throw runtime_error("generateTexturePartitions: no textures");
+    }
+
+    Ptex::String error;
+    list<PtexPtr<PtexTexture>> srcs;
+
+    for (auto &tex : textures) {
+        const int type = get<0>(tex);
+        const string &tname = get<1>(tex);
+        const uint32_t tid = get<2>(tex);
+
+        auto &ftexProto = get<3>(tex);
+        auto &stexProto = get<4>(tex);
+
+        ParamSet pset = from_protobuf(type == FLOAT ? ftexProto.params()
+                                                    : stexProto.params());
+
+        const string filename = pset.FindOneString("filename", "");
+        if (filename.empty()) {
+            throw runtime_error("ptex texture with no filename");
+        }
+
+        const uint32_t newtid = _manager.getNextId(ObjectType::Texture);
+        const string srcPath = _manager.getScenePath() + "/" + filename;
+
+        srcs.emplace_back(PtexTexture::open(srcPath.c_str(), error, false));
+    }
+
+    struct AggFaceData {
+        size_t size{0};
+        size_t adj[4] = {
+            numeric_limits<size_t>::max(), numeric_limits<size_t>::max(),
+            numeric_limits<size_t>::max(), numeric_limits<size_t>::max()};
+        bool partitioned{false};
+    };
+
+    vector<AggFaceData> faces;
+
+    // (1) make sure all the textures have the same number of faces
+    size_t faceCount = srcs.front()->numFaces();
+
+    for (auto &src : srcs) {
+        if (src->numFaces() != faceCount) {
+            throw runtime_error(
+                "generateTexturePartitions: not all textures have the same "
+                "number of faces");
+        }
+    }
+
+    faces.resize(faceCount);
+    for (auto &src : srcs) {
+        for (size_t i = 0; i < faceCount; i++) {
+            auto &fdata = src->getFaceInfo(i);
+            faces[i].size += Ptex::DataSize(src->dataType()) *
+                             src->numChannels() *
+                             (fdata.isConstant() ? 1 : fdata.res.size());
+
+            for (size_t j = 0; j < 4; j++) {
+                if (fdata.adjface(j) == -1) continue;
+
+                if (faces[i].adj[j] == numeric_limits<size_t>::max()) {
+                    faces[i].adj[j] = fdata.adjface(j);
+                } else if (faces[i].adj[j] != fdata.adjface(j)) {
+                    throw runtime_error(
+                        "generateTexturePartitions: two textures have "
+                        "different adjacency data");
+                }
+            }
+        }
+    }
+
+    vector<pair<set<size_t>, size_t>> partitions;
+
+    size_t partitionSize = 0;
+    set<size_t> partition;
+    set<size_t> adjacents;
+    queue<size_t> nextToVisit;
+
+    for (size_t i = 0; i < faceCount; i++) {
+        adjacents.insert(i);
+    }
+
+    auto addFace = [&](const size_t id) {
+        faces[id].partitioned = true;
+        adjacents.erase(id);
+
+        for (size_t i = 0; i < 4; i++) {
+            const auto adj = faces[id].adj[i];
+
+            if (adj != numeric_limits<size_t>::max() && !partition.count(adj)) {
+                partition.insert(adj);
+                partitionSize += faces[adj].size;
+
+                if (not faces[adj].partitioned) {
+                    nextToVisit.push(adj);
+                }
+            }
+        }
+    };
+
+    while (!adjacents.empty()) {
+        auto id = *adjacents.begin();
+        partition.insert(id);
+        partitionSize += faces[id].size;
+
+        addFace(id);
+
+        while (!nextToVisit.empty()) {
+            const auto n = nextToVisit.front();
+            nextToVisit.pop();
+
+            if (partitionSize > maxTreeletBytes) {
+                partitions.emplace_back(
+                    make_pair(move(partition), partitionSize));
+
+                partition = {};
+                partition.insert(n);
+                partitionSize = faces[n].size;
+            }
+
+            addFace(n);
+        }
+    }
+
+    return partitions;
 }
 
 vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
