@@ -2429,6 +2429,7 @@ vector<pair<set<size_t>, size_t>> generateTexturePartitions(
             numeric_limits<size_t>::max(), numeric_limits<size_t>::max(),
             numeric_limits<size_t>::max(), numeric_limits<size_t>::max()};
         bool partitioned{false};
+        bool adjacent{false};
     };
 
     vector<AggFaceData> faces;
@@ -2471,21 +2472,25 @@ vector<pair<set<size_t>, size_t>> generateTexturePartitions(
     size_t partitionSize = 0;
     set<size_t> partition;
     set<size_t> adjacents;
+    set<size_t> unpartitionedFaces;
     queue<size_t> nextToVisit;
 
     for (size_t i = 0; i < faceCount; i++) {
-        adjacents.insert(i);
+        unpartitionedFaces.insert(i);
     }
 
     auto addFace = [&](const size_t id) {
+        partition.insert(id);
+        partitionSize += faces[id].size;
         faces[id].partitioned = true;
-        adjacents.erase(id);
+        unpartitionedFaces.erase(id);
 
         for (size_t i = 0; i < 4; i++) {
             const auto adj = faces[id].adj[i];
 
-            if (adj != numeric_limits<size_t>::max() && !partition.count(adj)) {
-                partition.insert(adj);
+            if (adj != numeric_limits<size_t>::max() && !partition.count(adj) &&
+                !faces[adj].adjacent) {
+                faces[adj].adjacent = true;
                 partitionSize += faces[adj].size;
 
                 if (not faces[adj].partitioned) {
@@ -2495,24 +2500,19 @@ vector<pair<set<size_t>, size_t>> generateTexturePartitions(
         }
     };
 
-    while (!adjacents.empty()) {
-        auto id = *adjacents.begin();
-        partition.insert(id);
-        partitionSize += faces[id].size;
-
-        addFace(id);
+    while (!unpartitionedFaces.empty()) {
+        nextToVisit.push(*unpartitionedFaces.begin());
 
         while (!nextToVisit.empty()) {
             const auto n = nextToVisit.front();
             nextToVisit.pop();
 
             if (partitionSize > maxTreeletBytes) {
-                partitions.emplace_back(
-                    make_pair(move(partition), partitionSize));
+                partitions.emplace_back(move(partition), partitionSize);
 
-                partition = {};
-                partition.insert(n);
-                partitionSize = faces[n].size;
+                partition.clear();
+                partitionSize = 0;
+                for (auto &face : faces) face.adjacent = false;
             }
 
             addFace(n);
