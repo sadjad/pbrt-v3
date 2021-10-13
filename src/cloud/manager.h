@@ -83,6 +83,22 @@ class SceneManager {
 
     std::vector<uint32_t> getAllMaterialIds() const;
 
+    void addToCompoundMaterial(const uint32_t originalMtlId,
+                               const uint32_t partitionMtlId,
+                               map<uint32_t, uint32_t>&& oldToNew) {
+        compoundMaterials[originalMtlId].insert_or_assign(partitionMtlId,
+                                                          move(oldToNew));
+    }
+
+    bool isCompoundMaterial(const uint32_t mtl) {
+        return compoundMaterials.count(mtl);
+    }
+
+    std::map<uint32_t, std::map<uint32_t, uint32_t>>& getCompoundMaterial(
+        const uint32_t mtl) {
+        return compoundMaterials.at(mtl);
+    }
+
     void recordMeshAreaLightId(const TriangleMesh* tm, const uint32_t light) {
         tmAreaLightIds[tm] = light;
     }
@@ -118,6 +134,9 @@ class SceneManager {
 
     std::map<const TriangleMesh*, uint32_t> tmMaterialIds;
     std::map<const TriangleMesh*, uint32_t> tmAreaLightIds;
+
+    std::map<uint32_t, std::map<uint32_t, std::map<uint32_t, uint32_t>>>
+        compoundMaterials;  // origMtl -> {newMtl -> {oldFace -> newFace}}
 
     std::map<ObjectID, std::set<ObjectKey>> treeletDependencies;
 };
