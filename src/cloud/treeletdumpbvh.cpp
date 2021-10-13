@@ -1926,8 +1926,9 @@ void TreeletDumpBVH::DumpHeader() const {
     header.close();
 }
 
-map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
-                             const set<int> &usedFaces) {
+map<uint32_t, uint32_t> cutPtexTexture(const string &srcPath,
+                                       const string &dstPath,
+                                       const set<uint32_t> &usedFaces) {
     // now we have to cut this ptex
     Ptex::String error;
     PtexPtr<PtexTexture> src{PtexTexture::open(srcPath.c_str(), error, false)};
@@ -1951,11 +1952,11 @@ map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
     dst->writeMeta(src->getMetaData());
 
     size_t outFaceId = 0;
-    map<int, int> oldToNew;
-    vector<int> newToOld;
+    map<uint32_t, uint32_t> oldToNew;
+    vector<uint32_t> newToOld;
     vector<char> facebuffer;
 
-    for (int i = 0; i < src->numFaces(); i++) {
+    for (uint32_t i = 0; i < static_cast<uint32_t>(src->numFaces()); i++) {
         if (!usedFaces.count(i)) continue;
         newToOld.push_back(i);
         oldToNew[i] = outFaceId++;
@@ -1981,24 +1982,23 @@ map<int, int> cutPtexTexture(const string &srcPath, const string &dstPath,
         size_t bufferLen = Ptex::DataSize(src->dataType()) *
                            src->numChannels() * face_info.res.size();
 
-        auto getNewId = [&](const int oldId) {
+        auto gid = [&](const int oldId) {
             return oldId == -1 ? -1 : oldToNew.at(oldId);
         };
 
-        auto getNewIdX = [&](const int oldId) {
+        auto gidX = [&](const int oldId) {
             return (oldId == -1 or !oldToNew.count(oldId)) ? -1
                                                            : oldToNew.at(oldId);
         };
 
         if (used) {
             face_info.setadjfaces(
-                getNewId(face_info.adjface(0)), getNewId(face_info.adjface(1)),
-                getNewId(face_info.adjface(2)), getNewId(face_info.adjface(3)));
+                gid(face_info.adjface(0)), gid(face_info.adjface(1)),
+                gid(face_info.adjface(2)), gid(face_info.adjface(3)));
         } else {
-            face_info.setadjfaces(getNewIdX(face_info.adjface(0)),
-                                  getNewIdX(face_info.adjface(1)),
-                                  getNewIdX(face_info.adjface(2)),
-                                  getNewIdX(face_info.adjface(3)));
+            face_info.setadjfaces(
+                gidX(face_info.adjface(0)), gidX(face_info.adjface(1)),
+                gidX(face_info.adjface(2)), gidX(face_info.adjface(3)));
         }
 
         if (facebuffer.size() < bufferLen) {
@@ -2095,74 +2095,19 @@ TextureList getTextureList(const protobuf::Material &mtl) {
     return textures;
 }
 
-uint32_t getMaterialForMesh(TriangleMesh *newMesh, const uint32_t mtlID) {
-    if (mtlID == numeric_limits<uint32_t>::max()) {
-        // there's no material
-        return mtlID;
-    }
-
-    set<int> usedFaces;
-    if (newMesh->faceIndices) {
-        usedFaces.insert(newMesh->faceIndices,
-                         newMesh->faceIndices + newMesh->nTriangles);
-    } else {
-        // we need faceIndices to be able to cut the textures
-        return mtlID;
-    }
-
+pair<uint32_t, map<uint32_t, uint32_t>> createMaterialPartition(
+    const uint32_t mtlId, const set<uint32_t> &usedFaces) {
     protobuf::Material mtl;
-    _manager.GetReader(ObjectType::Material, mtlID)->read(&mtl);
+    _manager.GetReader(ObjectType::Material, mtlId)->read(&mtl);
 
-    // are there any ptex textures that we can cut?
     TextureList textures{getTextureList(mtl)};
-
-    // our work is done here
     if (textures.empty()) {
-        return mtlID;
-    }
-
-    // (2.5) are the textures worth cutting?
-    bool shouldCut = false;
-
-    for (auto &tex : textures) {
-        const int type = get<0>(tex);
-        const string &tname = get<1>(tex);
-        const uint32_t tid = get<2>(tex);
-
-        auto &ftexProto = get<3>(tex);
-        auto &stexProto = get<4>(tex);
-
-        ParamSet pset = from_protobuf(type == FLOAT ? ftexProto.params()
-                                                    : stexProto.params());
-
-        const string filename = pset.FindOneString("filename", "");
-        if (filename.empty()) {
-            throw runtime_error("ptex texture with no filename");
-        }
-
-        const string fullpath = _manager.getScenePath() + "/" + filename;
-
-        Ptex::String error;
-        PtexPtr<PtexTexture> src{
-            PtexTexture::open(fullpath.c_str(), error, false)};
-
-        if ((1.0 * usedFaces.size() - src->numFaces()) / src->numFaces() <=
-            -0.33) {
-            // only cut if there's at least about ~33% saving in size
-            shouldCut = true;
-            break;
-        }
-    }
-
-    if (!shouldCut) {
-        LOG(INFO) << "Decided not to cut textures for material " << mtlID;
-        return mtlID;
+        throw runtime_error("the material has no textures");
     }
 
     auto newMtlId = _manager.getNextId(ObjectType::Material);
-    map<int, int> oldToNewFaceMapping;
+    map<uint32_t, uint32_t> oldToNewFaceMapping;
 
-    // (3) let's cut them up and create a new material & texture for this mesh.
     for (auto &tex : textures) {
         const int type = get<0>(tex);
         const string &tname = get<1>(tex);
@@ -2228,17 +2173,8 @@ uint32_t getMaterialForMesh(TriangleMesh *newMesh, const uint32_t mtlID) {
         }
     }
 
-    // (4) let's update the face indices for the triangle mesh
-    if (newMesh->faceIndices) {
-        for (int i = 0; i < newMesh->nTriangles; i++) {
-            newMesh->faceIndices[i] =
-                oldToNewFaceMapping.at(newMesh->faceIndices[i]);
-        }
-    }
-
-    // (5) write out the new material
     _manager.GetWriter(ObjectType::Material, newMtlId)->write(mtl);
-    return newMtlId;
+    return make_pair(newMtlId, move(oldToNewFaceMapping));
 }
 
 shared_ptr<TriangleMesh> cutMesh(
@@ -2304,7 +2240,7 @@ shared_ptr<TriangleMesh> cutMesh(
         mesh->faceIndices ? faceIdxs.data() : nullptr);
 }
 
-vector<pair<set<size_t>, size_t>> generateTexturePartitions(
+vector<pair<set<uint32_t>, size_t>> generateTexturePartitions(
     const uint32_t mtlID, const size_t maxTreeletBytes) {
     protobuf::Material mtl;
     _manager.GetReader(ObjectType::Material, mtlID)->read(&mtl);
@@ -2341,18 +2277,17 @@ vector<pair<set<size_t>, size_t>> generateTexturePartitions(
 
     struct AggFaceData {
         size_t size{0};
-        size_t adj[4] = {
-            numeric_limits<size_t>::max(), numeric_limits<size_t>::max(),
-            numeric_limits<size_t>::max(), numeric_limits<size_t>::max()};
+        uint32_t adj[4] = {
+            numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(),
+            numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max()};
         bool partitioned{false};
         bool adjacent{false};
     };
 
     vector<AggFaceData> faces;
 
-    // (1) make sure all the textures have the same number of faces
-    size_t faceCount = srcs.front()->numFaces();
-
+    // make sure all the textures have the same number of faces
+    uint32_t faceCount = srcs.front()->numFaces();
     for (auto &src : srcs) {
         if (src->numFaces() != faceCount) {
             throw runtime_error(
@@ -2361,6 +2296,7 @@ vector<pair<set<size_t>, size_t>> generateTexturePartitions(
         }
     }
 
+    // extract face information and size estimates
     faces.resize(faceCount);
     for (auto &src : srcs) {
         for (size_t i = 0; i < faceCount; i++) {
@@ -2372,7 +2308,7 @@ vector<pair<set<size_t>, size_t>> generateTexturePartitions(
             for (size_t j = 0; j < 4; j++) {
                 if (fdata.adjface(j) == -1) continue;
 
-                if (faces[i].adj[j] == numeric_limits<size_t>::max()) {
+                if (faces[i].adj[j] == numeric_limits<uint32_t>::max()) {
                     faces[i].adj[j] = fdata.adjface(j);
                 } else if (faces[i].adj[j] != fdata.adjface(j)) {
                     throw runtime_error(
@@ -2383,19 +2319,19 @@ vector<pair<set<size_t>, size_t>> generateTexturePartitions(
         }
     }
 
-    vector<pair<set<size_t>, size_t>> partitions;
+    vector<pair<set<uint32_t>, size_t>> partitions;  // [({faces}, est_size)]
 
     size_t partitionSize = 0;
-    set<size_t> partition;
-    set<size_t> adjacents;
-    set<size_t> unpartitionedFaces;
-    queue<size_t> nextToVisit;
+    set<uint32_t> partition;
+    set<uint32_t> adjacents;
+    set<uint32_t> unpartitionedFaces;
+    queue<uint32_t> nextToVisit;
 
     for (size_t i = 0; i < faceCount; i++) {
-        unpartitionedFaces.insert(i);
+        unpartitionedFaces.insert(unpartitionedFaces.end(), i);
     }
 
-    auto addFace = [&](const size_t id) {
+    auto addFace = [&](const uint32_t id) {
         partition.insert(id);
         partitionSize += faces[id].size;
         faces[id].partitioned = true;
@@ -2404,8 +2340,8 @@ vector<pair<set<size_t>, size_t>> generateTexturePartitions(
         for (size_t i = 0; i < 4; i++) {
             const auto adj = faces[id].adj[i];
 
-            if (adj != numeric_limits<size_t>::max() && !partition.count(adj) &&
-                !faces[adj].adjacent) {
+            if (adj != numeric_limits<uint32_t>::max() &&
+                !partition.count(adj) && !faces[adj].adjacent) {
                 faces[adj].adjacent = true;
                 partitionSize += faces[adj].size;
 
@@ -2425,7 +2361,6 @@ vector<pair<set<size_t>, size_t>> generateTexturePartitions(
 
             if (partitionSize > maxTreeletBytes) {
                 partitions.emplace_back(move(partition), partitionSize);
-
                 partition.clear();
                 partitionSize = 0;
                 for (auto &face : faces) face.adjacent = false;
@@ -2435,10 +2370,32 @@ vector<pair<set<size_t>, size_t>> generateTexturePartitions(
         }
     }
 
+    for (auto &p : partitions) {
+        auto newMtl = createMaterialPartition(mtlID, p.first);
+        const auto realSize = getTotalTextureSize(newMtl.first);
+        cout << "new material " << newMtl.first << " ("
+             << format_bytes(realSize) << "/" << format_bytes(p.second) << ")"
+             << endl;
+    }
+
     return partitions;
 }
 
-void TreeletDumpBVH::DumpMaterials() const {}
+void TreeletDumpBVH::DumpMaterials() const {
+    vector<uint32_t> allMaterialIds = _manager.getAllMaterialIds();
+
+    for (auto mtlId : allMaterialIds) {
+        const auto textureSize = getTotalTextureSize(mtlId);
+        cout << "mtl[" << mtlId << "] " << format_bytes(textureSize) << endl;
+
+        if (textureSize > maxTreeletBytes) {
+            // we need to turn this material into a compound material
+            generateTexturePartitions(mtlId, maxTreeletBytes);
+        }
+    }
+
+    abort();
+}
 
 vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
     // Assign IDs to each treelet
@@ -2448,6 +2405,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
     if (root) {
         DumpMaterials();
+        abort();
     }
 
     vector<unordered_map<uint64_t, uint32_t>> treeletNodeLocations(
