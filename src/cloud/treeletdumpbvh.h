@@ -189,6 +189,8 @@ class TreeletDumpBVH : public BVHAccel {
     void DumpSanityCheck(const std::vector<std::unordered_map<uint64_t, uint32_t>> &treeletNodeLocations) const;
     std::vector<uint32_t> DumpTreelets(bool root) const;
 
+    void DumpMaterials() const;
+
     std::vector<uint32_t> OrigAssignTreelets(const uint64_t) const;
 
     bool IntersectSendCheck(const Ray &ray,

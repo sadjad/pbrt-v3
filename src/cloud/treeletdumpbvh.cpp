@@ -2524,10 +2524,16 @@ vector<pair<set<size_t>, size_t>> generateTexturePartitions(
     return partitions;
 }
 
+void TreeletDumpBVH::DumpMaterials() const {}
+
 vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
     // Assign IDs to each treelet
     for (const TreeletInfo &treelet : allTreelets) {
         _manager.getNextId(ObjectType::Treelet, &treelet);
+    }
+
+    if (root) {
+        DumpMaterials();
     }
 
     vector<unordered_map<uint64_t, uint32_t>> treeletNodeLocations(
