@@ -2240,8 +2240,8 @@ shared_ptr<TriangleMesh> cutMesh(
         mesh->faceIndices ? faceIdxs.data() : nullptr);
 }
 
-vector<pair<set<uint32_t>, size_t>> generateTexturePartitions(
-    const uint32_t mtlID, const size_t maxTreeletBytes) {
+vector<uint32_t> generateTexturePartitions(const uint32_t mtlID,
+                                           const size_t maxTreeletBytes) {
     protobuf::Material mtl;
     _manager.GetReader(ObjectType::Material, mtlID)->read(&mtl);
     TextureList textures{getTextureList(mtl)};
@@ -2370,31 +2370,110 @@ vector<pair<set<uint32_t>, size_t>> generateTexturePartitions(
         }
     }
 
+    vector<uint32_t> newMtlIds;
+
     for (auto &p : partitions) {
         auto newMtl = createMaterialPartition(mtlID, p.first);
         const auto realSize = getTotalTextureSize(newMtl.first);
         cout << "new material " << newMtl.first << " ("
              << format_bytes(realSize) << "/" << format_bytes(p.second) << ")"
              << endl;
+
+        newMtlIds.push_back(newMtl.first);
+        _manager.addToCompoundMaterial(mtlID, newMtl.first,
+                                       move(newMtl.second));
     }
 
-    return partitions;
+    return newMtlIds;
 }
 
 void TreeletDumpBVH::DumpMaterials() const {
-    vector<uint32_t> allMaterialIds = _manager.getAllMaterialIds();
+    vector<pair<uint32_t, size_t>> allMaterials;
 
-    for (auto mtlId : allMaterialIds) {
-        const auto textureSize = getTotalTextureSize(mtlId);
+    for (auto mtlId : _manager.getAllMaterialIds()) {
+        auto textureSize = getTotalTextureSize(mtlId);
         cout << "mtl[" << mtlId << "] " << format_bytes(textureSize) << endl;
 
         if (textureSize > maxTreeletBytes) {
             // we need to turn this material into a compound material
-            generateTexturePartitions(mtlId, maxTreeletBytes);
+            auto newMtlIds = generateTexturePartitions(mtlId, maxTreeletBytes);
+            for (const auto i : newMtlIds) {
+                allMaterials.emplace_back(i, getTotalTextureSize(i));
+            }
+        } else {
+            if (textureSize == 0) {
+                textureSize = roost::file_size(
+                    _manager.getFilePath(ObjectType::Material, mtlId));
+            }
+
+            allMaterials.emplace_back(mtlId, textureSize);
         }
     }
 
-    abort();
+    // now let's make the material treelets
+    struct MaterialTreelet {
+        uint32_t id;
+        vector<uint32_t> materials{};
+        size_t size{0};
+
+        MaterialTreelet(const uint32_t tid) : id(tid) {}
+    };
+
+    vector<MaterialTreelet> treelets;
+    treelets.emplace_back(_manager.getNextId(ObjectType::Treelet));
+
+
+    // XXX assign material to treelets using first-fit bin-packing algorithm
+    // we should consider the alternatives, including next-fit and best-fit¡
+    sort(allMaterials.begin(), allMaterials.end(),
+         [](const auto &a, const auto &b) { return a.second > b.second; });
+
+    for (const auto &mtl : allMaterials) {
+        bool allotted = false;
+
+        for (auto &treelet : treelets) {
+            if (treelet.size + mtl.second <= maxTreeletBytes) {
+                treelet.materials.push_back(mtl.first);
+                treelet.size += mtl.second;
+                allotted = true;
+                break;
+            }
+        }
+
+        if (not allotted) {
+            treelets.emplace_back(_manager.getNextId(ObjectType::Treelet));
+            treelets.back().materials.push_back(mtl.first);
+            treelets.back().size += mtl.second;
+        }
+    }
+
+    // let's dump the material treelets
+    for (auto &t : treelets) {
+        auto writer = _manager.GetWriter(ObjectType::Treelet, t.id);
+
+        cout << "Dumping material treelet " << t.id << " with "
+             << t.materials.size() << " materials and " << format_bytes(t.size)
+             << " of textures... ";
+
+        const uint32_t numIncludedMaterials =
+            static_cast<uint32_t>(t.materials.size());
+
+        writer->write(numIncludedMaterials);
+
+        for (const auto mtlId : t.materials) {
+            _manager.recordMaterialTreeletId(mtlId, t.id);
+            _manager.recordDependency(ObjectKey{ObjectType::Treelet, t.id},
+                                      ObjectKey{ObjectType::Material, mtlId});
+
+            writer->write(mtlId);
+        }
+
+        writer->write(static_cast<uint32_t>(0));  // triangle meshes
+        writer->write(static_cast<uint32_t>(0));  // nodes
+        writer->write(static_cast<uint32_t>(0));  // triangles
+
+        cout << "done." << endl;
+    }
 }
 
 vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
@@ -2845,39 +2924,6 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                   << format_bytes(roost::file_size(_manager.getFilePath(
                          ObjectType::Treelet, sTreeletID)));
     }
-
-    // let's dump the material treelets
-    // if (root) {
-    //     for (auto &mTreelet : materialTreelets) {
-    //         const auto treeletId = mTreelet.first;
-    //         const auto &info = mTreelet.second;
-
-    //         auto writer = _manager.GetWriter(ObjectType::Treelet, treeletId);
-
-    //         cout << "Dumping material treelet " << treeletId << " with "
-    //              << info.materials.size() << " materials and "
-    //              << format_bytes(info.footprint) << " of textures... ";
-
-    //         const uint32_t numIncludedMaterials =
-    //             static_cast<uint32_t>(info.materials.size());
-
-    //         writer->write(numIncludedMaterials);
-
-    //         for (const auto mtlId : info.materials) {
-    //             _manager.recordDependency(
-    //                 ObjectKey{ObjectType::Treelet, treeletId},
-    //                 ObjectKey{ObjectType::Material, mtlId});
-
-    //             writer->write(mtlId);
-    //         }
-
-    //         writer->write(static_cast<uint32_t>(0));  // triangle meshes
-    //         writer->write(static_cast<uint32_t>(0));  // nodes
-    //         writer->write(static_cast<uint32_t>(0));  // triangles
-
-    //         cout << "done." << endl;
-    //     }
-    // }
 
     if (root) {
         ofstream staticAllocOut(_manager.getScenePath() + "/STATIC0_pre");
