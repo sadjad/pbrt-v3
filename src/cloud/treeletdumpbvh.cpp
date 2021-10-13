@@ -2328,8 +2328,8 @@ vector<shared_ptr<TriangleMesh>> cutTriangleMeshIntoParts(
 }
 
 shared_ptr<TriangleMesh> cutMesh(
-    TriangleMesh *mesh, const vector<size_t> &triNums,
-    unordered_map<TriangleMesh *, unordered_map<size_t, size_t>> &triNumRemap) {
+    const uint32_t newMeshId, TriangleMesh *mesh, const vector<size_t> &triNums,
+    unordered_map<size_t, pair<size_t, size_t>> &triNumRemap) {
     size_t numTris = triNums.size();
     unordered_map<int, size_t> vertexRemap;
     size_t newIdx = 0;
@@ -2342,8 +2342,10 @@ shared_ptr<TriangleMesh> cutMesh(
                 vertexRemap.emplace(idx, newIdx++);
             }
         }
-        triNumRemap[mesh].emplace(triNum, newTriNum++);
+
+        triNumRemap.emplace(triNum, make_pair(newMeshId, newTriNum++));
     }
+
     size_t numVerts = newIdx;
     CHECK_EQ(numVerts, vertexRemap.size());
 
@@ -2528,19 +2530,6 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
         _manager.getNextId(ObjectType::Treelet, &treelet);
     }
 
-    struct MaterialTreeletInfo {
-        set<uint32_t> materials{};
-        size_t footprint{0};
-    };
-
-    uint32_t currentMaterialTreelet = 0;
-    map<uint32_t, MaterialTreeletInfo> materialTreelets;
-
-    if (root) {
-        currentMaterialTreelet = _manager.getNextId(ObjectType::Treelet);
-        materialTreelets[currentMaterialTreelet];
-    }
-
     vector<unordered_map<uint64_t, uint32_t>> treeletNodeLocations(
         allTreelets.size());
     vector<unordered_map<TreeletDumpBVH *, uint32_t>> treeletInstanceStarts(
@@ -2629,8 +2618,9 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
         LOG(INFO) << "Dumping treelet " << sTreeletID << " (" << treeletID
                   << ") with " << numTriMeshes << " triangle mesh(es)";
 
-        unordered_map<TriangleMesh *, unordered_map<size_t, size_t>>
-            triNumRemap;
+        unordered_map<TriangleMesh *,
+                      unordered_map<size_t, pair<size_t, size_t>>>
+            triNumRemap;  // mesh -> (triNum -> (newMesh, newTriNum))
         unordered_map<TriangleMesh *, uint32_t> triMeshIDs;
         unordered_map<TriangleMesh *, uint32_t> compoundMeshes;
 
@@ -2639,52 +2629,23 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             TriangleMesh *mesh = kv.first;
             vector<size_t> &triNums = kv.second;
 
-            auto newMesh = cutMesh(mesh, triNums, triNumRemap);
+            auto newMeshId = _manager.getNextId(ObjectType::TriangleMesh);
+            auto newMesh = cutMesh(newMeshId, mesh, triNums, triNumRemap[mesh]);
+            triMeshIDs[newMesh.get()] = newMeshId;
 
-            vector<shared_ptr<TriangleMesh>> meshesToWrite;
-            meshesToWrite.push_back(newMesh);
-
-            // Getting the material for mesh
-            const uint32_t mtlID = getMaterialForMesh(
-                newMesh.get(), _manager.getMeshMaterialId(mesh));
+            const uint32_t mtlID = 0;
             _manager.recordMeshMaterialId(newMesh.get(), mtlID);
 
-            /* if the material/textures for this mesh don't fit within one
-            treelet, we need to cut this mesh into multiple parts */
-            const auto materialTextureSize = getTotalTextureSize(mtlID);
-
-            bool isCompound = false;
-
-            if (materialTextureSize > maxTreeletBytes) {
-                const size_t nParts =
-                    ceil(1.0 * materialTextureSize / maxTreeletBytes);
-
-                meshesToWrite = cutTriangleMeshIntoParts(newMesh.get(), nParts);
-                compoundMeshes.emplace(mesh, meshesToWrite[0]->nTriangles);
-
-                triMeshIDs[mesh] = _manager.getNextId(ObjectType::TriangleMesh);
-                isCompound = true;
-            }
+            vector<shared_ptr<TriangleMesh>> meshesToWrite;
+            meshesToWrite.push_back(move(newMesh));
 
             const uint32_t areaLightID = _manager.getMeshAreaLightId(mesh);
 
             for (auto &m : meshesToWrite) {
                 numTriMeshes++;
 
-                const auto sMeshID =
-                    _manager.getNextId(ObjectType::TriangleMesh);
-
-                if (!isCompound) {
-                    triMeshIDs[mesh] = sMeshID;
-                }
-
-                const uint32_t mtlID = getMaterialForMesh(
-                    m.get(), _manager.getMeshMaterialId(mesh));
-                _manager.recordMeshMaterialId(m.get(), mtlID);
-
-                LOG(INFO) << "Dumping triangle mesh " << sMeshID
-                          << " for treelet " << sTreeletID;
-
+                const auto sMeshID = triMeshIDs.at(m.get());
+                const uint32_t mtlID = _manager.getMeshMaterialId(m.get());
                 const auto mData = serdes::triangle_mesh::serialize(*m);
 
                 LOG(INFO) << "Mesh " << sMeshID << " contains " << m->nVertices
@@ -2694,16 +2655,8 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
                 const auto newMatSize = getTotalTextureSize(mtlID);
 
-                if (materialTreelets[currentMaterialTreelet].footprint +
-                        newMatSize >
-                    maxTreeletBytes) {
-                    currentMaterialTreelet =
-                        _manager.getNextId(ObjectType::Treelet);
-                    materialTreelets[currentMaterialTreelet];
-                }
-
                 MaterialKey mtlKey;
-                mtlKey.treelet = currentMaterialTreelet;
+                mtlKey.treelet = 0;
                 mtlKey.id = mtlID;
 
                 // writing the triangle mesh
@@ -2712,11 +2665,6 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                               sizeof(MaterialKey));
                 writer->write(areaLightID);
                 writer->write(mData);
-
-                materialTreelets[currentMaterialTreelet].materials.insert(
-                    mtlID);
-                materialTreelets[currentMaterialTreelet].footprint +=
-                    newMatSize;
             }
         }
 
@@ -2729,29 +2677,12 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
             triMeshIDs[instMesh] = sMeshID;
 
-            uint32_t mtlID = _manager.getMeshMaterialId(instMesh);
-            const auto instMeshData =
-                serdes::triangle_mesh::serialize(*instMesh);
+            uint32_t mtlID = 0;
+            const auto data = serdes::triangle_mesh::serialize(*instMesh);
             const uint32_t areaLightID = _manager.getMeshAreaLightId(instMesh);
 
-            if (meshesWithTexturesAlreadyCut.count(instMesh) == 0) {
-                mtlID = getMaterialForMesh(instMesh, mtlID);
-                _manager.recordMeshMaterialId(instMesh, mtlID);
-                meshesWithTexturesAlreadyCut.insert(instMesh);
-            }
-
-            const auto materialTextureSize = getTotalTextureSize(mtlID);
-
-            if (materialTreelets[currentMaterialTreelet].footprint +
-                    materialTextureSize >
-                maxTreeletBytes) {
-                currentMaterialTreelet =
-                    _manager.getNextId(ObjectType::Treelet);
-                materialTreelets[currentMaterialTreelet];
-            }
-
             MaterialKey mtlKey;
-            mtlKey.treelet = currentMaterialTreelet;
+            mtlKey.treelet = 0;
             mtlKey.id = mtlID;
 
             LOG(INFO) << "Dumping instance mesh " << sMeshID << " for treelet "
@@ -2759,22 +2690,14 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             LOG(INFO) << "Mesh " << sMeshID << " contains "
                       << instMesh->nVertices << " vertices and "
                       << instMesh->nTriangles << " triangles and its size is "
-                      << format_bytes(instMeshData.size());
+                      << format_bytes(data.size());
 
             // writing the triangle mesh
             writer->write(static_cast<uint64_t>(sMeshID));
             writer->write(reinterpret_cast<const char *>(&mtlKey),
                           sizeof(MaterialKey));
             writer->write(areaLightID);
-            writer->write(instMeshData);
-
-            /* _manager.recordDependency(
-                ObjectKey{ObjectType::Treelet, sTreeletID},
-                ObjectKey{ObjectType::Material, mtlID}); */
-
-            materialTreelets[currentMaterialTreelet].materials.insert(mtlID);
-            materialTreelets[currentMaterialTreelet].footprint +=
-                materialTextureSize;
+            writer->write(data);
         }
 
         // Write out nodes for treelet
@@ -2990,26 +2913,11 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                     CHECK_NOTNULL(tri);
                     TriangleMesh *mesh = tri->mesh.get();
 
-                    uint32_t sMeshID = triMeshIDs.at(mesh);
                     int origTriNum = (tri->v - mesh->vertexIndices) / 3;
+                    auto info = triNumRemap.at(mesh).at(origTriNum);
 
-                    int newTriNum;
-
-                    // is it a compound mesh?
-                    const bool isCompound = compoundMeshes.count(mesh) > 0;
-
-                    if (!isCompound) {
-                        newTriNum = triNumRemap.at(mesh).at(origTriNum);
-                    } else {
-                        const auto partSize = compoundMeshes.at(mesh);
-                        newTriNum = triNumRemap.at(mesh).at(origTriNum);
-                        sMeshID += newTriNum / partSize + 1;
-                        newTriNum =
-                            newTriNum - (newTriNum / partSize) * partSize;
-                    }
-
-                    triangle.mesh_id = sMeshID;
-                    triangle.tri_number = newTriNum;
+                    triangle.mesh_id = info.first;
+                    triangle.tri_number = info.second;
 
                     writer->write(reinterpret_cast<const char *>(&triangle),
                                   sizeof(triangle));
@@ -3061,37 +2969,37 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
     }
 
     // let's dump the material treelets
-    if (root) {
-        for (auto &mTreelet : materialTreelets) {
-            const auto treeletId = mTreelet.first;
-            const auto &info = mTreelet.second;
+    // if (root) {
+    //     for (auto &mTreelet : materialTreelets) {
+    //         const auto treeletId = mTreelet.first;
+    //         const auto &info = mTreelet.second;
 
-            auto writer = _manager.GetWriter(ObjectType::Treelet, treeletId);
+    //         auto writer = _manager.GetWriter(ObjectType::Treelet, treeletId);
 
-            cout << "Dumping material treelet " << treeletId << " with "
-                 << info.materials.size() << " materials and "
-                 << format_bytes(info.footprint) << " of textures... ";
+    //         cout << "Dumping material treelet " << treeletId << " with "
+    //              << info.materials.size() << " materials and "
+    //              << format_bytes(info.footprint) << " of textures... ";
 
-            const uint32_t numIncludedMaterials =
-                static_cast<uint32_t>(info.materials.size());
+    //         const uint32_t numIncludedMaterials =
+    //             static_cast<uint32_t>(info.materials.size());
 
-            writer->write(numIncludedMaterials);
+    //         writer->write(numIncludedMaterials);
 
-            for (const auto mtlId : info.materials) {
-                _manager.recordDependency(
-                    ObjectKey{ObjectType::Treelet, treeletId},
-                    ObjectKey{ObjectType::Material, mtlId});
+    //         for (const auto mtlId : info.materials) {
+    //             _manager.recordDependency(
+    //                 ObjectKey{ObjectType::Treelet, treeletId},
+    //                 ObjectKey{ObjectType::Material, mtlId});
 
-                writer->write(mtlId);
-            }
+    //             writer->write(mtlId);
+    //         }
 
-            writer->write(static_cast<uint32_t>(0));  // triangle meshes
-            writer->write(static_cast<uint32_t>(0));  // nodes
-            writer->write(static_cast<uint32_t>(0));  // triangles
+    //         writer->write(static_cast<uint32_t>(0));  // triangle meshes
+    //         writer->write(static_cast<uint32_t>(0));  // nodes
+    //         writer->write(static_cast<uint32_t>(0));  // triangles
 
-            cout << "done." << endl;
-        }
-    }
+    //         cout << "done." << endl;
+    //     }
+    // }
 
     if (root) {
         ofstream staticAllocOut(_manager.getScenePath() + "/STATIC0_pre");
