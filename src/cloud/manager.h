@@ -81,6 +81,8 @@ class SceneManager {
         return tmMaterialIds.at(tm);
     }
 
+    std::vector<uint32_t> getAllMaterialIds() const;
+
     void recordMeshAreaLightId(const TriangleMesh* tm, const uint32_t light) {
         tmAreaLightIds[tm] = light;
     }

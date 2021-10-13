@@ -321,6 +321,16 @@ vector<double> SceneManager::getTreeletProbs() const {
     return result;
 }
 
+vector<uint32_t> SceneManager::getAllMaterialIds() const {
+    set<uint32_t> res;
+
+    for (auto& kv : tmMaterialIds) {
+        res.insert(kv.second);
+    }
+
+    return {res.begin(), res.end()};
+}
+
 namespace global {
 SceneManager manager;
 }
