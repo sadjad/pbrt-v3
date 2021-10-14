@@ -2241,6 +2241,23 @@ shared_ptr<TriangleMesh> cutMesh(
         mesh->faceIndices ? faceIdxs.data() : nullptr);
 }
 
+vector<size_t> convertFaceIdsToTriNums(const TriangleMesh *mesh,
+                                       const set<uint32_t> &faceIds) {
+    if (!mesh->faceIndices) {
+        throw runtime_error("mesh doesn't have any face indices");
+    }
+
+    vector<size_t> output;
+
+    for (size_t i = 0; i < mesh->nTriangles; i++) {
+        if (faceIds.count(mesh->faceIndices[i])) {
+            output.push_back(i);
+        }
+    }
+
+    return output;
+}
+
 vector<uint32_t> generateTexturePartitions(const uint32_t mtlID,
                                            const size_t maxTreeletBytes) {
     protobuf::Material mtl;
