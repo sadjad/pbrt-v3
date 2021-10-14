@@ -2179,7 +2179,8 @@ pair<uint32_t, map<uint32_t, uint32_t>> createMaterialPartition(
 
 shared_ptr<TriangleMesh> cutMesh(
     const uint32_t newMeshId, TriangleMesh *mesh, const vector<size_t> &triNums,
-    unordered_map<size_t, pair<size_t, size_t>> &triNumRemap) {
+    unordered_map<size_t, pair<size_t, size_t>> &triNumRemap,
+    function<int(const int)> faceRemap = [](const int a) { return a; }) {
     size_t numTris = triNums.size();
     unordered_map<int, size_t> vertexRemap;
     size_t newIdx = 0;
@@ -2214,7 +2215,7 @@ shared_ptr<TriangleMesh> cutMesh(
             vertIdxs[i * 3 + j] = newIdx;
         }
         if (mesh->faceIndices) {
-            faceIdxs[i] = mesh->faceIndices[triNum];
+            faceIdxs[i] = faceRemap(mesh->faceIndices[triNum]);
         }
     }
 
@@ -2421,7 +2422,6 @@ void TreeletDumpBVH::DumpMaterials() const {
 
     vector<MaterialTreelet> treelets;
     treelets.emplace_back(_manager.getNextId(ObjectType::Treelet));
-
 
     // XXX assign material to treelets using first-fit bin-packing algorithm
     // we should consider the alternatives, including next-fit and best-fit¡
