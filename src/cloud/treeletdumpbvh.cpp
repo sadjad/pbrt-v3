@@ -2287,9 +2287,7 @@ vector<uint32_t> generateTexturePartitions(const uint32_t mtlID,
             throw runtime_error("ptex texture with no filename");
         }
 
-        const uint32_t newtid = _manager.getNextId(ObjectType::Texture);
         const string srcPath = _manager.getScenePath() + "/" + filename;
-
         srcs.emplace_back(PtexTexture::open(srcPath.c_str(), error, false));
     }
 
