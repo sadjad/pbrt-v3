@@ -2095,8 +2095,40 @@ TextureList getTextureList(const protobuf::Material &mtl) {
     return textures;
 }
 
-pair<uint32_t, map<uint32_t, uint32_t>> createMaterialPartition(
-    const uint32_t mtlId, const set<uint32_t> &usedFaces) {
+void createTexturePartition(const vector<string> &textureKey,
+                            const set<uint32_t> &usedFaces) {
+    auto oldToNewFaceMapping = make_shared<map<uint32_t, uint32_t>>();
+    vector<ObjectID> partKey;
+
+    for (auto &tex : textureKey) {
+        const uint32_t newtid = _manager.getNextId(ObjectType::Texture);
+        const auto newtex = _manager.getFileName(ObjectType::Texture, newtid);
+        const string srcPath = _manager.getScenePath() + "/" + tex;
+        const string dstPath = _manager.getScenePath() + "/" + newtex;
+
+        LOG(INFO) << "Cutting texture " << tex
+                  << ", size = " << format_bytes(roost::file_size(srcPath));
+
+        const auto mapping = cutPtexTexture(srcPath, dstPath, usedFaces);
+
+        LOG(INFO) << "Texture " << tex << " is cut into a new one (" << newtex
+                  << "), size = " << format_bytes(roost::file_size(dstPath));
+
+        oldToNewFaceMapping->insert(mapping.begin(), mapping.end());
+        partKey.push_back(newtid);
+    }
+
+    _manager.addToCompoundTexture(textureKey, partKey, oldToNewFaceMapping);
+}
+
+uint32_t createMaterialPartition(const uint32_t mtlId,
+                                 const vector<string> &oldTextureKey,
+                                 const vector<ObjectID> &partKey) {
+    map<string, ObjectID> textureKey;
+    for (size_t i = 0; i < oldTextureKey.size(); i++) {
+        textureKey[oldTextureKey.at(i)] = partKey.at(i);
+    }
+
     protobuf::Material mtl;
     _manager.GetReader(ObjectType::Material, mtlId)->read(&mtl);
 
@@ -2106,7 +2138,6 @@ pair<uint32_t, map<uint32_t, uint32_t>> createMaterialPartition(
     }
 
     auto newMtlId = _manager.getNextId(ObjectType::Material);
-    map<uint32_t, uint32_t> oldToNewFaceMapping;
 
     for (auto &tex : textures) {
         const int type = get<0>(tex);
@@ -2124,26 +2155,10 @@ pair<uint32_t, map<uint32_t, uint32_t>> createMaterialPartition(
             throw runtime_error("ptex texture with no filename");
         }
 
-        const uint32_t newtid = _manager.getNextId(ObjectType::Texture);
-        const string srcPath = _manager.getScenePath() + "/" + filename;
-        const string dstPath =
-            _manager.getScenePath() + "/" +
-            _manager.getFileName(ObjectType::Texture, newtid);
-
-        LOG(INFO) << "Cutting texture " << tname << " (" << filename << "), "
-                  << " size = " << format_bytes(roost::file_size(srcPath));
-
-        const auto mapping = cutPtexTexture(srcPath, dstPath, usedFaces);
-
-        LOG(INFO) << "Texture " << tname << " is cut into a new one ("
-                  << _manager.getFileName(ObjectType::Texture, newtid)
-                  << "), size = " << format_bytes(roost::file_size(dstPath));
-
-        oldToNewFaceMapping.insert(mapping.begin(), mapping.end());
-
         // update the path to texture in stex
         std::unique_ptr<std::string[]> filenameVal(new std::string[1]);
-        filenameVal[0] = _manager.getFileName(ObjectType::Texture, newtid);
+        filenameVal[0] =
+            _manager.getFileName(ObjectType::Texture, textureKey.at(filename));
         pset.AddString("filename", move(filenameVal), 1);
 
         if (type == FLOAT) {
@@ -2156,8 +2171,9 @@ pair<uint32_t, map<uint32_t, uint32_t>> createMaterialPartition(
             _manager.recordDependency({ObjectType::Material, newMtlId},
                                       {ObjectType::FloatTexture, newId});
 
-            _manager.recordDependency({ObjectType::FloatTexture, newId},
-                                      {ObjectType::Texture, newtid});
+            _manager.recordDependency(
+                {ObjectType::FloatTexture, newId},
+                {ObjectType::Texture, textureKey.at(filename)});
         } else {
             stexProto.mutable_params()->CopyFrom(to_protobuf(pset));
             const auto newId = _manager.getNextId(ObjectType::SpectrumTexture);
@@ -2168,13 +2184,14 @@ pair<uint32_t, map<uint32_t, uint32_t>> createMaterialPartition(
             _manager.recordDependency({ObjectType::Material, newMtlId},
                                       {ObjectType::SpectrumTexture, newId});
 
-            _manager.recordDependency({ObjectType::SpectrumTexture, newId},
-                                      {ObjectType::Texture, newtid});
+            _manager.recordDependency(
+                {ObjectType::SpectrumTexture, newId},
+                {ObjectType::Texture, textureKey.at(filename)});
         }
     }
 
     _manager.GetWriter(ObjectType::Material, newMtlId)->write(mtl);
-    return make_pair(newMtlId, move(oldToNewFaceMapping));
+    return newMtlId;
 }
 
 shared_ptr<TriangleMesh> cutMesh(
@@ -2270,6 +2287,7 @@ vector<uint32_t> generateTexturePartitions(const uint32_t mtlID,
 
     Ptex::String error;
     list<PtexPtr<PtexTexture>> srcs;
+    vector<string> textureKey;
 
     for (auto &tex : textures) {
         const int type = get<0>(tex);
@@ -2289,115 +2307,127 @@ vector<uint32_t> generateTexturePartitions(const uint32_t mtlID,
 
         const string srcPath = _manager.getScenePath() + "/" + filename;
         srcs.emplace_back(PtexTexture::open(srcPath.c_str(), error, false));
+        textureKey.push_back(filename);
     }
 
-    struct AggFaceData {
-        size_t size{0};
-        uint32_t adj[4] = {
-            numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max(),
-            numeric_limits<uint32_t>::max(), numeric_limits<uint32_t>::max()};
-        bool partitioned{false};
-        bool adjacent{false};
-    };
+    sort(textureKey.begin(), textureKey.end());
 
-    vector<AggFaceData> faces;
+    // have we already cut this texture group?
+    if (not _manager.isCompoundTexture(textureKey)) {
+        vector<pair<set<uint32_t>, size_t>>
+            partitions;  // [({faces}, est_size)]
 
-    // make sure all the textures have the same number of faces
-    uint32_t faceCount = srcs.front()->numFaces();
-    for (auto &src : srcs) {
-        if (src->numFaces() != faceCount) {
-            throw runtime_error(
-                "generateTexturePartitions: not all textures have the same "
-                "number of faces");
+        struct AggFaceData {
+            size_t size{0};
+            uint32_t adj[4] = {numeric_limits<uint32_t>::max(),
+                               numeric_limits<uint32_t>::max(),
+                               numeric_limits<uint32_t>::max(),
+                               numeric_limits<uint32_t>::max()};
+            bool partitioned{false};
+            bool adjacent{false};
+        };
+
+        vector<AggFaceData> faces;
+
+        // make sure all the textures have the same number of faces
+        uint32_t faceCount = srcs.front()->numFaces();
+        for (auto &src : srcs) {
+            if (src->numFaces() != faceCount) {
+                throw runtime_error(
+                    "generateTexturePartitions: not all textures have the same "
+                    "number of faces");
+            }
         }
-    }
 
-    // extract face information and size estimates
-    faces.resize(faceCount);
-    for (auto &src : srcs) {
+        // extract face information and size estimates
+        faces.resize(faceCount);
+        for (auto &src : srcs) {
+            for (size_t i = 0; i < faceCount; i++) {
+                auto &fdata = src->getFaceInfo(i);
+                faces[i].size += Ptex::DataSize(src->dataType()) *
+                                 src->numChannels() *
+                                 (fdata.isConstant() ? 1 : fdata.res.size());
+
+                for (size_t j = 0; j < 4; j++) {
+                    if (fdata.adjface(j) == -1) continue;
+
+                    if (faces[i].adj[j] == numeric_limits<uint32_t>::max()) {
+                        faces[i].adj[j] = fdata.adjface(j);
+                    } else if (faces[i].adj[j] != fdata.adjface(j)) {
+                        throw runtime_error(
+                            "generateTexturePartitions: two textures have "
+                            "different adjacency data");
+                    }
+                }
+            }
+        }
+
+        size_t partitionSize = 0;
+        set<uint32_t> partition;
+        set<uint32_t> adjacents;
+        set<uint32_t> unpartitionedFaces;
+        queue<uint32_t> nextToVisit;
+
         for (size_t i = 0; i < faceCount; i++) {
-            auto &fdata = src->getFaceInfo(i);
-            faces[i].size += Ptex::DataSize(src->dataType()) *
-                             src->numChannels() *
-                             (fdata.isConstant() ? 1 : fdata.res.size());
+            unpartitionedFaces.insert(unpartitionedFaces.end(), i);
+        }
 
-            for (size_t j = 0; j < 4; j++) {
-                if (fdata.adjface(j) == -1) continue;
+        auto addFace = [&](const uint32_t id) {
+            partition.insert(id);
+            partitionSize += faces[id].size;
+            faces[id].partitioned = true;
+            unpartitionedFaces.erase(id);
 
-                if (faces[i].adj[j] == numeric_limits<uint32_t>::max()) {
-                    faces[i].adj[j] = fdata.adjface(j);
-                } else if (faces[i].adj[j] != fdata.adjface(j)) {
-                    throw runtime_error(
-                        "generateTexturePartitions: two textures have "
-                        "different adjacency data");
+            for (size_t i = 0; i < 4; i++) {
+                const auto adj = faces[id].adj[i];
+
+                if (adj != numeric_limits<uint32_t>::max() &&
+                    !partition.count(adj) && !faces[adj].adjacent) {
+                    faces[adj].adjacent = true;
+                    partitionSize += faces[adj].size;
+
+                    if (not faces[adj].partitioned) {
+                        nextToVisit.push(adj);
+                    }
                 }
             }
-        }
-    }
+        };
 
-    vector<pair<set<uint32_t>, size_t>> partitions;  // [({faces}, est_size)]
+        while (!unpartitionedFaces.empty()) {
+            nextToVisit.push(*unpartitionedFaces.begin());
 
-    size_t partitionSize = 0;
-    set<uint32_t> partition;
-    set<uint32_t> adjacents;
-    set<uint32_t> unpartitionedFaces;
-    queue<uint32_t> nextToVisit;
+            while (!nextToVisit.empty()) {
+                const auto n = nextToVisit.front();
+                nextToVisit.pop();
 
-    for (size_t i = 0; i < faceCount; i++) {
-        unpartitionedFaces.insert(unpartitionedFaces.end(), i);
-    }
-
-    auto addFace = [&](const uint32_t id) {
-        partition.insert(id);
-        partitionSize += faces[id].size;
-        faces[id].partitioned = true;
-        unpartitionedFaces.erase(id);
-
-        for (size_t i = 0; i < 4; i++) {
-            const auto adj = faces[id].adj[i];
-
-            if (adj != numeric_limits<uint32_t>::max() &&
-                !partition.count(adj) && !faces[adj].adjacent) {
-                faces[adj].adjacent = true;
-                partitionSize += faces[adj].size;
-
-                if (not faces[adj].partitioned) {
-                    nextToVisit.push(adj);
+                if (partitionSize > maxTreeletBytes) {
+                    partitions.emplace_back(move(partition), partitionSize);
+                    partition.clear();
+                    partitionSize = 0;
+                    for (auto &face : faces) face.adjacent = false;
                 }
+
+                addFace(n);
             }
         }
-    };
 
-    while (!unpartitionedFaces.empty()) {
-        nextToVisit.push(*unpartitionedFaces.begin());
+        if (not partition.empty()) {
+            partitions.emplace_back(move(partition), partitionSize);
+        }
 
-        while (!nextToVisit.empty()) {
-            const auto n = nextToVisit.front();
-            nextToVisit.pop();
-
-            if (partitionSize > maxTreeletBytes) {
-                partitions.emplace_back(move(partition), partitionSize);
-                partition.clear();
-                partitionSize = 0;
-                for (auto &face : faces) face.adjacent = false;
-            }
-
-            addFace(n);
+        for (auto &p : partitions) {
+            createTexturePartition(textureKey, p.first);
         }
     }
 
     vector<uint32_t> newMtlIds;
 
-    for (auto &p : partitions) {
-        auto newMtl = createMaterialPartition(mtlID, p.first);
-        const auto realSize = getTotalTextureSize(newMtl.first);
-        cout << "new material " << newMtl.first << " ("
-             << format_bytes(realSize) << "/" << format_bytes(p.second) << ")"
-             << endl;
+    for (auto &p : _manager.getCompoundTexture(textureKey)) {
+        auto newMtl = createMaterialPartition(mtlID, textureKey, p.first);
 
-        newMtlIds.push_back(newMtl.first);
-        _manager.addToCompoundMaterial(mtlID, newMtl.first,
-                                       move(newMtl.second));
+        const auto realSize = getTotalTextureSize(newMtl);
+        newMtlIds.push_back(newMtl);
+        _manager.addToCompoundMaterial(mtlID, newMtl, p.second);
     }
 
     return newMtlIds;
@@ -2408,7 +2438,6 @@ void TreeletDumpBVH::DumpMaterials() const {
 
     for (auto mtlId : _manager.getAllMaterialIds()) {
         auto textureSize = getTotalTextureSize(mtlId);
-        cout << "mtl[" << mtlId << "] " << format_bytes(textureSize) << endl;
 
         if (textureSize > maxTreeletBytes) {
             // we need to turn this material into a compound material
@@ -2600,21 +2629,18 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
         // Write out rewritten meshes with only triangles in treelet
         for (auto &kv : trianglesInTreelet) {
-            TriangleMesh *mesh = kv.first;
-            vector<size_t> &triNums = kv.second;
+            TriangleMesh *const mesh = kv.first;
+            const vector<size_t> &triNums = kv.second;
 
             vector<shared_ptr<TriangleMesh>> meshesToWrite;
 
-            auto newMeshId = _manager.getNextId(ObjectType::TriangleMesh);
-
-            shared_ptr<TriangleMesh> tmPtr;
-            TriangleMesh *newMesh;
+            shared_ptr<TriangleMesh> newMesh;
+            const auto newMeshId = _manager.getNextId(ObjectType::TriangleMesh);
 
             if (!triNums.empty()) {
-                tmPtr = cutMesh(newMeshId, mesh, triNums, triNumRemap[mesh]);
-                newMesh = tmPtr.get();
+                newMesh = cutMesh(newMeshId, mesh, triNums, triNumRemap[mesh]);
             } else {
-                newMesh = mesh;
+                newMesh = {mesh, [](TriangleMesh *) {}};
 
                 auto &t = triNumRemap[mesh];
                 for (size_t i = 0; i < mesh->nTriangles; i++) {
@@ -2630,18 +2656,21 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
                 for (const auto &part : mtlParts) {
                     const uint32_t partMtlId = part.first;
-                    const auto &faceMap = part.second;
-                    const auto newTriNums =
-                        convertFaceIdsToTriNums(newMesh, faceMap);
+                    const auto &faceMap = *part.second;
+                    const auto partTriNums =
+                        convertFaceIdsToTriNums(newMesh.get(), faceMap);
 
                     const auto partMeshId =
                         _manager.getNextId(ObjectType::TriangleMesh);
+
+                    LOG(INFO)
+                        << "Making a compound mesh part, id = " << partMeshId;
 
                     unordered_map<size_t, pair<uint64_t, uint64_t>>
                         partTriNumRemap;
 
                     auto partMesh = cutMesh(
-                        partMeshId, newMesh, newTriNums, partTriNumRemap,
+                        partMeshId, newMesh.get(), partTriNums, partTriNumRemap,
                         [&faceMap](const int a) { return faceMap.at(a); });
 
                     // merge old and new triNumRemap
@@ -2649,7 +2678,9 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                     for (auto &kv : oldTriNumRemap) {
                         if (kv.second.first == newMeshId &&
                             partTriNumRemap.count(kv.second.second)) {
-                            kv.second = partTriNumRemap.at(kv.second.second);
+                            auto &n = partTriNumRemap.at(kv.second.second);
+                            kv.second.first = n.first;
+                            kv.second.second = n.second;
                         }
                     }
 
@@ -2657,10 +2688,19 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
                     _manager.recordMeshMaterialId(partMesh.get(), partMtlId);
                     meshesToWrite.push_back(move(partMesh));
                 }
+
+                for (auto &kv : triNumRemap.at(mesh)) {
+                    if (kv.second.first == newMeshId) {
+                        throw runtime_error(
+                            "some triangles didn't get remapped: " +
+                            to_string(kv.first) + ", " +
+                            to_string(kv.second.second));
+                    }
+                }
             } else {
-                triMeshIDs[newMesh] = newMeshId;
-                _manager.recordMeshMaterialId(newMesh, mtlID);
-                meshesToWrite.push_back(move(tmPtr));
+                triMeshIDs[newMesh.get()] = newMeshId;
+                _manager.recordMeshMaterialId(newMesh.get(), mtlID);
+                meshesToWrite.push_back(move(newMesh));
             }
 
             const uint32_t areaLightID = _manager.getMeshAreaLightId(mesh);

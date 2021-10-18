@@ -85,7 +85,7 @@ class SceneManager {
 
     void addToCompoundTexture(
         const std::vector<std::string>& texKey,
-        const std::vector<std::string>& partKey,
+        const std::vector<ObjectID>& partKey,
         std::shared_ptr<std::map<uint32_t, uint32_t>> oldToNew) {
         compoundTextures[texKey].emplace_back(partKey, std::move(oldToNew));
     }
@@ -94,7 +94,7 @@ class SceneManager {
         return compoundTextures.count(texKey);
     }
 
-    std::vector<std::pair<std::vector<std::string>,
+    std::vector<std::pair<std::vector<ObjectID>,
                           std::shared_ptr<std::map<uint32_t, uint32_t>>>>&
     getCompoundTexture(const std::vector<std::string>& texKey) {
         return compoundTextures.at(texKey);
@@ -162,7 +162,7 @@ class SceneManager {
 
     std::map<
         std::vector<std::string>,
-        std::vector<std::pair<std::vector<std::string>,
+        std::vector<std::pair<std::vector<ObjectID>,
                               std::shared_ptr<std::map<uint32_t, uint32_t>>>>>
         compoundTextures;
 
