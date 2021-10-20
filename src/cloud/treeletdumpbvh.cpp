@@ -2054,8 +2054,10 @@ size_t getTotalTextureSize(const uint32_t materialId) {
     return output;
 }
 
-using TextureList = vector<tuple<int, string, uint32_t, protobuf::FloatTexture,
-                                 protobuf::SpectrumTexture>>;
+using TextureList =
+    vector<tuple<int /* type */, string /* name */, uint32_t /* id */,
+                 protobuf::FloatTexture, protobuf::SpectrumTexture,
+                 string /* filename */>>;
 
 enum { FLOAT, SPECTRUM };
 
@@ -2072,8 +2074,10 @@ TextureList getTextureList(const protobuf::Material &mtl) {
         if (ftex.name() == "imagemap") {
             throw runtime_error("imagemap textures are not supported");
         } else if (ftex.name() == "ptex") {
+            const ParamSet pset = from_protobuf(ftex.params());
             textures.emplace_back(FLOAT, name, id, ftex,
-                                  protobuf::SpectrumTexture{});
+                                  protobuf::SpectrumTexture{},
+                                  pset.FindOneString("filename", ""));
         }
     }
 
@@ -2087,12 +2091,19 @@ TextureList getTextureList(const protobuf::Material &mtl) {
         if (stex.name() == "imagemap") {
             throw runtime_error("imagemap textures are not supported");
         } else if (stex.name() == "ptex") {
+            const ParamSet pset = from_protobuf(stex.params());
             textures.emplace_back(SPECTRUM, name, id, protobuf::FloatTexture{},
-                                  stex);
+                                  stex, pset.FindOneString("filename", ""));
         }
     }
 
     return textures;
+}
+
+TextureList getTextureList(const uint32_t mtlId) {
+    protobuf::Material mtl;
+    _manager.GetReader(ObjectType::Material, mtlId)->read(&mtl);
+    return getTextureList(mtl);
 }
 
 void createTexturePartition(const vector<string> &textureKey,
