@@ -2445,7 +2445,8 @@ vector<uint32_t> generateTexturePartitions(const uint32_t mtlID,
 }
 
 void TreeletDumpBVH::DumpMaterials() const {
-    vector<pair<uint32_t, size_t>> allMaterials;
+    vector<pair<uint32_t, size_t>> texturedMaterials;
+    vector<pair<uint32_t, size_t>> noTextureMaterials;
 
     for (auto mtlId : _manager.getAllMaterialIds()) {
         auto textureSize = getTotalTextureSize(mtlId);
@@ -2454,22 +2455,87 @@ void TreeletDumpBVH::DumpMaterials() const {
             // we need to turn this material into a compound material
             auto newMtlIds = generateTexturePartitions(mtlId, maxTreeletBytes);
             for (const auto i : newMtlIds) {
-                allMaterials.emplace_back(i, getTotalTextureSize(i));
+                texturedMaterials.emplace_back(i, getTotalTextureSize(i));
             }
+        } else if (textureSize) {
+            texturedMaterials.emplace_back(mtlId, textureSize);
         } else {
-            if (textureSize == 0) {
-                textureSize = roost::file_size(
-                    _manager.getFilePath(ObjectType::Material, mtlId));
-            }
-
-            allMaterials.emplace_back(mtlId, textureSize);
+            noTextureMaterials.emplace_back(
+                mtlId, roost::file_size(
+                           _manager.getFilePath(ObjectType::Material, mtlId)));
         }
+    }
+
+    map<vector<string>, pair<vector<uint32_t>, size_t>> textureKeyToMaterial;
+    for (auto &m : texturedMaterials) {
+        auto textureList = getTextureList(m.first);
+
+        if (textureList.empty()) {
+            throw runtime_error("texture list is empty");
+        }
+
+        // getting the texture key
+        vector<string> textureKey;
+        for (auto &t : textureList) textureKey.push_back(get<5>(t));
+        sort(textureKey.begin(), textureKey.end());
+
+        if (textureKeyToMaterial.count(textureKey) == 0) {
+            size_t s = 0;
+            for (auto &t : textureKey) {
+                s += roost::file_size(_manager.getScenePath() + "/" + t);
+            }
+            textureKeyToMaterial[textureKey].second = s;
+        }
+
+        textureKeyToMaterial[textureKey].first.push_back(m.first);
+    }
+
+    auto isSubset = [](const vector<string> &sub, const vector<string> &super) {
+        if (super.size() <= sub.size()) return false;
+
+        size_t i = 0;
+        for (size_t j = 0; i < sub.size() && j < super.size();) {
+            if (sub[i] == super[j]) i++;
+            j++;
+        }
+
+        return i == sub.size();
+    };
+
+    // merging keys
+    for (auto it = textureKeyToMaterial.begin();
+         it != textureKeyToMaterial.end();) {
+        bool found = false;
+
+        for (auto jt = textureKeyToMaterial.begin();
+             jt != textureKeyToMaterial.end(); jt++) {
+            if (jt == it) continue;
+            if (isSubset(it->first, jt->first)) {
+                jt->second.first.insert(jt->second.first.end(),
+                                        it->second.first.begin(),
+                                        it->second.first.end());
+
+                found = true;
+                it = textureKeyToMaterial.erase(it);
+                break;
+            }
+        }
+
+        if (!found) {
+            it++;
+        }
+    }
+
+    vector<pair<vector<string>, size_t>> textureKeys;
+    for (auto &t : textureKeyToMaterial) {
+        textureKeys.emplace_back(t.first, t.second.second);
     }
 
     // now let's make the material treelets
     struct MaterialTreelet {
         uint32_t id;
         vector<uint32_t> materials{};
+        vector<vector<string>> textureKeys{};
         size_t size{0};
 
         MaterialTreelet(const uint32_t tid) : id(tid) {}
@@ -2480,16 +2546,16 @@ void TreeletDumpBVH::DumpMaterials() const {
 
     // XXX assign material to treelets using first-fit bin-packing algorithm
     // we should consider the alternatives, including next-fit and best-fit¡
-    sort(allMaterials.begin(), allMaterials.end(),
+    sort(textureKeys.begin(), textureKeys.end(),
          [](const auto &a, const auto &b) { return a.second > b.second; });
 
-    for (const auto &mtl : allMaterials) {
+    for (const auto &tk : textureKeys) {
         bool allotted = false;
 
         for (auto &treelet : treelets) {
-            if (treelet.size + mtl.second <= maxTreeletBytes) {
-                treelet.materials.push_back(mtl.first);
-                treelet.size += mtl.second;
+            if (treelet.size + tk.second <= maxTreeletBytes) {
+                treelet.textureKeys.push_back(tk.first);
+                treelet.size += tk.second;
                 allotted = true;
                 break;
             }
@@ -2497,9 +2563,27 @@ void TreeletDumpBVH::DumpMaterials() const {
 
         if (not allotted) {
             treelets.emplace_back(_manager.getNextId(ObjectType::Treelet));
-            treelets.back().materials.push_back(mtl.first);
-            treelets.back().size += mtl.second;
+            treelets.back().textureKeys.push_back(tk.first);
+            treelets.back().size += tk.second;
         }
+    }
+
+    for (auto &t : treelets) {
+        for (auto &tk : t.textureKeys) {
+            if (textureKeyToMaterial.count(tk) == 0) continue;
+            auto &mats = textureKeyToMaterial[tk].first;
+            t.materials.insert(t.materials.end(), mats.begin(), mats.end());
+        }
+    }
+
+    // how about materials with no key?
+    // let's put all of them into the smallest material treelet!
+    auto minIt = min_element(
+        treelets.begin(), treelets.end(),
+        [](const auto &x, const auto &y) { return x.size < y.size; });
+
+    for (auto &ntm : noTextureMaterials) {
+        minIt->materials.push_back(ntm.first);
     }
 
     // let's dump the material treelets
