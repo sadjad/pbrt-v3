@@ -2622,7 +2622,7 @@ void TreeletDumpBVH::DumpMaterials() const {
                     allDeps.count(dep)) {
                     for (const auto &tdep : allDeps.at(dep)) {
                         if (tdep.type == ObjectType::Texture) {
-                            texs.insert(dep.id);
+                            texs.insert(tdep.id);
                         }
                     }
                 }
