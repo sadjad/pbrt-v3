@@ -32,6 +32,8 @@ class LiteRecordWriter {
     void write(const char* buf, const uint32_t len);
     void write(const std::string& str) { write(str.data(), str.length()); }
 
+    void write_raw(const std::string &str);
+
     template <class T>
     void write(const T& t);
 

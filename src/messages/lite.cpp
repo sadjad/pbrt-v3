@@ -27,3 +27,7 @@ void LiteRecordWriter::write(const char* buf, const uint32_t len) {
     fout_.write(reinterpret_cast<const char*>(&len), sizeof(len));
     fout_.write(buf, len);
 }
+
+void LiteRecordWriter::write_raw(const string& str) {
+    fout_.write(str.data(), str.length());
+}
