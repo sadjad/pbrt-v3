@@ -129,7 +129,7 @@ unique_ptr<protobuf::RecordWriter> SceneManager::GetWriter(
     return make_unique<protobuf::RecordWriter>(FileDescriptor(CheckSystemCall(
         "openat",
         openat(sceneFD->fd_num(), getFileName(type, id).c_str(),
-               O_WRONLY | O_CREAT | O_EXCL,
+               O_WRONLY | O_CREAT | O_TRUNC,
                S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH))));
 }
 
