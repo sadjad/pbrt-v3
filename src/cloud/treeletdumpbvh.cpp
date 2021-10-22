@@ -2629,7 +2629,8 @@ void TreeletDumpBVH::DumpMaterials() const {
             }
         }
 
-        auto writer = _manager.GetWriter(ObjectType::Treelet, t.id);
+        auto writer = make_unique<LiteRecordWriter>(
+            _manager.getFilePath(ObjectType::Treelet, t.id));
 
         cout << "Dumping material treelet " << t.id << " with "
              << t.materials.size() << " materials and " << format_bytes(t.size)
@@ -2645,14 +2646,14 @@ void TreeletDumpBVH::DumpMaterials() const {
         writer->write(static_cast<uint32_t>(stexs.size()));
         for (const auto id : stexs) {
             writer->write(id);
-            writer->write(roost::read_file(
+            writer->write_raw(roost::read_file(
                 _manager.getFilePath(ObjectType::SpectrumTexture, id)));
         }
 
         writer->write(static_cast<uint32_t>(ftexs.size()));
         for (const auto id : ftexs) {
             writer->write(id);
-            writer->write(roost::read_file(
+            writer->write_raw(roost::read_file(
                 _manager.getFilePath(ObjectType::FloatTexture, id)));
         }
 
@@ -2661,7 +2662,7 @@ void TreeletDumpBVH::DumpMaterials() const {
             _manager.recordMaterialTreeletId(id, t.id);
 
             writer->write(id);
-            writer->write(roost::read_file(
+            writer->write_raw(roost::read_file(
                 _manager.getFilePath(ObjectType::Material, id)));
         }
 
