@@ -2601,23 +2601,68 @@ void TreeletDumpBVH::DumpMaterials() const {
 
     // let's dump the material treelets
     for (auto &t : treelets) {
+        set<uint32_t> texs;
+        set<uint32_t> stexs;
+        set<uint32_t> ftexs;
+
+        auto &allDeps = _manager.getDependenciesMap();
+
+        for (auto &mat : t.materials) {
+            if (allDeps.count({ObjectType::Material, mat}) == 0) continue;
+
+            for (const auto &dep : allDeps.at({ObjectType::Material, mat})) {
+                if (dep.type == ObjectType::SpectrumTexture) {
+                    stexs.insert(dep.id);
+                } else if (dep.type == ObjectType::FloatTexture) {
+                    ftexs.insert(dep.id);
+                }
+
+                if ((dep.type == ObjectType::SpectrumTexture ||
+                     dep.type == ObjectType::FloatTexture) &&
+                    allDeps.count(dep)) {
+                    for (const auto &tdep : allDeps.at(dep)) {
+                        if (tdep.type == ObjectType::Texture) {
+                            texs.insert(dep.id);
+                        }
+                    }
+                }
+            }
+        }
+
         auto writer = _manager.GetWriter(ObjectType::Treelet, t.id);
 
         cout << "Dumping material treelet " << t.id << " with "
              << t.materials.size() << " materials and " << format_bytes(t.size)
              << " of textures... ";
 
-        const uint32_t numIncludedMaterials =
-            static_cast<uint32_t>(t.materials.size());
+        writer->write(static_cast<uint32_t>(texs.size()));
+        for (const auto id : texs) {
+            writer->write(id);
+            writer->write(roost::read_file(
+                _manager.getFilePath(ObjectType::Texture, id)));
+        }
 
-        writer->write(numIncludedMaterials);
+        writer->write(static_cast<uint32_t>(stexs.size()));
+        for (const auto id : stexs) {
+            writer->write(id);
+            writer->write(roost::read_file(
+                _manager.getFilePath(ObjectType::SpectrumTexture, id)));
+        }
 
-        for (const auto mtlId : t.materials) {
-            _manager.recordMaterialTreeletId(mtlId, t.id);
-            _manager.recordDependency(ObjectKey{ObjectType::Treelet, t.id},
-                                      ObjectKey{ObjectType::Material, mtlId});
+        writer->write(static_cast<uint32_t>(ftexs.size()));
+        for (const auto id : ftexs) {
+            writer->write(id);
+            writer->write(roost::read_file(
+                _manager.getFilePath(ObjectType::FloatTexture, id)));
+        }
 
-            writer->write(mtlId);
+        writer->write(static_cast<uint32_t>(t.materials.size()));
+        for (const auto id : t.materials) {
+            _manager.recordMaterialTreeletId(id, t.id);
+
+            writer->write(id);
+            writer->write(roost::read_file(
+                _manager.getFilePath(ObjectType::Material, id)));
         }
 
         writer->write(static_cast<uint32_t>(0));  // triangle meshes
@@ -2717,8 +2762,10 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
         auto writer = make_unique<LiteRecordWriter>(
             _manager.getFilePath(ObjectType::Treelet, sTreeletID));
 
-        const uint32_t numIncludedMaterials = 0;
-        writer->write(numIncludedMaterials);
+        writer->write(static_cast<uint32_t>(0));  // numTexs
+        writer->write(static_cast<uint32_t>(0));  // numStexs
+        writer->write(static_cast<uint32_t>(0));  // numFtexs
+        writer->write(static_cast<uint32_t>(0));  // numMats
 
         uint32_t numTriMeshes = 0;
         writer->write(numTriMeshes);
@@ -2840,7 +2887,7 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
             }
         }
 
-        writer->write_at(sizeof(uint32_t) * 2, numTriMeshes);
+        writer->write_at(sizeof(uint32_t) * 4 * 2, numTriMeshes);
 
         // Write out nodes for treelet
         /* format:
