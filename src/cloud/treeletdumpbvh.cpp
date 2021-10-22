@@ -2450,6 +2450,8 @@ void TreeletDumpBVH::DumpMaterials() const {
     vector<pair<uint32_t, size_t>> texturedMaterials;
     vector<pair<uint32_t, size_t>> noTextureMaterials;
 
+    cout << "Dumping materials started." << endl;
+
     for (auto mtlId : _manager.getAllMaterialIds()) {
         auto textureSize = getTotalTextureSize(mtlId);
 
@@ -2467,6 +2469,10 @@ void TreeletDumpBVH::DumpMaterials() const {
                            _manager.getFilePath(ObjectType::Material, mtlId)));
         }
     }
+
+    cout << "Dumping " << texturedMaterials.size()
+         << " textured material(s) and " << noTextureMaterials.size()
+         << " untextured materials." << endl;
 
     map<vector<string>, pair<vector<uint32_t>, size_t>> textureKeyToMaterial;
     for (auto &m : texturedMaterials) {
@@ -2504,6 +2510,8 @@ void TreeletDumpBVH::DumpMaterials() const {
         return i == sub.size();
     };
 
+    cout << "Found " << textureKeyToMaterial.size() << " texture key(s)... ";
+
     // merging keys
     for (auto it = textureKeyToMaterial.begin();
          it != textureKeyToMaterial.end();) {
@@ -2527,6 +2535,9 @@ void TreeletDumpBVH::DumpMaterials() const {
             it++;
         }
     }
+
+    cout << textureKeyToMaterial.size() << " texture key(s) after merge."
+         << endl;
 
     vector<pair<vector<string>, size_t>> textureKeys;
     for (auto &t : textureKeyToMaterial) {
