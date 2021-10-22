@@ -2101,6 +2101,10 @@ TextureList getTextureList(const protobuf::Material &mtl) {
 }
 
 TextureList getTextureList(const uint32_t mtlId) {
+    if (mtlId == numeric_limits<uint32_t>::max()) {
+        return {};
+    }
+
     protobuf::Material mtl;
     _manager.GetReader(ObjectType::Material, mtlId)->read(&mtl);
     return getTextureList(mtl);
@@ -2140,13 +2144,13 @@ uint32_t createMaterialPartition(const uint32_t mtlId,
         textureKey[oldTextureKey.at(i)] = partKey.at(i);
     }
 
-    protobuf::Material mtl;
-    _manager.GetReader(ObjectType::Material, mtlId)->read(&mtl);
-
-    TextureList textures{getTextureList(mtl)};
+    TextureList textures{mtlId};
     if (textures.empty()) {
         throw runtime_error("the material has no textures");
     }
+
+    protobuf::Material mtl;
+    _manager.GetReader(ObjectType::Material, mtlId)->read(&mtl);
 
     auto newMtlId = _manager.getNextId(ObjectType::Material);
 
@@ -2288,9 +2292,7 @@ vector<size_t> convertFaceIdsToTriNums(const TriangleMesh *mesh,
 
 vector<uint32_t> generateTexturePartitions(const uint32_t mtlID,
                                            const size_t maxTreeletBytes) {
-    protobuf::Material mtl;
-    _manager.GetReader(ObjectType::Material, mtlID)->read(&mtl);
-    TextureList textures{getTextureList(mtl)};
+    TextureList textures{getTextureList(mtlID)};
 
     if (textures.empty()) {
         throw runtime_error("generateTexturePartitions: no textures");

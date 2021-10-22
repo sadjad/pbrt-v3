@@ -325,6 +325,7 @@ vector<uint32_t> SceneManager::getAllMaterialIds() const {
     set<uint32_t> res;
 
     for (auto& kv : tmMaterialIds) {
+        if (kv.second == numeric_limits<uint32_t>::max()) continue;
         res.insert(kv.second);
     }
 
