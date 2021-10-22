@@ -143,6 +143,18 @@ class SceneManager {
 
     size_t treeletCount();
 
+    void addInMemoryTexture(const std::string& path,
+                            std::shared_ptr<char>&& data, const size_t length) {
+        inMemoryTextures.emplace(path, make_pair(std::move(data), length));
+    }
+
+    std::pair<std::shared_ptr<char>, size_t> getInMemoryTexture(
+        const std::string& path) {
+        return inMemoryTextures.at(path);
+    }
+
+    bool hasInMemoryTextures() const { return not inMemoryTextures.empty(); }
+
   private:
     void loadManifest();
     void loadTreeletDependencies();
@@ -157,6 +169,10 @@ class SceneManager {
     std::map<ObjectKey, uint64_t> objectSizes{};
     std::map<ObjectKey, std::set<ObjectKey>> dependencies;
 
+    std::map<std::string, std::pair<std::shared_ptr<char>, size_t>>
+        inMemoryTextures;
+
+    // Dumping treelets
     std::map<const TriangleMesh*, uint32_t> tmMaterialIds;
     std::map<const TriangleMesh*, uint32_t> tmAreaLightIds;
 

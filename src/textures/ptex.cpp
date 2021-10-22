@@ -33,12 +33,15 @@
 // textures/ptex.cpp*
 #include "textures/ptex.h"
 
+#include <Ptexture.h>
+
+#include <memory>
+
+#include "cloud/manager.h"
 #include "error.h"
 #include "interaction.h"
 #include "paramset.h"
 #include "stats.h"
-
-#include <Ptexture.h>
 
 namespace pbrt {
 
@@ -58,6 +61,57 @@ struct : public PtexErrorHandler {
     void reportError(const char *error) override { Error("%s", error); }
 } errorHandler;
 
+class : public PtexInputHandler {
+  public:
+    Handle open(const char *path) override {
+        auto tex = global::manager.getInMemoryTexture(path);
+        openedTextures.emplace_back(
+            std::make_unique<OpenedTexture>(std::move(tex.first), tex.second));
+        return reinterpret_cast<Handle>(openedTextures.back().get());
+    }
+
+    void seek(Handle handle, int64_t pos) override {
+        reinterpret_cast<OpenedTexture *>(handle)->pos = pos;
+    }
+
+    size_t read(void *buffer, size_t size, Handle handle) override {
+        auto h = reinterpret_cast<OpenedTexture *>(handle);
+        auto ptr = h->data.get() + h->pos;
+        size_t len = (h->pos + size > h->length) ? (h->length - h->pos) : size;
+        if (len > 0) {
+            memcpy(buffer, ptr, len);
+            h->pos += len;
+        }
+        return len;
+    }
+
+    bool close(Handle handle) override {
+        for (auto it = openedTextures.begin(); it != openedTextures.end();
+             it++) {
+            if (it->get() == handle) {
+                openedTextures.erase(it);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    const char *lastError() override { return nullptr; }
+
+  private:
+    struct OpenedTexture {
+        OpenedTexture(std::shared_ptr<char> &&data, const size_t length)
+            : data(std::move(data)), length(length) {}
+
+        std::shared_ptr<char> data;
+        size_t length;
+        int64_t pos{0};
+    };
+
+    std::list<std::unique_ptr<OpenedTexture>> openedTextures;
+} inMemoryInputHandler;
+
 }  // anonymous namespace
 
 // PtexTexture Method Definitions
@@ -70,7 +124,10 @@ PtexTexture<T>::PtexTexture(const std::string &filename, Float gamma)
         size_t maxMem = 1ull << 32;  // 4GB
         bool premultiply = true;
 
-        cache = Ptex::PtexCache::create(maxFiles, maxMem, premultiply, nullptr,
+        cache = Ptex::PtexCache::create(maxFiles, maxMem, premultiply,
+                                        global::manager.hasInMemoryTextures()
+                                            ? &inMemoryInputHandler
+                                            : nullptr,
                                         &errorHandler);
         // TODO? cache->setSearchPath(...);
     }
@@ -128,7 +185,7 @@ inline Spectrum fromResult<Spectrum>(int nc, float *result) {
     if (nc == 1)
         return Spectrum(result[0]);
     else {
-        Float rgb[3] = { result[0], result[1], result[2] };
+        Float rgb[3] = {result[0], result[1], result[2]};
         return Spectrum::FromRGB(rgb);
     }
 }
@@ -150,8 +207,8 @@ T PtexTexture<T>::Evaluate(const SurfaceInteraction &si) const {
 
     float result[3];
     int firstChan = 0;
-    filter->eval(result, firstChan, nc, si.faceIndex, si.uv[0],
-                 si.uv[1], si.dudx, si.dvdx, si.dudy, si.dvdy);
+    filter->eval(result, firstChan, nc, si.faceIndex, si.uv[0], si.uv[1],
+                 si.dudx, si.dvdx, si.dudy, si.dvdy);
     filter->release();
     texture->release();
 
