@@ -294,15 +294,74 @@ void CloudBVH::loadTreeletBase(const uint32_t root_id, const char *buffer,
 
     LiteRecordReader reader{buffer, length};
 
-    /* read in and load the materials included in this treelet */
+    /* read in the textures & materials included in this treelet */
+    uint32_t included_texture_count = 0;
+    reader.read(&included_texture_count);
+
+    // PTEX TEXTURES
+    for (size_t i = 0; i < included_texture_count; i++) {
+        uint32_t id;
+        reader.read(&id);
+
+        const char *data;
+        size_t len;
+        reader.read(&data, &len);
+
+        shared_ptr<char> storage{new char[len], default_delete<char[]>()};
+        memcpy(storage.get(), data, len);
+
+        _manager.addInMemoryTexture(
+            _manager.getFileName(ObjectType::Texture, id), move(storage), len);
+    }
+
+    // SPECTRUM TEXTURES
+    uint32_t included_spectrum_count = 0;
+    reader.read(&included_spectrum_count);
+
+    for (size_t i = 0; i < included_spectrum_count; i++) {
+        uint32_t id;
+        reader.read(&id);
+
+        const char *data;
+        size_t len;
+        reader.read(&data, &len);
+
+        auto tw = _manager.GetWriter(ObjectType::SpectrumTexture, id);
+        tw->write(data, len);
+    }
+
+    // FLOAT TEXTURES
+    uint32_t included_float_count = 0;
+    reader.read(&included_float_count);
+
+    for (size_t i = 0; i < included_float_count; i++) {
+        uint32_t id;
+        reader.read(&id);
+
+        const char *data;
+        size_t len;
+        reader.read(&data, &len);
+
+        auto tw = _manager.GetWriter(ObjectType::FloatTexture, id);
+        tw->write(data, len);
+    }
+
+    // MATERIALS
     uint32_t included_material_count = 0;
     reader.read(&included_material_count);
 
     for (size_t i = 0; i < included_material_count; i++) {
-        uint32_t material_id;
-        reader.read(&material_id);
+        uint32_t id;
+        reader.read(&id);
 
-        treelet.included_material.emplace(material_id, nullptr);
+        const char *data;
+        size_t len;
+        reader.read(&data, &len);
+
+        auto tw = _manager.GetWriter(ObjectType::Material, id);
+        tw->write(data, len);
+
+        treelet.included_material.emplace(id, nullptr);
     }
 
     map<uint32_t, MaterialKey> mesh_material_ids;
