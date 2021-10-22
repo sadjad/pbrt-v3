@@ -2144,7 +2144,7 @@ uint32_t createMaterialPartition(const uint32_t mtlId,
         textureKey[oldTextureKey.at(i)] = partKey.at(i);
     }
 
-    TextureList textures{mtlId};
+    TextureList textures{getTextureList(mtlId)};
     if (textures.empty()) {
         throw runtime_error("the material has no textures");
     }
