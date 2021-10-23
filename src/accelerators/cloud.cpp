@@ -202,7 +202,7 @@ void CloudBVH::LoadTreelet(const uint32_t root_id, const char *buffer,
     /* load the materials */
     for (const auto mkey : treelet.required_materials) {
         if (mkey.id == numeric_limits<uint32_t>::max()) {
-            materials_[mkey.id] = nullptr;
+            materials_[mkey.id] = make_shared<PlaceholderMaterial>(mkey);
             continue;
         }
 

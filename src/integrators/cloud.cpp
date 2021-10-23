@@ -54,11 +54,14 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
     // the next two lines are basically:
     // it.ComputeScatteringFunctions(rayState.ray, arena, true);
     it.ComputeDifferentials(rayState.ray);
-    material->ComputeScatteringFunctions(&it, arena,
-                                         pbrt::TransportMode::Radiance, true);
+    if (material) {
+        material->ComputeScatteringFunctions(
+            &it, arena, pbrt::TransportMode::Radiance, true);
+    }
 
     if (!it.bsdf) {
-        throw runtime_error("!it.bsdf");
+        // throw runtime_error("!it.bsdf");
+        return {nullptr, nullptr};
     }
 
     /* setting the sampler */
