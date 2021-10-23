@@ -121,6 +121,7 @@ class SceneManager {
     }
 
     uint32_t getMaterialTreeletId(const uint32_t mtlId) {
+        if (mtlId == std::numeric_limits<uint32_t>::max()) return 0;
         return materialToTreelet.at(mtlId);
     }
 

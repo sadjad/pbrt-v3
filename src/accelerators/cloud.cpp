@@ -118,6 +118,8 @@ CloudBVH::CloudBVH(const uint32_t bvh_root, const bool preload_all,
 CloudBVH::~CloudBVH() {}
 
 shared_ptr<Material> CloudBVH::GetMaterial(const uint32_t material_id) const {
+    if (material_id == numeric_limits<uint32_t>::max()) return nullptr;
+
     auto &treelet = *treelets_[bvh_root_];
     auto &mat = treelet.included_material.at(material_id);
 
