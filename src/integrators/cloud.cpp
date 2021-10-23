@@ -60,8 +60,16 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
     }
 
     if (!it.bsdf) {
-        // throw runtime_error("!it.bsdf");
-        return {nullptr, nullptr};
+        bouncePtr = move(rayStatePtr);
+        rayStatePtr = nullptr;
+        auto &newRay = *bouncePtr;
+
+        newRay.hop = 0;
+        newRay.ray = it.SpawnRay(newRay.ray.d);
+        newRay.remainingBounces -= 1;
+        newRay.StartTrace();
+
+        return {move(bouncePtr), nullptr};
     }
 
     /* setting the sampler */
