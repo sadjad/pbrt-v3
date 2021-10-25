@@ -2861,17 +2861,15 @@ vector<uint32_t> TreeletDumpBVH::DumpTreelets(bool root) const {
 
             const uint32_t areaLightID = _manager.getMeshAreaLightId(mesh);
 
+            LOG(INFO) << "Writing " << meshesToWrite.size()
+                      << " triangle meshe(s).";
+
             for (auto &m : meshesToWrite) {
                 numTriMeshes++;
 
                 const auto sMeshID = triMeshIDs.at(m.get());
                 const uint32_t mtlID = _manager.getMeshMaterialId(m.get());
                 const auto mData = serdes::triangle_mesh::serialize(*m);
-
-                LOG(INFO) << "Mesh " << sMeshID << " contains " << m->nVertices
-                          << " vertices and " << m->nTriangles
-                          << " triangles and its size is "
-                          << format_bytes(mData.size());
 
                 const auto newMatSize = getTotalTextureSize(mtlID);
 
