@@ -778,7 +778,7 @@ extern int catIndentCount;
 // Parsing Global Interface
 static void parse(std::unique_ptr<Tokenizer> t) {
     if (PbrtOptions.loadScene) {
-        SetSearchDirectory(global::manager.getScenePath());
+        SetSearchDirectory("");
     }
 
     std::vector<std::unique_ptr<Tokenizer>> fileStack;
