@@ -421,7 +421,8 @@ ParamSet from_protobuf(const protobuf::ParamSet& pp) {
     return ps;
 }
 
-Scene from_protobuf(const protobuf::Scene& proto_scene) {
+Scene from_protobuf(const protobuf::Scene& proto_scene,
+                    vector<shared_ptr<Light>>&& lights) {
     /* we have to create a fake scene here */
     auto worldBound = from_protobuf(proto_scene.world_bound());
 
@@ -431,7 +432,7 @@ Scene from_protobuf(const protobuf::Scene& proto_scene) {
         fakeShape, nullptr, nullptr, MediumInterface{});
 
     /* create the fake scene */
-    return {fakePrimitive, {}};
+    return {fakePrimitive, move(lights)};
 }
 
 TextureParams from_protobuf(

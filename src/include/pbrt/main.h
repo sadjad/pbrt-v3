@@ -52,8 +52,6 @@ class Base {
     std::shared_ptr<GlobalSampler> sampler{};
     std::vector<std::unique_ptr<Transform>> transformCache{};
     std::unique_ptr<Scene> fakeScene{};
-    std::vector<std::shared_ptr<Light>> lights{};
-    std::vector<std::shared_ptr<Light>> infiniteLights{};
 
     std::vector<std::shared_ptr<TriangleMesh>> areaLightMeshes{};
     std::vector<std::shared_ptr<Shape>> areaLightShapes{};
@@ -97,8 +95,7 @@ namespace graphics {
 RayStatePtr TraceRay(RayStatePtr &&rayState, const CloudBVH &treelet);
 
 std::pair<RayStatePtr, RayStatePtr> ShadeRay(
-    RayStatePtr &&rayState, const CloudBVH &treelet,
-    const std::vector<std::shared_ptr<Light>> &lights,
+    RayStatePtr &&rayState, const CloudBVH &treelet, const Scene &scene,
     const Vector2<int> &sampleExtent, std::shared_ptr<GlobalSampler> &sampler,
     int maxPathDepth, MemoryArena &arena);
 

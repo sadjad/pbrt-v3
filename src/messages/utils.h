@@ -88,7 +88,8 @@ RGBSpectrum from_protobuf(const protobuf::RGBSpectrum& spectrum);
 TriangleMesh from_protobuf(const protobuf::TriangleMesh& mesh);
 CloudIntegrator::SampleData from_protobuf(const protobuf::SampleData& sample);
 ParamSet from_protobuf(const protobuf::ParamSet& paramset);
-Scene from_protobuf(const protobuf::Scene& scene);
+Scene from_protobuf(const protobuf::Scene& scene,
+                    std::vector<std::shared_ptr<Light>>&& lights);
 TextureParams from_protobuf(
     const protobuf::TextureParams& texture_params, ParamSet& geom_params,
     ParamSet& material_params,

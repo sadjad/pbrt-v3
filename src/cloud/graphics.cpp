@@ -118,6 +118,7 @@ Base::Base(const std::string &path, const int samplesPerPixel) {
     reader->read(&proto_sampler);
     sampler = sampler::from_protobuf(proto_sampler, samplesPerPixel);
 
+    vector<shared_ptr<Light>> lights;
     reader = manager.GetReader(ObjectType::Lights);
     while (!reader->eof()) {
         protobuf::Light proto_light;
@@ -157,14 +158,7 @@ Base::Base(const std::string &path, const int samplesPerPixel) {
     reader = manager.GetReader(ObjectType::Scene);
     protobuf::Scene proto_scene;
     reader->read(&proto_scene);
-    fakeScene = make_unique<Scene>(from_protobuf(proto_scene));
-
-    for (auto &light : lights) {
-        light->Preprocess(*fakeScene);
-        if (light->flags & (int)LightFlags::Infinite) {
-            infiniteLights.push_back(light);
-        }
-    }
+    fakeScene = make_unique<Scene>(from_protobuf(proto_scene, move(lights)));
 
     const auto treeletCount = manager.treeletCount();
     treeletDependencies.resize(treeletCount);
@@ -203,11 +197,11 @@ RayStatePtr TraceRay(RayStatePtr &&rayState, const CloudBVH &treelet) {
 
 pair<RayStatePtr, RayStatePtr> ShadeRay(RayStatePtr &&rayState,
                                         const CloudBVH &treelet,
-                                        const vector<shared_ptr<Light>> &lights,
+                                        const Scene &scene,
                                         const Vector2i &sampleExtent,
                                         shared_ptr<GlobalSampler> &sampler,
                                         int maxPathDepth, MemoryArena &arena) {
-    return CloudIntegrator::Shade(move(rayState), treelet, lights, sampleExtent,
+    return CloudIntegrator::Shade(move(rayState), treelet, scene, sampleExtent,
                                   sampler, maxPathDepth, arena);
 }
 

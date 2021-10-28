@@ -37,10 +37,13 @@ RayStatePtr CloudIntegrator::Trace(RayStatePtr &&rayState,
 }
 
 pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
-    RayStatePtr &&rayStatePtr, const CloudBVH &treelet,
-    const vector<shared_ptr<Light>> &lights, const Vector2i &sampleExtent,
-    shared_ptr<GlobalSampler> &sampler, int maxPathDepth, MemoryArena &arena) {
+    RayStatePtr &&rayStatePtr, const CloudBVH &treelet, const Scene &scene,
+    const Vector2i &sampleExtent, shared_ptr<GlobalSampler> &sampler,
+    int maxPathDepth, MemoryArena &arena) {
     nShadeCalls++;
+
+    static unique_ptr<LightDistribution> lightDistribution =
+        CreateLightSampleDistribution("spatial", scene);
 
     RayStatePtr bouncePtr = nullptr;
     RayStatePtr shadowRayPtr = nullptr;
@@ -80,15 +83,15 @@ pair<RayStatePtr, RayStatePtr> CloudIntegrator::Shade(
 
     const auto bsdfFlags = BxDFType(BSDF_ALL & ~BSDF_SPECULAR);
 
-    if (it.bsdf->NumComponents(bsdfFlags) > 0 && lights.size() > 0) {
-        /* Let's pick a light at random */
-        int nLights = (int)lights.size();
-        int lightNum;
-        Float lightSelectPdf;
+    const Distribution1D *distrib = lightDistribution->Lookup(it.p);
 
-        lightSelectPdf = Float(1) / nLights;
-        lightNum = min((int)(sampler->Get1D() * nLights), nLights - 1);
-        const shared_ptr<Light> &light = lights[lightNum];
+    if (it.bsdf->NumComponents(bsdfFlags) > 0 && scene.lights.size() > 0) {
+        /* Let's pick a light at random */
+        Float lightSelectPdf;
+        const int lightNum =
+            distrib->SampleDiscrete(sampler->Get1D(), &lightSelectPdf);
+
+        const shared_ptr<Light> &light = scene.lights[lightNum];
 
         Point2f uLight = sampler->Get2D();
         Point2f uScattering = sampler->Get2D();  // For consistency with PBRT
@@ -253,8 +256,8 @@ void CloudIntegrator::Render(const Scene &scene) {
                 samples.push_back(move(newRayPtr));
             }
         } else if (state.hit) {
-            auto newRays = Shade(move(statePtr), *bvh, scene.lights,
-                                 sampleExtent, sampler, maxDepth, arena);
+            auto newRays = Shade(move(statePtr), *bvh, scene, sampleExtent,
+                                 sampler, maxDepth, arena);
 
             if (newRays.first != nullptr) {
                 rayQueue.push_back(move(newRays.first));

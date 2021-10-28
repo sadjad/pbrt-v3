@@ -3,11 +3,11 @@
 
 #include <memory>
 
-#include "pbrt/raystate.h"
 #include "core/camera.h"
 #include "core/integrator.h"
 #include "core/lightdistrib.h"
 #include "core/scene.h"
+#include "pbrt/raystate.h"
 
 namespace pbrt {
 
@@ -35,11 +35,9 @@ class CloudIntegrator : public Integrator {
     static RayStatePtr Trace(RayStatePtr &&rayState, const CloudBVH &treelet);
 
     static std::pair<RayStatePtr, RayStatePtr> Shade(
-        RayStatePtr &&rayState, const CloudBVH &treelet,
-        const std::vector<std::shared_ptr<Light>> &lights,
+        RayStatePtr &&rayState, const CloudBVH &treelet, const Scene &scene,
         const Vector2i &sampleExtent, std::shared_ptr<GlobalSampler> &sampler,
-        int maxPathDepth,
-        MemoryArena &arena);
+        int maxPathDepth, MemoryArena &arena);
 
   private:
     const int maxDepth;

@@ -69,7 +69,6 @@ int main(int argc, char const *argv[]) {
         MemoryArena arena;
         auto &camera = sceneBase.camera;
         auto &sampler = sceneBase.sampler;
-        auto &lights = sceneBase.lights;
         auto &fakeScene = sceneBase.fakeScene;
 
         vector<unique_ptr<CloudBVH>> treelets;
@@ -81,10 +80,6 @@ int main(int argc, char const *argv[]) {
             treelets[i] = make_unique<CloudBVH>(i, false, false);
             treelets[i]->LoadTreelet(i);
             cout << "done." << endl;
-        }
-
-        for (auto &light : lights) {
-            light->Preprocess(*fakeScene);
         }
 
         const auto sampleExtent = camera->film->GetSampleBounds().Diagonal();
@@ -117,7 +112,7 @@ int main(int argc, char const *argv[]) {
                 } else if (emptyVisit) {
                     newRay.Ld = 0.f;
                     if (newRay.remainingBounces == maxDepth - 1) {
-                        for (const auto &light : sceneBase.infiniteLights) {
+                        for (const auto &light : fakeScene->infiniteLights) {
                             newRay.Ld += light->Le(newRay.ray);
                         }
                     }
@@ -126,7 +121,7 @@ int main(int argc, char const *argv[]) {
             } else if (theRay.HasHit()) {
                 RayStatePtr bounceRay, shadowRay;
                 tie(bounceRay, shadowRay) = graphics::ShadeRay(
-                    move(theRayPtr), *treelets[rayTreeletId], lights,
+                    move(theRayPtr), *treelets[rayTreeletId], *fakeScene,
                     sampleExtent, sampler, maxDepth, arena);
 
                 if (bounceRay != nullptr) {
