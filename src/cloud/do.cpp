@@ -31,6 +31,9 @@ int main(int argc, char const *argv[]) {
             return EXIT_FAILURE;
         }
 
+        FLAGS_log_prefix = false;
+        google::InitGoogleLogging( argv[0] );
+
         /* CloudBVH requires this */
         PbrtOptions.nThreads = 1;
 
